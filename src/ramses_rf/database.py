@@ -292,12 +292,8 @@ class MessageIndex:
     def all(self, include_expired: bool = False) -> tuple[Message, ...]:
         """Return all messages from the index."""
 
-        # self._cu.execute("SELECT * FROM messages")
-        # return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
-
-        return tuple(
-            m for m in self._msgs.values() if include_expired or not m._expired
-        )
+        self._cu.execute("SELECT * FROM messages")
+        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
     def clr(self) -> None:
         """Clear the message index (remove all messages)."""
