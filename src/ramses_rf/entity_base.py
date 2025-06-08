@@ -177,7 +177,10 @@ class _Entity:
 
 
 class _MessageDB(_Entity):
-    """Maintain/utilize an entity's state database."""
+    """Maintain/utilize an entity's state database.
+
+    Deprecated since 0.50.2, use SQLite in src/ramses_rf/database.py instead
+    """
 
     _gwy: Gateway
     ctl: Controller
@@ -190,13 +193,19 @@ class _MessageDB(_Entity):
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
-        self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
+        self._msgs_: dict[
+            Code, Message
+        ] = {}  # code, should be code/ctx? Deprecated since 0.50.2
         self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
+        # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
-        """Store a msg in the DBs."""
+        """Store a msg in the DBs.
+
+        Uses SQLite since 0.50.3
+        """
 
         if not (
             msg.src.id == self.id[:9]
@@ -205,7 +214,11 @@ class _MessageDB(_Entity):
         ):
             return  # ZZZ: don't store these
 
-        # Store msg by code in flat self._msgs_ Dict (deprecated since 0.50.3)
+        if self._gwy.msg_db:
+            self._gwy.msg_db.add(msg)
+            # ignore any replaced message that might be returned
+
+        # Store msg by code in _msgs_ Dict (deprecated since 0.51.6)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
@@ -261,9 +274,9 @@ class _MessageDB(_Entity):
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a header."""
 
-        # if self._gwy.msg_db:  # central SQLite MessageIndex
-        #     msgs = self._gwy.msg_db.get(hdr=hdr)
-        #     return msgs[0] if msgs else None
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+           msgs = self._gwy.msg_db.get(hdr=hdr)
+           return msgs[0] if msgs else None
 
         msg: Message
         code: Code
@@ -474,8 +487,8 @@ class _Discovery(_MessageDB):
         def _to_data_id(msg_id: MsgId | str) -> OtDataId:
             return int(msg_id, 16)  # type: ignore[return-value]
 
-        def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
-            return f"{data_id:02X}"  # type: ignore[return-value]
+        # def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
+        #     return f"{data_id:02X}"  # type: ignore[return-value]
 
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
