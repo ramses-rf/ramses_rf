@@ -939,15 +939,22 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         # Uses SQLite query WHERE _22F4, _31D9 or _31DA on MessageIndex
 
         sql = """
-            SELECT dtm from messages WHERE verb in (' I', 'RP')
+            SELECT pl from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
             AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
+            AND (plk like %SZ_FAN_MODE%)
         """
-        resMode = self._msg_qry(sql, SZ_FAN_MODE)  # SQLite query on MessageIndex
-        _LOGGER.info(f"{resMode} # SQL FAN_MODE FETCHED from MessageIndex")  # DEBUG
+        res_mode: str = self._msg_qry(sql).get(SZ_FAN_MODE)  # SQLite query on MessageIndex
+        _LOGGER.info(f"{res_mode} # FAN_MODE FETCHED from MessageIndex")  # DEBUG
 
-        resRate = self._msg_qry(sql, SZ_FAN_RATE)  # SQLite query on MessageIndex
-        _LOGGER.info(f"{resRate} # SQL FAN_RATE FETCHED from MessageIndex")  # DEBUG
+        sql = """
+            SELECT pl from messages WHERE verb in (' I', 'RP')
+            AND (src = ? OR dst = ?)
+            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
+            AND (plk like %SZ_FAN_RATE%)
+        """
+        res_rate: str = self._msg_qry(sql)[SZ_FAN_RATE]  # SQLite query on MessageIndex
+        _LOGGER.info(f"{res_rate} # FAN_RATE FETCHED from MessageIndex")  # DEBUG
 
         if Code._31D9 in self._msgs:
             # was a dict by Code

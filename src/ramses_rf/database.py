@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sqlite3
 from collections import OrderedDict
@@ -24,6 +25,8 @@ class Params(TypedDict):
     code: str | None
     ctx: str | None
     hdr: str | None
+    pl: str | None
+    plk: str | None
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,6 +46,29 @@ def _setup_db_adapters() -> None:
         return dt.fromisoformat(val.decode())
 
     sqlite3.register_converter("dtm", convert_datetime)
+
+
+def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type-arg]
+    """
+    Copy payload keys for faster query outside JSON
+
+    :param parsed_payload: pre-parsed message payload dict
+    :return: string of payload keys, separated by the | char
+    """
+
+    def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
+        _k: str = ""
+        for k in ppl:
+            _k += k + "|"
+        return _k
+
+    if isinstance(parsed_payload, list):
+        keys: str = ""
+        for d in parsed_payload:
+            keys += append_keys(d)
+        return keys
+    elif isinstance(parsed_payload, dict):
+        return append_keys(parsed_payload)
 
 
 class MessageIndex:
@@ -104,6 +130,8 @@ class MessageIndex:
         - code packet code aka command class e.g. _0005, _31DA
         - ctx  message context, created from payload as index + extra markers (Heat)
         - hdr  packet header e.g. 000C|RP|01:223036|0208 (see: src/ramses_tx/frame.py)
+        - pl   the parsed message payload, stored as JSON string
+        - plk the keys stored in the parsed payload, separated by the | char
         """
 
         self._cu.execute(
@@ -116,6 +144,8 @@ class MessageIndex:
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT     NOT NULL,
                 hdr    TEXT     NOT NULL UNIQUE
+                pl     TEXT     NOT NULL,
+                plk    TEXT     NOT NULL, # faster to check all included keys before extracting JSON?
             )
             """
         )
@@ -126,6 +156,8 @@ class MessageIndex:
         self._cu.execute("CREATE INDEX idx_code ON messages (code)")
         self._cu.execute("CREATE INDEX idx_ctx ON messages (ctx)")
         self._cu.execute("CREATE INDEX idx_hdr ON messages (hdr)")
+        # no index on pl
+        self._cu.execute("CREATE INDEX idx_plk ON messages (plk)")
 
         self._cx.commit()
 
@@ -197,8 +229,8 @@ class MessageIndex:
         msgs = self._delete_from(hdr=msg._pkt._hdr)
 
         sql = """
-            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, pl, plk)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         self._cu.execute(
@@ -211,6 +243,8 @@ class MessageIndex:
                 msg.code,
                 msg._pkt._ctx,
                 msg._pkt._hdr,
+                json.dumps(msg.payload, indent=4),
+                payload_keys(msg.payload),
             ),
         )
 
@@ -288,6 +322,16 @@ class MessageIndex:
         self._cu.execute(sql, parameters)
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+
+    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[str]:
+        """Return a set of message field(s) from the index, given sql and parameters."""
+
+        if "SELECT" not in sql:
+            raise ValueError(f"{self}: Only SELECT queries are allowed")
+
+        self._cu.execute(sql, parameters)
+
+        return self._cu.fetchall()
 
     def all(self, include_expired: bool = False) -> tuple[Message, ...]:
         """Return all messages from the index."""
