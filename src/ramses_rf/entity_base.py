@@ -214,11 +214,11 @@ class _MessageDB(_Entity):
         ):
             return  # ZZZ: don't store these
 
-        if self._gwy.msg_db:
+        if self._gwy.msg_db:  # central SQLite MessageIndex
             self._gwy.msg_db.add(msg)
             # ignore any replaced message that might be returned
 
-        # Store msg by code in _msgs_ Dict (deprecated since 0.51.6)
+        # Store msg by code in flat self._msgs_ Dict (deprecated since 0.51.6)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
@@ -310,6 +310,7 @@ class _MessageDB(_Entity):
     def _msg_value(
         self, code: Code | Iterable[Code], *args: Any, **kwargs: Any
     ) -> dict | list | None:
+        """To be Deprecated. Use direct SQLite query on MessageIndex"""
         if isinstance(code, str | tuple):  # a code or a tuple of codes
             return self._msg_value_code(code, *args, **kwargs)
         # raise RuntimeError
@@ -393,6 +394,28 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
+    def _msg_qry(self, sql: str, key: str) -> str | None:
+        """
+        SQLite query on full MessageIndex.
+
+        :param sql: SQLite query on MessageIndex
+        :param key: key for which to return the (first/latest) value
+        :return: the value stored for the supplied key in the parsed Message
+        """
+        if sql and self._gwy.msg_db:
+            # SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?) AND (code = CODE)
+            for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9])):
+                # fetch only the first message row
+                res = m.payload()
+                if isinstance(res, list):
+                    return str(res[0][key].value)
+                elif res[key]:
+                    return str(res[key].value)
+                else:
+                    return None
+        else:
+            return None
+
     @property
     def traits(self) -> dict:
         """Return the codes seen by the entity."""
@@ -412,7 +435,8 @@ class _MessageDB(_Entity):
 
         :return: nested Dict of messages by Code
         """
-        if not self._gwy.msg_db:  # no central SQLite MessageIndex
+        if not self._gwy.msg_db:
+            # no central SQLite MessageIndex, deprecated since 0.51.6
             return self._msgs_
 
         sql = """
@@ -429,7 +453,7 @@ class _MessageDB(_Entity):
 
         :return: Dict of messages, nested by Code, Verb, Context
         """
-        if not self._gwy.msg_db:  # no central SQLite MessageIndex
+        if not self._gwy.msg_db:  # no central SQLite MessageIndex, deprecated since 0.51.6
             return self._msgz_
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
