@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import random
 from collections.abc import Iterable
@@ -394,25 +395,19 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
-    def _msg_qry(self, sql: str, key: str) -> str | None:
+    def _msg_qry(self, sql: str) -> dict | None:
         """
         SQLite query on full MessageIndex.
 
         :param sql: SQLite query on MessageIndex
-        :param key: key for which to return the (first/latest) value
-        :return: the value stored for the supplied key in the parsed Message
+        :return: the value stored for the supplied key in the selected message payload, or None
         """
         if sql and self._gwy.msg_db:
-            # SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?) AND (code = CODE)
-            for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9])):
-                # fetch only the first message row
-                res = m.payload()
-                if isinstance(res, list):
-                    return str(res[0][key].value)
-                elif res[key]:
-                    return str(res[key].value)
-                else:
-                    return None
+            # SELECT pl from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?) AND (code = CODE)
+            for _pl in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+                if isinstance(_pl, list):
+                    for d in _pl:
+                        return json.loads(d)  # fetch only the first selected row column
         else:
             return None
 
