@@ -911,19 +911,34 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     @property
     def fan_info(self) -> str | None:
         """
-        Extract fan info description from _31D9 or _31DA message payload, e.g. "speed 2, medium".
+        Extract fan info description from MessageIndex _31D9 or _31DA payload,
+        e.g. "speed 2, medium".
         By its name, the result is picked up by a sensor in HA Climate UI.
         Some manufacturers (Orcon, Vasco) include the fan mode (auto, manual), others don't (Itho).
 
-        :return: a string describing fan mode, speed
+        :return: string describing fan mode, speed
         """
+        # Uses SQLite query WHERE _22F4, _31D9 or _31DA on MessageIndex
+
+        sql = """
+            SELECT dtm from messages WHERE verb in (' I', 'RP')
+            AND (src = ? OR dst = ?)
+            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
+        """
+        resMode = self._msg_qry(sql, SZ_FAN_MODE)  # SQLite query on MessageIndex
+        _LOGGER.info(f"{resMode} # SQL FAN_MODE FETCHED from MessageIndex")  # DEBUG
+
+        resRate = self._msg_qry(sql, SZ_FAN_RATE)  # SQLite query on MessageIndex
+        _LOGGER.info(f"{resRate} # SQL FAN_RATE FETCHED from MessageIndex")  # DEBUG
+
         if Code._31D9 in self._msgs:
-            # Itho, Vasco D60 and ClimaRad (MiniBox fan) send mode/speed in _31D9
+            # was a dict by Code
+            # Itho, Vasco D60 and ClimaRad minibox send mode/speed in _31D9
             v: str
             for k, v in self._msgs[Code._31D9].payload.items():
                 if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
                     return v
-            # continue to 31DA
+        # # continue to 31DA
         return str(self._msg_value(Code._31DA, key=SZ_FAN_INFO))  # Itho lookup
 
     @property
