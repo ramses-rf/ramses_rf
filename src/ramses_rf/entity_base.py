@@ -395,21 +395,23 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
-    def _msg_qry(self, sql: str) -> dict | None:
+    def _msg_qry(self, sql: str) -> list[dict]:
         """
-        SQLite query on full MessageIndex.
+        SQLite query for a single column on full MessageIndex.
 
         :param sql: SQLite query on MessageIndex
         :return: the value stored for the supplied key in the selected message payload, or None
         """
+
+        res: list[dict] = []
         if sql and self._gwy.msg_db:
             # SELECT pl from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?) AND (code = CODE)
             for _pl in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
-                if isinstance(_pl, list):
-                    for d in _pl:
-                        return json.loads(d)  # fetch only the first selected row column
-        else:
-            return None
+                for d in _pl:
+                    res.append(
+                        json.loads(d)
+                    )  # fetch only the first selected row column
+        return res
 
     @property
     def traits(self) -> dict:

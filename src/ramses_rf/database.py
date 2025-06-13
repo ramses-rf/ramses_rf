@@ -324,8 +324,10 @@ class MessageIndex:
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
     def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[str]:
-        """Return a set of message field(s) from the index, given sql and parameters."""
+        """Return a list of message field values from the index, given sql and parameters."""
 
+        if "SELECT" not in sql:
+            raise ValueError(f"{self}: Only SELECT queries are allowed")
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
 
