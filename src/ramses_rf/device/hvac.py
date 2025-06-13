@@ -918,8 +918,9 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: string describing fan mode, speed
         """
-        # Uses SQLite query WHERE _22F4, _31D9 or _31DA on MessageIndex
 
+        # Use SQLite query on MessageIndex
+        info: str = ""  # query result
         sql = """
             SELECT pl from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
@@ -933,7 +934,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             SELECT pl from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
             AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk like %SZ_FAN_RATE%)
+            AND (plk like %SZ_FAN_RATE% OR plk like %SZ_FAN_RATE%)
         """
         res_rate: str = self._msg_qry(sql)[SZ_FAN_RATE]  # SQLite query on MessageIndex
         _LOGGER.info(f"{res_rate} # FAN_RATE FETCHED from MessageIndex")  # DEBUG
