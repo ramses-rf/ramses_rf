@@ -55,6 +55,10 @@ from .helpers import (
     hex_from_str,
     hex_from_temp,
     timestamp,
+    capability_bits,
+    fan_info_to_byte,
+    fan_info_flags,
+    air_quality_code,
 )
 from .opentherm import parity
 from .parsers import LOOKUP_PUZZ
