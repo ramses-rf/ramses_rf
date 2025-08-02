@@ -1066,7 +1066,7 @@ _DEV_KLASSES_HVAC: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._22F1: {RP: {}},
         Code._22F2: {I_: {}, RP: {}},
         Code._22F3: {},
-        Code._22F4: {I_: {}},
+        Code._22F4: {I_: {}, RP: {}},
         Code._22F7: {I_: {}, RP: {}},
         Code._2411: {I_: {}, RP: {}},
         Code._2E10: {I_: {}},
