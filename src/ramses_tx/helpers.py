@@ -736,8 +736,8 @@ def parse_fan_info(value: HexStr2) -> PayDictT.FAN_INFO:
     if not isinstance(value, str) or len(value) != 2:
         raise ValueError(f"Invalid value: {value}, is not a 2-char hex string")
 
-    # if value == "EF":  # TODO: Not implemented???
-    #     return {SZ_FAN_INFO: None}
+    if value in ["EF", "FF"]:
+        return {SZ_FAN_INFO: "", "_unknown_fan_info_flags": []}
 
     assert int(value, 16) & 0xE0 in (
         0x00,
@@ -750,7 +750,9 @@ def parse_fan_info(value: HexStr2) -> PayDictT.FAN_INFO:
     flags = list((int(value, 16) & (1 << x)) >> x for x in range(7, 4, -1))
 
     return {
-        SZ_FAN_INFO: _31DA_FAN_INFO[int(value, 16) & 0x1F],
+        SZ_FAN_INFO: _31DA_FAN_INFO[
+            int(value, 16) & 0x1F
+        ],  # lookup description from code
         "_unknown_fan_info_flags": flags,
     }
 
