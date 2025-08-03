@@ -1219,6 +1219,85 @@ class Command(Frame):
 
         return cls._from_attrs(W_, Code._2411, payload, addr0=src_id, addr1=fan_id)
 
+    @classmethod  # constructor for RQ|2411
+    def get_fan_param(
+        cls,
+        fan_id: DeviceIdT | str,
+        param_id: str,
+        *,
+        src_id: DeviceIdT | str,
+    ) -> Command:
+        """Create a command to get a fan parameter.
+
+        This method constructs a command to read a specific parameter from a fan device using the 2411 command.
+        The parameter ID must be a valid 2-character hexadecimal string (00-FF).
+
+        For a complete example of how to use this method in a real application, see the
+        `test_get_fan_param.py` test file in the tests directory. The test demonstrates:
+        - Setting up the gateway
+        - Sending the command
+        - Handling the response
+        - Proper error handling
+
+        Example:
+            # Basic usage:
+            cmd = Command.get_fan_param(
+                fan_id='01:123456',  # Target fan device ID
+                param_id='4E',       # Parameter to read (2-char hex)
+                src_id='12:345678'   # Source device ID (e.g., remote)
+            )
+
+            # For a complete working example, see:
+            # tests/test_get_fan_param.py
+
+        Args:
+            fan_id: The device ID of the target fan (e.g., '01:123456')
+            param_id: The parameter ID to read (2-character hex string, e.g., '4E')
+            src_id: The source device ID that will send the command (e.g., a remote or DIS device ID)
+
+        Returns:
+            Command: A Command object for the RQ|2411 message that can be sent to the gateway
+
+        Raises:
+            CommandInvalid: If the parameter ID is invalid, including:
+                - None value
+                - Non-string types
+                - Leading/trailing whitespace
+                - Incorrect length (not 2 characters)
+                - Non-hexadecimal characters
+        """
+        # Check for None first
+        if param_id is None:
+            raise exc.CommandInvalid("Parameter ID cannot be None")
+
+        # Check if param_id is a string
+        if not isinstance(param_id, str):
+            raise exc.CommandInvalid(
+                f"Parameter ID must be a string, got {type(param_id).__name__}"
+            )
+
+        # Check for leading/trailing whitespace by comparing with stripped version
+        param_id_stripped = param_id.strip()
+        if param_id != param_id_stripped:
+            raise exc.CommandInvalid(
+                f"Parameter ID cannot have leading or trailing whitespace: '{param_id}'"
+            )
+
+        # Then validate the string format
+        try:
+            if len(param_id) != 2:
+                raise ValueError("Invalid length")
+            int(param_id, 16)  # Will raise ValueError if not valid hex
+        except ValueError as err:
+            raise exc.CommandInvalid(
+                f"Invalid parameter ID: '{param_id}'. Must be a 2-character hex string (00-FF)."
+            ) from err
+
+        # For RQ, the payload is just the parameter ID with 0000 prefix
+        payload = f"0000{param_id.upper()}"  # Convert to uppercase for consistency
+
+        return cls._from_attrs(RQ, Code._2411, payload, addr0=src_id, addr1=fan_id)
+
     @classmethod  # constructor for RQ|2E04
     def get_system_mode(cls, ctl_id: DeviceIdT | str) -> Command:
         """Constructor to get the mode of a system (c.f. parser_2e04)."""
@@ -1426,6 +1505,7 @@ CODE_API_MAP = {
     f"{I_}|{Code._1260}": Command.put_dhw_temp,  # .          has a test (empty)
     f"{I_}|{Code._22F1}": Command.set_fan_mode,
     f"{W_}|{Code._2411}": Command.set_fan_param,
+    f"{RQ}|{Code._2411}": Command.get_fan_param,  # .         has a test
     f"{I_}|{Code._12A0}": Command.put_indoor_humidity,
     f"{RQ}|{Code._1030}": Command.get_mix_valve_params,
     f"{W_}|{Code._1030}": Command.set_mix_valve_params,  # .  has a test
