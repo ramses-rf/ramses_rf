@@ -16,6 +16,7 @@
 2021-02-12T17:29:02.197564 066  I 017 --:------ --:------ 39:159057 22F1 003 000404  # {'fan_mode': 'high',        '_scheme': 'itho',   '_mode_idx': '04', '_mode_max': '04', "seqx_num": "017"}
 
 # Scheme 06 - seen with Vasco and ClimaRad fans: 000[234]06 (sent as set of 5)
+# (ClimaRad VenturaV1x HRU does not send 22F1 for speed, uses 22F4 for mode + step)
 2024-10-10T18:10:21.527295 073  I --- 29:123150 29:099029 --:------ 22F1 003 000306  #
                                                                            # 000006  # (faked) not responding
 2024-10-10T22:26:28.420378 041  I --- 29:091138 32:022222 --:------ 22F1 003 000106  # {'fan_mode': 'away', '_scheme': 'vasco', '_mode_idx': '01', '_mode_max': '06'}

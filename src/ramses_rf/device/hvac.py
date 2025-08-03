@@ -27,7 +27,9 @@ from ramses_rf.const import (
     SZ_POST_HEAT,
     SZ_PRE_HEAT,
     SZ_PRESENCE_DETECTED,
+    SZ_REMAINING_DAYS,
     SZ_REMAINING_MINS,
+    SZ_REMAINING_PERCENT,
     SZ_SPEED_CAPABILITIES,
     SZ_SUPPLY_FAN_SPEED,
     SZ_SUPPLY_FLOW,
@@ -169,7 +171,15 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
 
     @property
     def filter_remaining(self) -> int | None:
-        return self._msg_value(Code._10D0, key="days_remaining")
+        _val = self._msg_value(Code._10D0, key=SZ_REMAINING_DAYS)
+        assert isinstance(_val, (int | type(None)))
+        return _val
+
+    @property
+    def filter_remaining_percent(self) -> float | None:
+        _val = self._msg_value(Code._10D0, key=SZ_REMAINING_PERCENT)
+        assert isinstance(_val, (float | type(None)))
+        return _val
 
 
 class RfsGateway(DeviceHvac):  # RFS: (spIDer gateway)
@@ -366,8 +376,15 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
         return self._msg_value(Code._31DA, key=SZ_CO2_LEVEL)
 
     @property
-    def exhaust_fan_speed(self) -> float | None:  # was from: (Code._31D9, Code._31DA)
-        return self._msg_value(Code._31DA, key=SZ_EXHAUST_FAN_SPEED)
+    def exhaust_fan_speed(
+        self,
+    ) -> float | None:  # some fans use Code._31D9 for speed + mode
+        for c in (Code._31DA, Code._31D9):
+            if v := self._msgs[c].payload.get(SZ_EXHAUST_FAN_SPEED):
+                assert isinstance(v, (float | type(None)))
+                return v
+                # if both packets exist and both have the key, return the most recent
+        return None
 
     @property
     def exhaust_flow(self) -> float | None:
@@ -375,6 +392,13 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def exhaust_temp(self) -> float | None:
+        if Code._12A0 in self._msgs and isinstance(
+            self._msgs[Code._12A0].payload, list
+        ):  # FAN Ventura sends RH/temps as a list, use element [2] for exhaust temp
+            if v := self._msgs[Code._12A0].payload[2].get(SZ_TEMPERATURE):
+                assert isinstance(v, (float | type(None)))
+                return v
+            return None
         return self._msg_value(Code._31DA, key=SZ_EXHAUST_TEMP)
 
     @property
@@ -407,7 +431,23 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def indoor_humidity(self) -> float | None:
-        return self._msg_value(Code._31DA, key=SZ_INDOOR_HUMIDITY)
+        """
+        Extract humidity value from _12A0 or _31DA JSON message payload
+
+        :return: percentage <= 1.0
+        """
+        if Code._12A0 in self._msgs and isinstance(
+            self._msgs[Code._12A0].payload, list
+        ):  # FAN Ventura sends a list, use element [0]
+            if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
+                assert isinstance(v, (float | type(None)))
+                return v
+            return None  # prevent AttributeError: 'list' object has no attribute 'get'
+        for c in (Code._12A0, Code._31DA):
+            if v := self._msgs[c].payload.get(SZ_INDOOR_HUMIDITY):
+                assert isinstance(v, (float | type(None)))
+                return v
+        return None
 
     @property
     def indoor_temp(self) -> float | None:

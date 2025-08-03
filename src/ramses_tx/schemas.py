@@ -232,7 +232,7 @@ SCH_DEVICE_ID_BDR = vol.Match(DEVICE_ID_REGEX.BDR)
 SCH_DEVICE_ID_UFC = vol.Match(DEVICE_ID_REGEX.UFC)
 
 _SCH_TRAITS_DOMAINS = ("heat", "hvac")
-_SCH_TRAITS_HVAC_SCHEMES = ("itho", "nuaire", "orcon", "vasco")
+_SCH_TRAITS_HVAC_SCHEMES = ("itho", "nuaire", "orcon", "vasco", "climarad")
 
 
 DeviceTraitsT = TypedDict(
