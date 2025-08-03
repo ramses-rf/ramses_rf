@@ -7,6 +7,7 @@ Construct a command (packet that is to be sent).
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -50,9 +51,16 @@ from .helpers import (
 )
 from .opentherm import parity
 from .parsers import LOOKUP_PUZZ
-from .ramses import _2411_PARAMS_SCHEMA
+from .ramses import (
+    SZ_DATA_TYPE,
+    SZ_MAX_VALUE,
+    SZ_MIN_VALUE,
+    SZ_PRECISION,
+    _2411_PARAMS_SCHEMA,
+)
 from .version import VERSION
 
+# ruff: noqa: I001  # Allow out-of-order imports for special case
 from .const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
     RP,
@@ -1204,20 +1212,257 @@ class Command(Frame):
         cls,
         fan_id: DeviceIdT | str,
         param_id: str,
-        value: str,
+        value: str | int | float | bool,
         *,
-        src_id: DeviceIdT | str | None = None,
+        src_id: DeviceIdT | str,
     ) -> Command:
-        """Constructor to set a configurable fan parameter (c.f. parser_2411)."""
+        """Set a fan parameter value.
 
-        src_id = src_id or fan_id  # TODO: src_id should be an arg?
+        This method constructs a command to set a specific parameter on a fan device.
+        The parameter ID must be a valid 2-character hexadecimal string (00-FF) that
+        exists in the _2411_PARAMS_SCHEMA.
 
-        if not _2411_PARAMS_SCHEMA.get(param_id):  # TODO: not exclude unknowns?
-            raise exc.CommandInvalid(f"Unknown parameter: {param_id}")
+        # --- Ramses-II 2411 payload: 23 bytes, 46 hex digits ---
+        ^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{4})?$
 
-        payload = f"0000{param_id}0000{value:08X}"  # TODO: needs work
+        Args:
+            fan_id: Target fan device ID (e.g., "39:123456")
+            param_id: 2-character hex parameter ID (e.g., "3F")
+            value: Parameter value to set
+            src_id: Source device ID (e.g., "12:345678")
 
-        return cls._from_attrs(W_, Code._2411, payload, addr0=src_id, addr1=fan_id)
+        Returns:
+            Command: Configured command object
+
+        Raises:
+            CommandInvalid: For invalid parameters or values
+        """
+        # Validate and normalize parameter ID
+        try:
+            param_id = param_id.strip().upper()
+            if len(param_id) != 2:
+                raise ValueError(
+                    "Parameter ID must be exactly 2 hexadecimal characters"
+                )
+            int(param_id, 16)  # Validate hex
+        except ValueError as err:
+            raise exc.CommandInvalid(
+                f"Invalid parameter ID: '{param_id}'. Must be a 2-digit hexadecimal value (00-FF)"
+            ) from err
+
+        # Get parameter schema
+        if (param_schema := _2411_PARAMS_SCHEMA.get(param_id)) is None:
+            raise exc.CommandInvalid(
+                f"Unknown parameter ID: '{param_id}'. This parameter is not defined in the device schema"
+            )
+
+        # Get value constraints with defaults
+        min_val = param_schema[SZ_MIN_VALUE]
+        max_val = param_schema[SZ_MAX_VALUE]
+        precision = param_schema.get(SZ_PRECISION, 1.0)
+        data_type = param_schema.get(SZ_DATA_TYPE, "00")
+
+        _LOGGER.debug(
+            f"set_fan_param: value : {value} min_val: {min_val} max_val: {max_val} precision: {precision} data_type: {data_type}"
+        )
+
+        try:
+            # Check for special float values first
+            if isinstance(value, float) and not math.isfinite(value):
+                raise exc.CommandInvalid(
+                    f"Parameter {param_id}: Invalid value '{value}'. Must be a finite number"
+                )
+
+            # Scaling
+            if str(data_type) == "01":  # %
+                # Special handling for parameter 52 (Sensor sensitivity)
+                value_scaled = int(round(float(value) / precision))
+                min_val_scaled = int(round(float(min_val) / precision))
+                max_val_scaled = int(round(float(max_val) / precision))
+                precision_scaled = int(round(float(precision) * 10))
+                trailer = "0032"  # Trailer for percentage parameters
+
+                # For percentage values, validate input is in range
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise exc.CommandInvalid(
+                        f"Parameter {param_id}: Value {value_scaled/10}% is out of allowed range ({min_val_scaled/10}% to {max_val_scaled/10}%)"
+                    )
+            elif str(data_type) == "0F":  # %
+                # For other percentage parameters, use the standard scaling
+                value_scaled = int(round((float(value) / 100.0) / float(precision)))
+                min_val_scaled = int(round(float(min_val) / float(precision)))
+                max_val_scaled = int(round(float(max_val) / float(precision)))
+                precision_scaled = int(round(float(precision) * 200))
+                trailer = "0032"  # Trailer for percentage parameters
+
+                # For percentage values, validate input is in range
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise exc.CommandInvalid(
+                        f"Parameter {param_id}: Value {value_scaled/2}% is out of allowed range ({min_val_scaled/2}% to {max_val_scaled/2}%)"
+                    )
+            elif str(data_type) == "92":  # °C
+                # Scale temperature values by 100 (21.5°C -> 2150 = 0x0866)
+                value_scaled = int(float(value) * 100)
+                min_val_scaled = int(float(min_val) * 100)
+                max_val_scaled = int(float(max_val) * 100)
+                precision_scaled = int(float(precision) * 100)
+                trailer = (
+                    "0001"  # always 4 hex not sure about the value, but seems to work.
+                )
+                # For temperature values, validate input is within allowed range
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise exc.CommandInvalid(
+                        f"Parameter {param_id}: Temperature {value_scaled/100:.1f}°C is out of allowed range ({min_val_scaled/100:.1f}°C to {max_val_scaled/100:.1f}°C)"
+                    )
+            elif (str(data_type) == "00") or (
+                str(data_type) == "10"
+            ):  # numeric (minutes, medium(0)/high(1) or days)
+                value_scaled = int(value)
+                min_val_scaled = int(min_val)
+                max_val_scaled = int(max_val)
+                precision = 1
+                precision_scaled = int(precision)
+                trailer = (
+                    "0001"  # always 4 hex not sure about the value, but seems to work.
+                )
+                # For numeric values, validate input is between min and max
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    unit = "minutes" if data_type == "00" else ""
+                    raise exc.CommandInvalid(
+                        f"Parameter {param_id}: Value {value_scaled}{' ' + unit if unit else ''} is out of allowed range ({min_val_scaled} to {max_val_scaled}{' ' + unit if unit else ''})"
+                    )
+            else:
+                # Validate value against min/max
+                raise exc.CommandInvalid(
+                    f"Parameter {param_id}: Invalid data type '{data_type}'. Must be one of '00', '01', '0F', '10', or '92'"
+                    f"Invalid Data_type {data_type} for parameter {param_id}"
+                )
+
+            # Assemble payload fields
+            leading = "00"  # always 2 hex
+            param_id_hex = f"{int(param_id, 16):04X}"  # 4 hex, upper, zero-padded
+
+            # data_type (6 hex): always from schema, zero-padded to 6 hex
+            data_type_hex = f"00{data_type}"
+            value_hex = f"{value_scaled:08X}"
+            min_hex = f"{min_val_scaled:08X}"
+            max_hex = f"{max_val_scaled:08X}"
+            precision_hex = f"{precision_scaled:08X}"
+
+            _LOGGER.debug(
+                f"set_fan_param: value={value}, min={min_val}, max={max_val}, precision={precision}"
+                f"\n  Scaled: value={value_scaled} (0x{value_hex}), min={min_val_scaled} (0x{min_hex}), "
+                f"max={max_val_scaled} (0x{max_hex}), precision={precision_scaled} (0x{precision_hex})"
+            )
+
+            # Final field order: 2+4+4+8+8+8+8+4 = 46 hex -> 23 bytes
+            payload = (
+                f"{leading}"
+                f"{param_id_hex}"
+                f"{data_type_hex}"
+                f"{value_hex}"
+                f"{min_hex}"
+                f"{max_hex}"
+                f"{precision_hex}"
+                f"{trailer}"
+            )
+            payload = "".join(payload)
+            _LOGGER.debug(
+                f"set_fan_param: Final frame: {W_} --- {src_id} {fan_id} --:------ 2411 {len(payload):03d} {payload}"
+            )
+
+            # Create the command with exactly 2 addresses: from_id and fan_id
+            return cls._from_attrs(
+                W_,
+                Code._2411,
+                payload,
+                addr0=src_id,
+                addr1=fan_id,
+                addr2=NON_DEV_ADDR.id,
+            )
+
+        except (ValueError, TypeError) as err:
+            raise exc.CommandInvalid(f"Invalid value: {value}") from err
+        # --- End universal 2411 payload encoder ---
+
+    @classmethod  # constructor for RQ|2411
+    def get_fan_param(
+        cls,
+        fan_id: DeviceIdT | str,
+        param_id: str,
+        *,
+        src_id: DeviceIdT | str,
+    ) -> Command:
+        """Create a command to get a fan parameter.
+
+        This method constructs a command to read a specific parameter from a fan device using the 2411 command.
+        The parameter ID must be a valid 2-character hexadecimal string (00-FF).
+
+        For a complete example of how to use this method in a real application, see the
+        `test_get_fan_param.py` test file in the tests directory. The test demonstrates:
+        - Setting up the gateway
+        - Sending the command
+        - Handling the response
+        - Proper error handling
+
+        Example:
+            # Basic usage:
+            cmd = Command.get_fan_param(
+                fan_id='01:123456',  # Target fan device ID
+                param_id='4E',       # Parameter to read (2-char hex)
+                src_id='12:345678'   # Source device ID (e.g., remote)
+            )
+
+            # For a complete working example, see:
+            # tests/test_get_fan_param.py
+
+        Args:
+            fan_id: The device ID of the target fan (e.g., '01:123456')
+            param_id: The parameter ID to read (2-character hex string, e.g., '4E')
+            src_id: The source device ID that will send the command (e.g., a remote or DIS device ID)
+
+        Returns:
+            Command: A Command object for the RQ|2411 message that can be sent to the gateway
+
+        Raises:
+            CommandInvalid: If the parameter ID is invalid, including:
+                - None value
+                - Non-string types
+                - Leading/trailing whitespace
+                - Incorrect length (not 2 characters)
+                - Non-hexadecimal characters
+        """
+        # Check for None first
+        if param_id is None:
+            raise exc.CommandInvalid("Parameter ID cannot be None")
+
+        # Check if param_id is a string
+        if not isinstance(param_id, str):
+            raise exc.CommandInvalid(
+                f"Parameter ID must be a string, got {type(param_id).__name__}"
+            )
+
+        # Check for leading/trailing whitespace by comparing with stripped version
+        param_id_stripped = param_id.strip()
+        if param_id != param_id_stripped:
+            raise exc.CommandInvalid(
+                f"Parameter ID cannot have leading or trailing whitespace: '{param_id}'"
+            )
+
+        # Then validate the string format
+        try:
+            if len(param_id) != 2:
+                raise ValueError("Invalid length")
+            int(param_id, 16)  # Will raise ValueError if not valid hex
+        except ValueError as err:
+            raise exc.CommandInvalid(
+                f"Invalid parameter ID: '{param_id}'. Must be a 2-character hex string (00-FF)."
+            ) from err
+
+        # For RQ, the payload is just the parameter ID with 0000 prefix
+        payload = f"0000{param_id.upper()}"  # Convert to uppercase for consistency
+
+        return cls._from_attrs(RQ, Code._2411, payload, addr0=src_id, addr1=fan_id)
 
     @classmethod  # constructor for RQ|2E04
     def get_system_mode(cls, ctl_id: DeviceIdT | str) -> Command:
@@ -1425,7 +1670,8 @@ CODE_API_MAP = {
     f"{RQ}|{Code._1260}": Command.get_dhw_temp,
     f"{I_}|{Code._1260}": Command.put_dhw_temp,  # .          has a test (empty)
     f"{I_}|{Code._22F1}": Command.set_fan_mode,
-    f"{W_}|{Code._2411}": Command.set_fan_param,
+    f"{W_}|{Code._2411}": Command.set_fan_param,  # .         has a test
+    f"{RQ}|{Code._2411}": Command.get_fan_param,  # .         has a test
     f"{I_}|{Code._12A0}": Command.put_indoor_humidity,
     f"{RQ}|{Code._1030}": Command.get_mix_valve_params,
     f"{W_}|{Code._1030}": Command.set_mix_valve_params,  # .  has a test

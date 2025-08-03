@@ -1331,7 +1331,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MIN_VALUE: 0,
         SZ_MAX_VALUE: 25.0,
         SZ_PRECISION: 0.1,
-        SZ_DATA_TYPE: "0F",
+        SZ_DATA_TYPE: "01",
     },
     "54": {  # slot 0C
         SZ_DESCRIPTION: "Moisture sensor overrun time (mins)",
