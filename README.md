@@ -34,14 +34,15 @@ It includes a CLI and can be used as a standalone tool, but also is used as a cl
 
 To use the `ramses_rf` Integration in Home Assistant, just install `Ramses RF` from HACS. It will take care of installing this library. See the [`Ramses_cc wiki`](https://github.com/ramses-rf/ramses_cc/wiki/1.-Installation) for details.
 
-To run the `ramses_rf` client:
+To run the `ramses_rf` command line client:
 ```
 git clone https://github.com/ramses-rf/ramses_rf
 cd ramses_rf
 pip install -r requirements.txt
+pip install -e .
 ```
 
-For development, more setup is required. Please follow the steps in our [Developer's Resource](README-developers.md)
+For code development, more setup is required. Please follow the steps in our [Developer's Resource](README-developers.md)
 
 ## Ramses_rf CLI
 
