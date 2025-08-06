@@ -1,6 +1,6 @@
-![Linting](https://github.com/zxdavb/ramses_rf/actions/workflows/check-lint.yml/badge.svg)
-![Typing](https://github.com/zxdavb/ramses_rf/actions/workflows/check-type.yml/badge.svg)
-![Testing](https://github.com/zxdavb/ramses_rf/actions/workflows/check-test.yml/badge.svg)
+![Linting](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-lint.yml/badge.svg)
+![Typing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-type.yml/badge.svg)
+![Testing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-test.yml/badge.svg)
 
 ## Overview
 
@@ -27,16 +27,16 @@ For CH/DHW, the simplest way to know if it will work with your system is to iden
 Other systems may well work, such as some Itho Daalderop HVAC systems, use this protocol, YMMV.
 
 It includes a CLI and can be used as a standalone tool, but also is used as a client library by:
- - [ramses_cc](https://github.com/zxdavb/ramses_cc), a Home Assistant integration
+ - [ramses_cc](https://github.com/ramses-rf/ramses_cc), a Home Assistant integration
  - [evohome-Listener](https://github.com/smar000/evohome-Listener), an MQTT gateway
 
 ## Installation
 
-To use the `ramses_rf` Integration in Home Assistant, just install `Ramses RF` from HACS. It will take care of installing this library. See the [`Ramses_cc wiki`](https://github.com/zxdavb/ramses_cc/wiki/1.-Installation) for details.
+To use the `ramses_rf` Integration in Home Assistant, just install `Ramses RF` from HACS. It will take care of installing this library. See the [`Ramses_cc wiki`](https://github.com/ramses-rf/ramses_cc/wiki/1.-Installation) for details.
 
-To run the `ramses_rf` client or study the code:
+To run the `ramses_rf` client:
 ```
-git clone https://github.com/zxdavb/ramses_rf
+git clone https://github.com/ramses-rf/ramses_rf
 cd ramses_rf
 pip install -r requirements.txt
 ```
@@ -69,4 +69,4 @@ Send command example:
 ```
 python3 client.py execute /dev/cu.usbmodemFD131 -x " I 29:091138 32:022222 22F1 000406"
 ```
-See the [client.py Configuration wiki page](https://github.com/zxdavb/ramses_rf/wiki/client.py-configuration-file) for more.
+See the [client.py Configuration wiki page](https://github.com/ramses-rf/ramses_rf/wiki/client.py-configuration-file) for more.

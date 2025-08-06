@@ -22,26 +22,30 @@ Python3.13 -m venv ~/your-path-to/virtual-envs/ramses_rf
 ```
 where `Python3.13` is the python version to set for the `venv`.
 
-Repeat for every session:
-```
-cd /your-path-to/ramses_rf
-source ~/your-path-to/virtual-envs/ramses_rf/bin/activate
-```
-and confirm your Terminal prompt looks like:
-`(ramses_rf) user:ramses_rf `
-
 ### Clone this repo
 
 Clone this repo and install the requirements.
 Using `pip`, in a location where your IDE has access:
 ```
-git clone https://github.com/zxdavb/ramses_rf
-cd ramses_rf
+git clone https://github.com/ramses-rf/ramses_rf
+```
+
+Activate the venv (repeat every new session):
+```
+cd /your-path-to/ramses_rf
+source /your-path-to/virtual-envs/ramses_rf/bin/activate
+```
+and confirm your Terminal prompt looks like:
+`(ramses_rf) user:ramses_rf`
+
+### Install dependencies:
+```
+cd /your-path-to/ramses_rf
 pip install -r requirements.txt
 pip install -r requirements_dev.txt
 ```
 
-You need to repeat this after a release update and also when dev_requirements change in master.
+Repeat this after a release update and also when dev_requirements change in master.
 
 ### Install pre-commit hook
 Install the repo's pre-commit hook
