@@ -106,7 +106,7 @@
   # ignore_missing_imports = true  # only used per-module
   # follow_imports = normal  # avoid skip/silent, prefer normal (default) over error
 
-  # ### Strict typing (--strict) if all following are set to true (excl. zxdavb)
+  # ### Strict typing (--strict) if all following are set to true (excl. ramses-rf)
   #  - https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
 
   # # Config file & Configuring warning

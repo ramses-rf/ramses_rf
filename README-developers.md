@@ -1,6 +1,6 @@
-![Linting](https://github.com/zxdavb/ramses_rf/actions/workflows/check-lint.yml/badge.svg)
-![Typing](https://github.com/zxdavb/ramses_rf/actions/workflows/check-type.yml/badge.svg)
-![Testing](https://github.com/zxdavb/ramses_rf/actions/workflows/check-test.yml/badge.svg)
+![Linting](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-lint.yml/badge.svg)
+![Typing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-type.yml/badge.svg)
+![Testing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-test.yml/badge.svg)
 
 # Ramses_rf developer's resource
 
@@ -57,4 +57,4 @@ Running `pre-commit run` will only check staged files before a commit, while
 `pre-commit run -a` will check all files.
 
 ## More
-For more hints, see the [How to submit a PR wiki page](https://github.com/zxdavb/ramses_rf/wiki/How-to-submit-a-PR)
+For more hints, see the [How to submit a PR wiki page](https://github.com/ramses-rf/ramses_rf/wiki/How-to-submit-a-PR)

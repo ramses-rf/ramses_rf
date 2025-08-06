@@ -10,7 +10,7 @@
 2024-01-01T12:00:00.000000 ---  I --- 32:166025 --:------ 32:166025 042F 009 00050E0B0C00111470
 
 
-### HVAC, see: https://github.com/zxdavb/ramses_rf/pull/135
+### HVAC, see: https://github.com/ramses-rf/ramses_rf/pull/135
 
 # disconnect all - 10 sec on touch bottom right:
 2024-10-09T11:50:24.287879 065 RQ --- 37:117647 32:022222 --:------ 22F1 001 00

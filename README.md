@@ -17,7 +17,7 @@ It does four things:
  - allows you to emulate some hardware devices
 
 > [!WARNING]
-> This integration is not affiliated in any way with Honeywell, Airios nor any final manufacturer. The developers take no responsibility for anything that may happen to your devices because of this library.
+> This integration is not affiliated with Honeywell, Airios nor any final manufacturer. The developers take no responsibility for anything that may happen to your devices because of this library.
 
 For CH/DHW, the simplest way to know if it will work with your system is to identify the box connected to your boiler/HVAC appliance as one of:
  - **R8810A**: OpenTherm Bridge
