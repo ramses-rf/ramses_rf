@@ -46,6 +46,7 @@ from .const import (
     SZ_DOMAIN_ID,
     SZ_DOMAIN_IDX,
     SZ_DURATION,
+    SZ_FAN_INFO,
     SZ_FAN_MODE,
     SZ_FAN_RATE,
     SZ_FAULT_STATE,
@@ -66,6 +67,7 @@ from .const import (
     SZ_OEM_CODE,
     SZ_OFFER,
     SZ_OPENWINDOW_FUNCTION,
+    SZ_OUTDOOR_TEMP,
     SZ_PAYLOAD,
     SZ_PHASE,
     SZ_PRESSURE,
@@ -74,6 +76,7 @@ from .const import (
     SZ_REMAINING_PERCENT,
     SZ_SETPOINT,
     SZ_SETPOINT_BOUNDS,
+    SZ_SUPPLY_TEMP,
     SZ_SYSTEM_MODE,
     SZ_TEMPERATURE,
     SZ_TIMESTAMP,
@@ -2204,18 +2207,21 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
 # ventilation state (extended), HVAC
 def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
     # see: https://github.com/python/typing/issues/1445
-    return {  # type: ignore[typeddict-unknown-key]
+    result = {
         **parse_exhaust_fan_speed(payload[38:40]),  # maybe 31D9[4:6] for some?
         **parse_fan_info(payload[36:38]),  # 22F3-ish
-        #
         **parse_air_quality(payload[2:6]),  # 12C8[2:6]
         **parse_co2_level(payload[6:10]),  # 1298[2:6]
         **parse_indoor_humidity(payload[10:12]),  # 12A0?
         **parse_outdoor_humidity(payload[12:14]),
-        **parse_exhaust_temp(payload[14:18]),  # to outside
+        **parse_exhaust_temp(
+            payload[14:18]
+        ),  # to outside. Replaced for ClimaRad Ventura, see below
         **parse_supply_temp(payload[18:22]),  # to home
         **parse_indoor_temp(payload[22:26]),  # in home
-        **parse_outdoor_temp(payload[26:30]),  # 1290?
+        **parse_outdoor_temp(
+            payload[26:30]
+        ),  # 1290? Replaced for ClimaRad Ventura, see below
         **parse_capabilities(payload[30:34]),
         **parse_bypass_position(payload[34:36]),  # 22F7-ish
         **parse_supply_fan_speed(payload[40:42]),
@@ -2225,6 +2231,26 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
         **parse_supply_flow(payload[50:54]),  # NOTE: is supply, not exhaust
         **parse_exhaust_flow(payload[54:58]),  # NOTE: order switched from others
     }
+
+    if (
+        result[SZ_FAN_INFO]
+        == "-unknown 0x1F-"  # 1F constant in Ventura HRU which has actual fan_info in 31D9
+        and result["_unknown_fan_info_flags"]
+        == [0, 0, 0]  # use a second check, should imply:
+        and result[SZ_SUPPLY_TEMP] is None
+        and result[SZ_OUTDOOR_TEMP]
+        is not None  # make sure we have a substitute value from device
+    ):
+        # [26:30] = is supply_temp in ClimaRad Ventura, not outdoor_temp
+        result[SZ_SUPPLY_TEMP] = result[SZ_OUTDOOR_TEMP]  # replace
+        # [14:18] = is outdoor_temp in ClimaRad Ventura, not exhaust (too low)
+        # further confirmation: this is same value as 12A0[2], but less frequent
+        result[SZ_OUTDOOR_TEMP] = None
+        result[SZ_FAN_INFO] = (
+            None  # clear useless lookup to prevent showing in Climate UI
+        )
+
+    return result  # type: ignore[return-value]
 
     # From an Orcon 15RF Display
     #  1 Software version
