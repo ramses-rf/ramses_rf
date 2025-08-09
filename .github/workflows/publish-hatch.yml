@@ -8,9 +8,6 @@ on:
   release:
     types: [published]
 
-  workflow_dispatch:
-  # for testing hatch workflow, remove once OK
-
 permissions:
   contents: read
 
@@ -27,10 +24,10 @@ jobs:
       - name: Build dist
         run: hatch build
 
-      # - name: Publish on PyPi
-        # run: hatch publish
-        # with:
-        #   user: __token__
-        #   password: ${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish on PyPi
+        run: hatch publish
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
 
       - run: echo "🍏 This job's status is ${{ job.status }}."
