@@ -34,7 +34,9 @@ It includes a CLI and can be used as a standalone tool, but also is used as a cl
 
 To use the `ramses_rf` Integration in Home Assistant, just install `Ramses RF` from HACS. It will take care of installing this library. See the [`Ramses_cc wiki`](https://github.com/ramses-rf/ramses_cc/wiki/1.-Installation) for details.
 
-To run the `ramses_rf` command line client:
+### Ramses_rf CLI
+
+To install the `ramses_rf` command line client:
 ```
 git clone https://github.com/ramses-rf/ramses_rf
 cd ramses_rf
@@ -42,32 +44,6 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-For code development, more setup is required. Please follow the steps in our [Developer's Resource](README-developers.md)
+The CLI is called ``client.py`` and is included in the code root. See the [client.py CLI wiki page](https://github.com/ramses-rf/ramses_rf/wiki/The-client.py-command-line) for instructions.
 
-## Ramses_rf CLI
-
-The CLI is called ``client.py`` and is included in the code root.
-
-For example, to monitor ramses_rf messages picked up by a dongle connected to port USB0, and log them in `packet.log`:
-```
-python client.py monitor /dev/ttyUSB0 -o packet.log
-```
-To view the `client.py` help:
-```
-python client.py --help
-```
-
-To send a command to a device, type:
-```
-python client.py execute /dev/ttyUSB0 -x "_verb [seqn] addr0 [addr1 [addr2]] code payload"
-```
-Notes:
-- Before the `I` verb, add a whitespace inside the opening double quote: [RP]|[RQ]|[ I]
-- Skip empty device addresses;
-- Don't enter the packet length.
-
-Send command example:
-```
-python3 client.py execute /dev/cu.usbmodemFD131 -x " I 29:091138 32:022222 22F1 000406"
-```
-See the [client.py Configuration wiki page](https://github.com/ramses-rf/ramses_rf/wiki/client.py-configuration-file) for more.
+For code development, some more setup is required. Please follow the steps in our [Developer's Resource](README-developers.md)
