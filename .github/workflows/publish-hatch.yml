@@ -1,6 +1,7 @@
 # This workflow will upload a Python Package using Hatch when a release is created
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
 # and: https://github.com/pypa/hatch/issues/669
+
 name: Publish via Hatch
 
 on:
