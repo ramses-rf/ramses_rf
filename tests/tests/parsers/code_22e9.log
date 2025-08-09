@@ -12,3 +12,6 @@
 
 # Orcon HVAC from issue #164 by #hermanbanken
 2025-01-13T00:00:00.000000 000 RP --- 32:133288 18:101036 --:------ 22E9 004 007EC800  # {'percent_2': 0.63, 'percent_4': 1.0, 'percent_6': 0.0}
+
+# From Orcon HCR-300 by @pocketware in ramses_cc issue 76
+2024-09-07T00:00:05.000000 ... RP --- 32:161205 18:017128 --:------ 22E9 004 008CC814  # {'percent_2': 0.7, 'percent_4': 1.0, 'percent_6': 0.1}

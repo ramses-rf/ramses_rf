@@ -32,6 +32,8 @@ from .const import (
     SZ_ACCEPT,
     SZ_ACTIVE,
     SZ_BINDINGS,
+    SZ_BYPASS_MODE,
+    SZ_BYPASS_STATE,
     SZ_CHANGE_COUNTER,
     SZ_CONFIRM,
     SZ_DATETIME,
@@ -1710,21 +1712,12 @@ def parser_22f4(payload: str, msg: Message) -> dict[str, Any]:
 
 # bypass_mode, HVAC
 def parser_22f7(payload: str, msg: Message) -> dict[str, Any]:
-    # RQ --- 37:171871 32:155617 --:------ 22F7 001 00
-    # RP --- 32:155617 37:171871 --:------ 22F7 003 00FF00  # also: 000000, 00C8C8
-
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 0000EF  # bypass off
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 000000
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 00C8EF  # bypass on
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 00C800
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 00FFEF  # bypass auto
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 00FFC8
-
     result = {
-        "bypass_mode": {"00": "off", "C8": "on", "FF": "auto"}.get(payload[2:4]),
+        SZ_BYPASS_MODE: {"00": "off", "C8": "on", "FF": "auto"}.get(payload[2:4]),
     }
     if msg.verb != W_ or payload[4:] not in ("", "EF"):
-        result["bypass_state"] = {"00": "off", "C8": "on"}.get(payload[4:])
+        result[SZ_BYPASS_STATE] = {"00": "off", "C8": "on"}.get(payload[4:])
+        result.update(**parse_bypass_position(payload[4:]))  # type: ignore[arg-type]
 
     return result
 

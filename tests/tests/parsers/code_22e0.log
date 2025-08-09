@@ -1,0 +1,5 @@
+# FAN from ramses_cc issue #76 @karsdejong
+2024-06-24T00:00:00.000000 000 RP --- 32:143293 18:071939 --:------ 22E0 004 0022E61E  # {'percent_2': 0.17, 'percent_4': 1.15, 'percent_6': 0.15}
+
+# From Orcon HCR-300 by @pocketware in ramses_cc issue 76
+2024-09-07T00:00:05.000000 ... RP --- 32:161205 18:017128 --:------ 22E0 004 001EA01E  # {'percent_2': 0.15, 'percent_4': 0.8, 'percent_6': 0.15}

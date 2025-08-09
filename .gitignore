@@ -8,7 +8,7 @@
 /*.yaml
 
 
-### generic .gitignore used by https://github.com/zxdavb
+### generic .gitignore used by https://github.com/ramses-rf
 
 !.gitignore
 !.pre-commit-config.yaml

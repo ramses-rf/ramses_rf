@@ -12,3 +12,6 @@
 
 # Orcon HVAC from issue #164 by @hermanbanken
 2025-01-13T00:00:00.000000 ... RP --- 32:133288 18:101036 --:------ 2210 042 00FF00FFFF580000000003FFFFFFFFFF00FFFF580000000003FFFFFFFFFFFFFFFF000000000000000800  # {'unknown_10': '58', 'unknown_20': '03', 'unknown_78': '00', 'unknown_80': '08', 'unknown_82': '00'}
+
+# Orcon RF15 control unit (log from remyderuysscher via ramses_cc issue 65)
+2022-06-26T00:00:00.000001 ... RP --- 32:155021 18:071957 --:------ 2210 042 00FF00FFFFFF0000000000FFFFFFFFFF00FFFFFF0000000000FFFFFFFFFFFFFFFF000000000000020800  # {'unknown_10': 'FF', 'unknown_20': '00', 'unknown_78': '02', 'unknown_80': '08', 'unknown_82': '00'}

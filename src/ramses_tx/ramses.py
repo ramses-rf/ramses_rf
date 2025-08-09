@@ -275,7 +275,7 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
     },
     Code._1298: {  # co2_level
         SZ_NAME: "co2_level",
-        I_: r"^00[0-9A-F]{4}$",
+        I_: r"^00[0-9A-F]{4}$",  # NOTE: RP is same
         RQ: r"^00$",
     },
     Code._12A0: {  # indoor_humidity
@@ -1061,6 +1061,7 @@ _DEV_KLASSES_HVAC: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._1F09: {I_: {}, RP: {}},
         Code._1FC9: {W_: {}},
         Code._2210: {I_: {}, RP: {}},
+        Code._22E0: {RP: {}},
         Code._22E5: {RP: {}},
         Code._22E9: {RP: {}},
         Code._22F1: {RP: {}},
@@ -1072,6 +1073,7 @@ _DEV_KLASSES_HVAC: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._2E10: {I_: {}},
         Code._3120: {I_: {}},
         Code._3150: {I_: {}},
+        Code._313E: {RP: {}},
         Code._313F: {I_: {}, RP: {}},
         Code._31D9: {I_: {}, RP: {}},
         Code._31DA: {I_: {}, RP: {}},
@@ -1082,7 +1084,7 @@ _DEV_KLASSES_HVAC: dict[str, dict[Code, dict[VerbT, Any]]] = {
     DevType.CO2: {
         Code._042F: {I_: {}},
         Code._10E0: {I_: {}, RP: {}},
-        Code._1298: {I_: {}},
+        Code._1298: {I_: {}, RP: {}},
         Code._1FC9: {I_: {}},
         Code._22F1: {RQ: {}},
         Code._2411: {RQ: {}},
