@@ -8,6 +8,9 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+  # for testing hatch
+
 permissions:
   contents: read
 
