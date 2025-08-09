@@ -1018,7 +1018,15 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._mqtt_qos = int(parse_qs(self._broker_url.query).get("qos", ["0"])[0])
 
         self._connected = False
+        self._connecting = False
         self._extra[SZ_IS_EVOFW3] = True
+
+        # Reconnection settings
+        self._reconnect_interval = 5.0  # seconds
+        self._max_reconnect_interval = 300.0  # 5 minutes max
+        self._reconnect_backoff = 1.5
+        self._current_reconnect_interval = self._reconnect_interval
+        self._reconnect_task: asyncio.Task[None] | None = None
 
         # used in .write_frame() to rate-limit the number of writes
         self._timestamp = perf_counter()
@@ -1027,18 +1035,61 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         # instantiate a paho mqtt client
         self.client = mqtt.Client(CallbackAPIVersion.VERSION2)
-        self.client.on_connect = self._on_connect
-        self.client.on_disconnect = self._on_disconnect
-        self.client.on_message = self._on_message
-
+        self.client.on_connect = self._on_connect  # type: ignore[assignment]
+        self.client.on_connect_fail = self._on_connect_fail  # type: ignore[assignment]
+        self.client.on_disconnect = self._on_disconnect  # type: ignore[assignment]
+        self.client.on_message = self._on_message  # type: ignore[assignment]
         self.client.username_pw_set(self._username, self._password)
         # connect to the mqtt server
-        self.client.connect_async(
-            self._broker_url.hostname,  # type: ignore[arg-type]
-            self._broker_url.port or 1883,
-            60,
+        self._attempt_connection()
+
+    def _attempt_connection(self) -> None:
+        """Attempt to connect to the MQTT broker."""
+        if self._connecting or self._connected:
+            return
+
+        self._connecting = True
+        try:
+            self.client.connect_async(
+                self._broker_url.hostname,  # type: ignore[arg-type]
+                self._broker_url.port or 1883,
+                60,
+            )
+            self.client.loop_start()
+        except Exception as err:
+            _LOGGER.error(f"Failed to initiate MQTT connection: {err}")
+            self._connecting = False
+            self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        """Schedule a reconnection attempt with exponential backoff."""
+        if self._closing or self._reconnect_task:
+            return
+
+        _LOGGER.info(
+            f"Scheduling MQTT reconnect in {self._current_reconnect_interval} seconds"
         )
-        self.client.loop_start()
+        self._reconnect_task = self._loop.create_task(
+            self._reconnect_after_delay(), name="MqttTransport._reconnect_after_delay()"
+        )
+
+    async def _reconnect_after_delay(self) -> None:
+        """Wait and then attempt to reconnect."""
+        try:
+            await asyncio.sleep(self._current_reconnect_interval)
+
+            # Increase backoff for next time
+            self._current_reconnect_interval = min(
+                self._current_reconnect_interval * self._reconnect_backoff,
+                self._max_reconnect_interval,
+            )
+
+            _LOGGER.info("Attempting MQTT reconnection...")
+            self._attempt_connection()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self._reconnect_task = None
 
     def _on_connect(
         self,
@@ -1050,6 +1101,23 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     ) -> None:
         # _LOGGER.error("Mqtt._on_connect(%s, %s, %s, %s)", client, userdata, flags, reason_code.getName())
 
+        self._connecting = False
+
+        if reason_code.is_failure:
+            _LOGGER.error(f"MQTT connection failed: {reason_code.getName()}")  # type: ignore[no-untyped-call]
+            self._schedule_reconnect()
+            return
+
+        _LOGGER.info(f"MQTT connected: {reason_code.getName()}")  # type: ignore[no-untyped-call]
+
+        # Reset reconnect interval on successful connection
+        self._current_reconnect_interval = self._reconnect_interval
+
+        # Cancel any pending reconnect task
+        if self._reconnect_task:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
+
         self.client.subscribe(self._topic_base)  # hope to see 'online' message
 
     def _on_connect_fail(
@@ -1059,10 +1127,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         reason_code: ReasonCode,
         properties: Any | None,
     ) -> None:
-        _LOGGER.error(f"Disconnected with result code {reason_code.getName()}")  # type: ignore[no-untyped-call]
+        _LOGGER.error(f"MQTT connection failed: {reason_code.getName()}")  # type: ignore[no-untyped-call]
 
-        # self._closing = False  # FIXME
-        # self._connection_lost(reason_code)
+        self._connecting = False
+        self._connected = False
+
+        if not self._closing:
+            self._schedule_reconnect()
 
     def _on_disconnect(
         self,
@@ -1072,10 +1143,17 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         reason_code: ReasonCode,
         properties: Any | None,
     ) -> None:
-        _LOGGER.error(f"Disconnected with result code {reason_code.getName()}")  # type: ignore[no-untyped-call]
+        _LOGGER.warning(f"MQTT disconnected: {reason_code.getName()}")  # type: ignore[no-untyped-call]
 
-        # self._closing = False  # FIXME
-        # self._connection_lost(reason_code)
+        self._connected = False
+
+        # Only attempt reconnection if we didn't deliberately disconnect
+        if not self._closing and not reason_code.is_failure:
+            # This was an unexpected disconnect, schedule reconnection
+            self._schedule_reconnect()
+        elif reason_code.is_failure and not self._closing:
+            # Connection failed, also schedule reconnection
+            self._schedule_reconnect()
 
     def _create_connection(self, msg: mqtt.MQTTMessage) -> None:
         """Invoke the Protocols's connection_made() callback MQTT is established."""
@@ -1084,8 +1162,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         assert msg.payload == b"online", "Coding error"
 
         if self._connected:
+            _LOGGER.info("MQTT device came back online - resuming writing")
             self._loop.call_soon_threadsafe(self._protocol.resume_writing)
             return
+
+        _LOGGER.info("MQTT device is online - establishing connection")
         self._connected = True
 
         self._extra[SZ_ACTIVE_HGI] = msg.topic[-9:]
@@ -1117,15 +1198,16 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         if msg.topic[-3:] != "/rx":  # then, e.g. 'RAMSES/GATEWAY/18:017804'
             if msg.payload == b"offline" and self._topic_sub.startswith(msg.topic):
                 _LOGGER.warning(
-                    f"{self}: the MQTT topic is offline: {self._topic_sub[:-3]}"
+                    f"{self}: the MQTT device is offline: {self._topic_sub[:-3]}"
                 )
+                self._connected = False
                 self._protocol.pause_writing()
 
             # BUG: using create task (self._loop.ct() & asyncio.ct()) causes the
             # BUG: event look to close early
             elif msg.payload == b"online":
-                _LOGGER.warning(
-                    f"{self}: the MQTT topic is online: {self._topic_sub[:-3]}"
+                _LOGGER.info(
+                    f"{self}: the MQTT device is online: {self._topic_sub[:-3]}"
                 )
                 self._create_connection(msg)
 
@@ -1157,6 +1239,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         Protocols call Transport.write_frame(), not Transport.write().
         """
+
+        # Check if we're connected before attempting to write
+        if not self._connected:
+            _LOGGER.debug(f"{self}: Dropping write - MQTT not connected")
+            return
 
         # top-up the token bucket
         timestamp = perf_counter()
@@ -1197,16 +1284,31 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         try:
             self._publish(data)
         except MQTTException as err:
-            self._close(exc.TransportError(err))
+            _LOGGER.error(f"MQTT publish failed: {err}")
+            # Don't close the transport, just log the error and continue
+            # The broker might come back online
             return
 
     def _publish(self, payload: str) -> None:
         # _LOGGER.error("Mqtt._publish(%s)", message)
 
+        if not self._connected:
+            _LOGGER.debug("Cannot publish - MQTT not connected")
+            return
+
         info: mqtt.MQTTMessageInfo = self.client.publish(
             self._topic_pub, payload=payload, qos=self._mqtt_qos
         )
-        assert info
+
+        if not info:
+            _LOGGER.warning("MQTT publish returned no info")
+        elif info.rc != mqtt.MQTT_ERR_SUCCESS:
+            _LOGGER.warning(f"MQTT publish failed with code: {info.rc}")
+            # Check if this indicates a connection issue
+            if info.rc in (mqtt.MQTT_ERR_NO_CONN, mqtt.MQTT_ERR_CONN_LOST):
+                self._connected = False
+                if not self._closing:
+                    self._schedule_reconnect()
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:
         """Close the transport (disconnect from the broker and stop its poller)."""
@@ -1214,13 +1316,21 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         super()._close(exc)
 
+        # Cancel any pending reconnection attempts
+        if self._reconnect_task:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
+
         if not self._connected:
             return
         self._connected = False
 
-        self.client.unsubscribe(self._topic_sub)
-        self.client.disconnect()
-        self.client.loop_stop()
+        try:
+            self.client.unsubscribe(self._topic_sub)
+            self.client.disconnect()
+            self.client.loop_stop()
+        except Exception as err:
+            _LOGGER.debug(f"Error during MQTT cleanup: {err}")
 
 
 def validate_topic_path(path: str) -> str:
