@@ -25,7 +25,7 @@ jobs:
         run: pipx install hatch
 
       - name: Run tests
-        run: hatch run test:test
+        run: hatch test
 
       - name: Build dist
         run: hatch build
