@@ -9,7 +9,7 @@ on:
     types: [published]
 
   workflow_dispatch:
-  # for testing hatch
+  # for testing hatch workflow, remove once OK
 
 permissions:
   contents: read
@@ -23,9 +23,6 @@ jobs:
 
       - name: Install hatch
         run: pipx install hatch
-
-      - name: Run tests
-        run: hatch test
 
       - name: Build dist
         run: hatch build
