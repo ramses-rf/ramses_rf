@@ -1,6 +1,6 @@
-# This workflow will upload a Python Package using Twine when a release is created
+# This workflow will upload a Python Package using Hatch when a release is created
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
+# and: https://github.com/pypa/hatch/issues/669
 name: Publish via Hatch
 
 on:
@@ -14,31 +14,20 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13"]
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Install hatch
+        run: pipx install hatch
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install build
+      - name: Run tests
+        run: hatch run test:test
 
-      - name: Build package
-        run:
-          python -m build
+      - name: Build dist
+        run: hatch build
 
-      # - name: Publish package
-        # uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
+      # - name: Publish on PyPi
+        # run: hatch publish
         # with:
         #   user: __token__
         #   password: ${{ secrets.PYPI_API_TOKEN }}
