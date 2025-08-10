@@ -43,7 +43,7 @@ from .logger import set_pkt_logging
 from .message import Message
 from .packet import PKT_LOGGER, Packet
 from .protocol import PortProtocol, ReadProtocol, protocol_factory
-from .ramses import CODES_BY_DEV_SLUG, CODES_SCHEMA
+from .ramses import CODES_BY_DEV_SLUG, CODES_SCHEMA, _2411_PARAMS_SCHEMA
 from .schemas import SZ_SERIAL_PORT, DeviceIdT, DeviceListT
 from .transport import (
     FileTransport,

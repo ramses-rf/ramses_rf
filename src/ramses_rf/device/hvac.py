@@ -3,11 +3,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 import logging
+
 from typing import Any, TypeVar
 
 from ramses_rf import exceptions as exc
 from ramses_rf.const import (
+    FAN_MODE,
     SZ_AIR_QUALITY,
     SZ_AIR_QUALITY_BASIS,
     SZ_BOOST_TIMER,
@@ -44,7 +48,11 @@ from ramses_rf.entity_base import class_by_attr
 from ramses_rf.helpers import shrink
 from ramses_rf.schemas import SCH_VCS, SZ_REMOTES, SZ_SENSORS
 from ramses_tx import Address, Command, Message, Packet, Priority
-from ramses_tx.ramses import CODES_OF_HVAC_DOMAIN_ONLY, HVAC_KLASS_BY_VC_PAIR
+from ramses_tx.ramses import (
+    CODES_OF_HVAC_DOMAIN_ONLY,
+    HVAC_KLASS_BY_VC_PAIR,
+    _2411_PARAMS_SCHEMA,
+)
 
 from .base import BatteryState, DeviceHvac, Fakeable
 
@@ -304,10 +312,13 @@ class HvacDisplayRemote(HvacRemote):  # DIS
     #     )
 
 
-class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
+class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     """The FAN (ventilation) class.
 
     The cardinal codes are 31D9, 31DA.  Signature is RP/31DA.
+    Also handles 2411 parameter messages for configuration.
+    Since 2411 is not supported by all vendors, discovery is used to determine if it is supported.
+    Since different parameters for 1 Code, we will process the 2411 messages in the _handle_msg method.
     """
 
     # Itho Daalderop (NL)
@@ -319,22 +330,194 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     _SLUG: str = DevType.FAN
 
-    def _handle_msg(self, *args: Any, **kwargs: Any) -> None:
-        return super()._handle_msg(*args, **kwargs)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the HvacVentilator."""
+        super().__init__(*args, **kwargs)
+        self._found_codes = set()  # Tracks which message codes we've encountered
+        self._pending_callbacks = []  # List of (code, callback) tuples
+        self._hgi = None  # Will be set when HGI is available
+        self._cleanup_tasks = []  # Track any cleanup tasks
+        self._bound_devices = {}  # Track bound devices (e.g., REM/DIS)
+        self._bound_to = None  # Track which REM/DIS this FAN is bound to
 
-    def _update_schema(self, **schema: Any) -> None:
-        """Update a FAN with new schema attrs.
+        """
+        _2411_params
+            A dictionary of 2411 parameters.
+            This is only created if the device supports 2411.
+            We need a special way to store these parameters since we cannot rely on
+            the standard msg_value method where only the last msg is stored.
+            Unlike eg the 31DA, the 2411 parameters each have their own RP and I codes.
+            I did concider using _pkt._ctx, but it seems work in progress and i don't know
+            if it would break anything else in the codebase.
+            This _2411_params is straightforward, and only used if there is support anyways.
+        found_codes
+            Whenever a message is received, the code is added to this set.
+            This allows to track support of certain codes (e.g. 2411).
 
-        Raise an exception if the new schema is not a superset of the existing schema.
+        Callback Mechanism:
+            The callback system allows other components to be notified when the device is fully initialized.
+            See [callback_mechanism.md](../docs/callback_mechanism.md) for detailed documentation.
         """
 
-        schema = shrink(SCH_VCS(schema))
+    def add_initialization_callback(self, callback, code=None):
+        """Add a callback to be called after initialization is complete.
 
-        for dev_id in schema.get(SZ_REMOTES, {}):
-            self._gwy.get_device(dev_id)
+        Args:
+            callback: A callable that will be invoked when the device is initialized.
+                     If code is provided, the callback will only be called when that
+                     specific code is processed.
+            code: Optional message code (e.g., Code._2411) that triggers this callback.
+                  If None, the callback will be called for any initialization.
+        """
+        if code is None or code in self._found_codes:
+            try:
+                callback()
+            except Exception as ex:
+                _LOGGER.warning("Error in initialization callback: %s", ex)
+        else:
+            self._pending_callbacks.append((code, callback))
 
-        for dev_id in schema.get(SZ_SENSORS, {}):
-            self._gwy.get_device(dev_id)
+    def _process_pending_callbacks(self, code=None):
+        """Process any pending callbacks that match the given code.
+
+        Args:
+            code: The message code that was just processed. If None, processes all
+                  callbacks regardless of code.
+
+        Callbacks are processed in the order they were added. After a callback is
+        successfully processed, its code is marked as initialized, so future callbacks
+        for the same code will be executed immediately.
+        """
+        remaining_callbacks = []
+        processed_codes = set()
+
+        for cb_code, callback in self._pending_callbacks:
+            if code is not None and cb_code is not None and cb_code != code:
+                remaining_callbacks.append((cb_code, callback))
+                continue
+
+            try:
+                callback()
+                # Only mark as processed if no exception was raised
+                if cb_code is not None:
+                    processed_codes.add(cb_code)
+            except Exception as e:
+                _LOGGER.warning(
+                    f"Error in callback for {self} (code={cb_code}): {e}",
+                    exc_info=True,
+                )
+                remaining_callbacks.append((cb_code, callback))
+
+        # Update found codes with all processed codes
+        self._found_codes.update(processed_codes)
+
+        # If we processed a specific code, ensure it's marked as found
+        if code is not None and code not in self._found_codes:
+            self._found_codes.add(code)
+
+        self._pending_callbacks = remaining_callbacks
+
+    @property
+    def supports_2411(self) -> bool:
+        """Return True if this device supports 2411 parameters."""
+        return Code._2411 in self._found_codes
+
+    @property
+    def param_value(self, param_id: str) -> Any:
+        """Get a parameter value, compatible with _msg_value pattern."""
+        if hasattr(self, "_2411_params") and param_id in self._2411_params:
+            return self._2411_params[param_id]
+        return None
+
+    @property
+    def hgi(self):
+        """Return the HGI device if available."""
+        if self._hgi is None and self._gwy and hasattr(self._gwy, "hgi"):
+            self._hgi = self._gwy.hgi
+        return self._hgi
+
+    def _handle_2411_message(self, msg: Message) -> None:
+        # Initialize the parameters dictionary if it doesn't exist
+        if not hasattr(self, "_2411_params"):
+            self._2411_params = {}
+
+        # Mark as supporting 2411 if we get a valid response (RP) or info (I)
+        if msg.verb in (RP, I_):
+            _LOGGER.debug("Processing 2411 message with verb %s", msg.verb)
+            if not self.supports_2411:
+                self._found_codes.add(Code._2411)
+                _LOGGER.info(
+                    "Device %s supports 2411 parameters (detected via %s message)",
+                    self.id,
+                    msg.verb,
+                )
+            # Process parameter value if payload is valid
+            if (
+                isinstance(msg.payload, dict)
+                and "parameter" in msg.payload
+                and "value" in msg.payload
+            ):
+                param_id = msg.payload["parameter"].upper()
+                value = msg.payload["value"]
+
+                _LOGGER.debug(
+                    "Processing 2411 parameter: device=%s, param_id=%s, value=%s",
+                    self.id,
+                    param_id,
+                    value,
+                )
+
+                # Store the parameter value in the standard location used by _msg_value
+                old_value = (
+                    self._2411_params.get(param_id)
+                    if hasattr(self, "_2411_params")
+                    else None
+                )
+                self._2411_params[param_id] = value
+
+                _LOGGER.debug(
+                    "Stored parameter %s value: %s (total params: %d)",
+                    param_id,
+                    value,
+                    len(self._2411_params),
+                )
+
+                # Also store in the _params_2411 dictionary for backward compatibility
+                if not hasattr(self, "_params_2411"):
+                    self._params_2411 = {}
+                self._params_2411[param_id] = value
+
+    def _handle_msg(self, msg: Message) -> None:
+        """Handle a message from this device.
+
+        Args:
+            msg: The incoming message to process
+
+        This method processes the message and triggers any callbacks registered
+        for the message's code. It also handles special processing for 2411 messages.
+        """
+        super()._handle_msg(msg)
+
+        # Special handling for 2411 parameter messages
+        if msg.code == Code._2411:
+            _LOGGER.debug(
+                "Received 2411 message from %s: verb=%s, payload=%s, src=%s, dst=%s",
+                self.id,
+                msg.verb,
+                msg.payload,
+                msg.src,
+                msg.dst,
+            )
+            self._handle_2411_message(msg)
+
+        # Process callbacks for this specific code
+        if hasattr(msg, "code") and msg.code is not None:
+            self._process_pending_callbacks(code=msg.code)
+
+        # # After first message, mark as initialized and process callbacks
+        # if not self._initialized:
+        #     self._initialized = True
+        #     self._process_pending_callbacks()
 
     def _setup_discovery_cmds(self) -> None:
         super()._setup_discovery_cmds()
@@ -344,14 +527,25 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             Command.from_attrs(RQ, self.id, Code._22F1, "00"), 60 * 60 * 24, delay=15
         )  # to learn scheme: orcon/itho/other (04/07/0?)
 
+        # Add a single discovery command for all parameters (3F likely to be supported if any)
+        # The handler will process the response and update the appropriate parameter and
+        # also set the supports_2411 flag
+        _LOGGER.debug("Adding single discovery command for all 2411 parameters")
+        self._add_discovery_cmd(
+            Command.from_attrs(RQ, self.id, Code._2411, "00003F"),
+            interval=60 * 60 * 24,  # Check daily
+            delay=40,  # Initial delay before first discovery
+        )
+
+        # Standard discovery commands for other codes
         for code in (
-            Code._2210,
-            Code._22E0,
-            Code._22E5,
-            Code._22E9,
-            Code._22F2,
-            Code._22F4,
-            Code._22F8,
+            Code._2210,  # Air quality
+            Code._22E0,  # Bypass position
+            Code._22E5,  # Remaining minutes
+            Code._22E9,  # Speed cap
+            Code._22F2,  # Post heat
+            Code._22F4,  # Pre heat
+            Code._22F8,  # Air quality base
         ):
             self._add_discovery_cmd(
                 Command.from_attrs(RQ, self.id, code, "00"), 60 * 30, delay=15
@@ -361,6 +555,183 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             self._add_discovery_cmd(
                 Command.from_attrs(RQ, self.id, code, "00"), 60 * 30, delay=30
             )
+
+    def add_bound_device(self, device_id: str, device_type: str) -> None:
+        """Add a bound device to this FAN.
+
+        Args:
+            device_id: The ID of the device to bind
+            device_type: The type of device (e.g., 'REM', 'DIS')
+        """
+        if device_type not in (DevType.REM, DevType.DIS):
+            _LOGGER.warning(
+                "Cannot bind device %s of type %s to FAN %s: must be REM or DIS",
+                device_id,
+                device_type,
+                self.id,
+            )
+            return
+
+        self._bound_devices[device_id] = device_type
+        _LOGGER.info("Bound %s device %s to FAN %s", device_type, device_id, self.id)
+
+    def remove_bound_device(self, device_id: str) -> None:
+        """Remove a bound device from this FAN.
+
+        Args:
+            device_id: The ID of the device to unbind
+        """
+        if device_id in self._bound_devices:
+            device_type = self._bound_devices.pop(device_id)
+            _LOGGER.info(
+                "Removed bound %s device %s from FAN %s",
+                device_type,
+                device_id,
+                self.id,
+            )
+
+    def get_bound_rem(self) -> str | None:
+        """Get the first bound REM/DIS device ID for this FAN.
+
+        Returns:
+            The device ID of the first bound REM/DIS device, or None if none found
+        """
+        if not self._bound_devices:
+            _LOGGER.debug("No bound devices found for FAN %s", self.id)
+            return None
+
+        # Return the first bound device ID
+        device_id = next(iter(self._bound_devices))
+        _LOGGER.debug("Using bound device %s for FAN %s", device_id, self.id)
+        return device_id
+
+    def get_fan_param(self, param_id: str) -> Any:
+        """Get a fan parameter value by ID.
+
+        Args:
+            param_id: The parameter ID to get (e.g. '31' or '3E')
+                    Case-insensitive, will be converted to uppercase for lookup
+
+        Returns:
+            The parameter value if found, None otherwise
+        """
+        if not self.supports_2411:
+            _LOGGER.debug(
+                "Cannot get parameter %s from %s: 2411 not supported", param_id, self.id
+            )
+            return None
+
+        # Ensure param_id is uppercase for consistent lookup
+        param_id = param_id.upper()
+
+        # Check if we have the parameter in our cache
+        if hasattr(self, "_2411_params") and param_id in self._2411_params:
+            value = self._2411_params[param_id]
+            _LOGGER.debug(
+                "Found cached parameter %s for %s: %s", param_id, self.id, value
+            )
+            return value
+
+        # Parameter not in cache, request it
+        _LOGGER.debug("Requesting parameter %s from %s", param_id, self.id)
+        self._send_cmd(Command.from_attrs(RQ, self.id, Code._2411, f"0000{param_id}"))
+        _LOGGER.debug("Sent parameter request for %s to %s", param_id, self.id)
+
+        return None
+
+    # @property
+    # def fan_params(self) -> dict[str, Any]:
+    #     """Return a dictionary of all fan parameters."""
+    #     from ramses_tx.ramses import _2411_PARAMS_SCHEMA
+
+    #     params = {}
+    #     for param_id in _2411_PARAMS_SCHEMA:
+    #         # Ensure param_id is uppercase hex for consistency
+    #         normalized_id = param_id.upper()
+    #         # Use the normalized parameter ID as the key and fetch its value
+    #         params[normalized_id] = self.get_fan_param(normalized_id)
+
+    #     return params
+
+    async def set_fan_param(
+        self, param_id: str, value: Any, max_retries: int = 2, timeout: float = 5.0
+    ) -> bool:
+        """Set a fan parameter value with request/response tracking.
+
+        Args:
+            param_id: The parameter ID to set (e.g., '31' or '3E')
+            value: The value to set (will be converted to int)
+            max_retries: Maximum number of retry attempts (unused, kept for backward compatibility)
+            timeout: Timeout in seconds for each retry (unused, kept for backward compatibility)
+
+        Returns:
+            bool: True if the parameter was set successfully, False otherwise
+
+        Note:
+            This method sends the command directly to the FAN device using the bound REM/DIS device
+            as the source. The FAN must be bound to a REM or DIS device for this to work.
+        """
+        if not self.supports_2411:
+            _LOGGER.debug(
+                "Cannot set parameter %s on %s: 2411 parameters not supported",
+                param_id,
+                self.id,
+            )
+            return False
+
+        # Ensure param_id is uppercase for consistency
+        param_id = param_id.upper()
+
+        # Get the bound REM/DIS device ID
+        src_id = self.get_bound_rem()
+        if not src_id:
+            _LOGGER.error(
+                "Cannot set parameter %s on %s: No bound REM/DIS device found. "
+                "The FAN must be bound to a REM or DIS device to set parameters. "
+                "See https://github.com/zxdavb/ramses_cc/wiki/5.-Faking-&-Impersonation for more information.",
+                param_id,
+                self.id,
+            )
+            return False
+
+        _LOGGER.debug(
+            "Setting parameter %s to %s on %s using bound device %s",
+            param_id,
+            value,
+            self.id,
+            src_id,
+        )
+
+        try:
+            # Convert value to int if it's numeric
+            try:
+                value_int = int(value)
+            except (TypeError, ValueError) as err:
+                _LOGGER.error(
+                    "Invalid value '%s' for parameter %s on %s: %s",
+                    value,
+                    param_id,
+                    self.id,
+                    err,
+                )
+                return False
+
+            # Create and send the command
+            cmd = Command.set_fan_param(self.id, param_id, value_int, src_id=src_id)
+            self._send_cmd(cmd)
+            _LOGGER.debug("Sent parameter set command: %s", cmd)
+            return True
+
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to set parameter %s to %s on %s: %s",
+                param_id,
+                value,
+                self.id,
+                err,
+                exc_info=_LOGGER.isEnabledFor(logging.DEBUG),
+            )
+            return False
 
     @property
     def air_quality(self) -> float | None:
@@ -654,7 +1025,7 @@ _REMOTES = {
 """
 # CVE/HRU remote (536-0124) [RFT W: 3 modes, timer]
     "away":       (Code._22F1, 00, 01|04"),  # how to invoke?
-    "low":        (Code._22F1, 00, 02|04"),
+    "low":        (Code._22F1, 00, 02|04"),  # aka eco
     "medium":     (Code._22F1, 00, 03|04"),  # aka auto (with sensors) - is that only for 63?
     "high":       (Code._22F1, 00, 04|04"),  # aka full
 
