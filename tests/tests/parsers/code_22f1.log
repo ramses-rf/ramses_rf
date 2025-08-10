@@ -7,7 +7,7 @@
 2023-11-05T10:00:43.645038 061  I --- 30:068457 20:020521 --:------ 22F1 003 000205  # {'_mode_idx': '02', '_mode_max': '05', '_scheme': 'orcon', 'fan_mode': 'medium'}
 2023-11-05T10:01:38.150893 076  I --- --:------ --:------ 20:020521 31D9 003 000001  # {'hvac_id': '00', 'exhaust_fan_speed': 0.005, 'fan_mode': '01', 'passive': False, 'damper_only': False, 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0]}
 
-# Contrived
+# Contrived from ramses_cc issue 76
 2022-06-22T00:00:01.000000 ... RQ --- 18:006402 30:071287 --:------ 22F1 001 00      # {}
 
 # Scheme 04 - seen with Itho  : 000[01234]04 (standby/off, auto, low, medium, high/boost if timer)
