@@ -383,9 +383,10 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
         """
         for code in [c for c in (Code._22F7, Code._31DA) if c in self._msgs]:
             if v := self._msgs[code].payload.get(SZ_BYPASS_POSITION):
-                assert isinstance(v, (float | type(None)))
+                assert isinstance(v, (int | type(None)))
                 return v
                 # if both packets exist and both have the key, return the most recent
+        return None
 
     @property
     def bypass_state(self) -> str | None:
@@ -408,6 +409,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 assert isinstance(v, (float | type(None)))
                 return v
                 # if both packets exist and both have the key, return the most recent
+        return None
 
     @property
     def exhaust_flow(self) -> float | None:
@@ -421,8 +423,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             if v := self._msgs[Code._12A0].payload[2].get(SZ_TEMPERATURE):
                 assert isinstance(v, (float | type(None)))
                 return v
-        else:
-            return self._msg_value(Code._31DA, key=SZ_EXHAUST_TEMP)
+            return None
+        return self._msg_value(Code._31DA, key=SZ_EXHAUST_TEMP)
 
     @property
     def fan_info(self) -> str | None:
@@ -465,11 +467,12 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
                 assert isinstance(v, (float | type(None)))
                 return v
-        else:  # prevent AttributeError: 'list' object has no attribute 'get'
-            for code in [c for c in (Code._12A0, Code._31DA) if c in self._msgs]:
-                if v := self._msgs[code].payload.get(SZ_INDOOR_HUMIDITY):
-                    assert isinstance(v, (float | type(None)))
-                    return v
+            return None  # prevent AttributeError: 'list' object has no attribute 'get'
+        for code in [c for c in (Code._12A0, Code._31DA) if c in self._msgs]:
+            if v := self._msgs[code].payload.get(SZ_INDOOR_HUMIDITY):
+                assert isinstance(v, (float | type(None)))
+                return v
+        return None
 
     @property
     def indoor_temp(self) -> float | None:
@@ -480,7 +483,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 if v := self._msgs[Code._12A0].payload[0].get(SZ_TEMPERATURE):
                     assert isinstance(v, (float | type(None)))
                     return v
-            elif v := self._msgs[Code._12A0].payload.get(SZ_TEMPERATURE):
+                return None
+            if v := self._msgs[Code._12A0].payload.get(SZ_TEMPERATURE):
                 assert isinstance(v, (float | type(None)))
                 return v  # ClimaRad minibox FAN sends (indoor) temp in 12A0
         return self._msg_value(Code._31DA, key=SZ_INDOOR_TEMP)
