@@ -377,13 +377,14 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
         return self._msg_value(Code._22F7, key=SZ_BYPASS_MODE)
 
     @property
-    def bypass_position(self) -> int | None:
+    def bypass_position(self) -> float | str | None:
         """
-        :return: bypass position as a percentage
+        :return: bypass position as percentage: 0.0 (closed) or 1.0 (open), on error: "x_faulted"
         """
+        # ventura: return self._msg_value(Code._31DA, key=SZ_BYPASS_POSITION)
         for code in [c for c in (Code._22F7, Code._31DA) if c in self._msgs]:
             if v := self._msgs[code].payload.get(SZ_BYPASS_POSITION):
-                assert isinstance(v, (float | type(None)))
+                assert isinstance(v, (float | str | type(None)))
                 return v
                 # if both packets exist and both have the key, return the most recent
         return None
@@ -449,7 +450,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                     mode = v
                 if k == SZ_FAN_RATE:
                     mode = mode + ", " + v
-            return mode
+            if mode != "":
+                return mode
         return str(
             self._msg_value(Code._31DA, key=SZ_FAN_INFO)
         )  # a description to display in climate, e.g. "speed 2, medium", note localize in UI
