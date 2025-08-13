@@ -496,6 +496,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 return v
         else:
             return self._msg_value(Code._31DA, key=SZ_INDOOR_TEMP)
+        return None
 
     @property
     def outdoor_humidity(self) -> float | None:
