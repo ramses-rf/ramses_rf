@@ -1106,7 +1106,11 @@ _DEV_KLASSES_HVAC: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._0001: {RQ: {}},  # from a VMI (only?)
         Code._042F: {I_: {}},  # from a VMI (only?)
         Code._1060: {I_: {}},
-        Code._10D0: {W_: {}},  # reset filter count from REM
+        Code._10D0: {
+            RP: {},
+            RQ: {},
+            W_: {},
+        },  # RQ/RP Orcon HRC, W=reset filter count from REM
         Code._10E0: {I_: {}, RQ: {}},  # RQ from a VMI (only?)
         Code._1470: {RQ: {}},  # from a VMI (only?)
         Code._1FC9: {I_: {}},
