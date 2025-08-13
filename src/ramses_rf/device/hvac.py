@@ -488,18 +488,14 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def indoor_temp(self) -> float | None:
-        if Code._12A0 in self._msgs:
-            if isinstance(
-                self._msgs[Code._12A0].payload, list
-            ):  # FAN Ventura sends RH/temps as a list; use element [0] for indoor_temp
-                if v := self._msgs[Code._12A0].payload[0].get(SZ_TEMPERATURE):
-                    assert isinstance(v, (float | type(None)))
-                    return v
-                return None
-            if v := self._msgs[Code._12A0].payload.get(SZ_TEMPERATURE):
+        if Code._12A0 in self._msgs and isinstance(
+            self._msgs[Code._12A0].payload, list
+        ):  # FAN Ventura sends RH/temps as a list; element [0] is indoor_temp
+            if v := self._msgs[Code._12A0].payload[0].get(SZ_TEMPERATURE):
                 assert isinstance(v, (float | type(None)))
-                return v  # ClimaRad minibox FAN sends (indoor) temp in 12A0
-        return self._msg_value(Code._31DA, key=SZ_INDOOR_TEMP)
+                return v
+        else:
+            return self._msg_value(Code._31DA, key=SZ_INDOOR_TEMP)
 
     @property
     def outdoor_humidity(self) -> float | None:
@@ -549,6 +545,11 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 if k != SZ_EXHAUST_FAN_SPEED
             },
         }
+
+    @property
+    def temperature(self) -> float | None:  # Celsius
+        # ClimaRad minibox FAN sends (indoor) temp in 12A0
+        return self._msg_value(Code._12A0, key=SZ_TEMPERATURE)
 
 
 # class HvacFanHru(HvacVentilator):
