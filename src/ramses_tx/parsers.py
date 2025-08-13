@@ -2147,7 +2147,7 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
 
     bitmap = int(payload[2:4], 16)
 
-    # NOTE: 31D9[4:6] is fan_rate (minibox, itho) *or* fan_mode (orcon?)
+    # NOTE: 31D9[4:6] is fan_rate (ClimaRad minibox, Itho) *or* fan_mode (Orcon, Vasco)
     result = {
         **parse_exhaust_fan_speed(payload[4:6]),  # itho
         SZ_FAN_MODE: payload[4:6],  # orcon, vasco/climarad
