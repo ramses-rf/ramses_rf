@@ -1,6 +1,6 @@
 #
 ### project ##########################################################################
-# last checked/updated: 2024-09-10
+# last checked/updated: 2025-08-03
 #
 
 [project]
@@ -8,16 +8,15 @@
   dynamic = ["version"]
   description = "A stateful RAMSES-II protocol decoder & analyser."
   readme = "README.md"
-  authors = [{name = "David Bonnes", email = "zxdavb@bonnes.me"}]
-  maintainers = [{name = "David Bonnes", email = "zxdavb@bonnes.me"}]
-  dependencies = [
-    "colorlog>=6.9.0",
-    "paho-mqtt>=2.1.0",
-    "pyserial-asyncio-fast>=0.16",
-    "voluptuous>=0.15.2",
+  authors = [
+    {name = "David Bonnes", email = "zxdavb@bonnes.me"},
+    {name = "Egbert Broerse", email = "dcc2@ebroerse.nl"}
   ]
-  requires-python = ">=3.11"
+  maintainers = [
+    {name = "Egbert Broerse", email = "dcc2@ebroerse.nl"}
+  ]
   license = "MIT"
+  license-files = ["LICENSE*"]
 
   keywords = [
     "evohome",
@@ -32,16 +31,26 @@
     "itho",
     "nuaire",
     "orcon",
+    "vasco",
+    "climarad",
   ]
   classifiers = [
     "Topic :: Home Automation",
+    "Programming Language :: Python :: 3.13",
+  ]
+  requires-python = ">=3.11"        # HA core >=3.13.2
+  dependencies = [
+    "colorlog>=6.9.0",              # latest
+    "paho-mqtt>=2.1.0",             # latest
+    "pyserial-asyncio-fast>=0.16",  # latest
+    "voluptuous>=0.15.2",           # latest
   ]
 
 #
 [project.urls]
-  "Homepage" = "https://github.com/zxdavb/ramses_rf"
-  "Bug Tracker" = "https://github.com/zxdavb/ramses_rf/issues"
-  "Wiki" = "https://github.com/zxdavb/ramses_rf/wiki"
+  "Homepage" = "https://github.com/ramses-rf/ramses_rf"
+  "Bug Tracker" = "https://github.com/ramses-rf/ramses_rf/issues"
+  "Wiki" = "https://github.com/ramses-rf/ramses_rf/wiki"
 
 #
 [project.scripts]
@@ -97,7 +106,7 @@
   # ignore_missing_imports = true  # only used per-module
   # follow_imports = normal  # avoid skip/silent, prefer normal (default) over error
 
-  # ### Strict typing (--strict) if all following are set to true (excl. zxdavb)
+  # ### Strict typing (--strict) if all following are set to true (excl. ramses-rf)
   #  - https://mypy.readthedocs.io/en/stable/existing_code.html#introduce-stricter-options
 
   # # Config file & Configuring warning

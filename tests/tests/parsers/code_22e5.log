@@ -1,2 +1,5 @@
 # Orcon HRU 500 EcoMax FAN from issue #123 @rfcdejong
-2024-08-19T00:00:00.000000 000 RP --- 32:160269 18:034927 --:------ 22E5 004 0050C800 # {'percent_2': 0.4, 'percent_4': 1.0, 'percent_6': 0.0}
+2024-08-19T00:00:00.000000 000 RP --- 32:160269 18:034927 --:------ 22E5 004 0050C800  # {'percent_2': 0.4, 'percent_4': 1.0, 'percent_6': 0.0}
+
+# From Orcon HCR-300 by @pocketware in ramses_cc issue 76
+2024-09-07T00:00:05.000000 ... RP --- 32:161205 18:017128 --:------ 22E5 004 0064C814  # {'percent_2': 0.5, 'percent_4': 1.0, 'percent_6': 0.1}

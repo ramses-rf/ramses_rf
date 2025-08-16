@@ -32,6 +32,8 @@ from .const import (
     SZ_ACCEPT,
     SZ_ACTIVE,
     SZ_BINDINGS,
+    SZ_BYPASS_MODE,
+    SZ_BYPASS_STATE,
     SZ_CHANGE_COUNTER,
     SZ_CONFIRM,
     SZ_DATETIME,
@@ -68,6 +70,8 @@ from .const import (
     SZ_PHASE,
     SZ_PRESSURE,
     SZ_RELAY_DEMAND,
+    SZ_REMAINING_DAYS,
+    SZ_REMAINING_PERCENT,
     SZ_SETPOINT,
     SZ_SETPOINT_BOUNDS,
     SZ_SYSTEM_MODE,
@@ -128,7 +132,7 @@ from .opentherm import (
     OtMsgType,
     decode_frame,
 )
-from .ramses import _2411_PARAMS_SCHEMA
+from .ramses import _31D9_FAN_INFO_VASCO, _2411_PARAMS_SCHEMA
 from .typed_dicts import PayDictT
 from .version import VERSION
 
@@ -972,12 +976,12 @@ def parser_10d0(payload: str, msg: Message) -> dict[str, Any]:
     result = {}
 
     if payload[2:4] not in ("FF", "FE"):
-        result["days_remaining"] = int(payload[2:4], 16)
+        result[SZ_REMAINING_DAYS] = int(payload[2:4], 16)
 
     if payload[4:6] not in ("FF", "FE"):
         result["days_lifetime"] = int(payload[4:6], 16)
 
-    result["percent_remaining"] = hex_to_percent(payload[6:8])
+    result[SZ_REMAINING_PERCENT] = hex_to_percent(payload[6:8])
 
     return result
 
@@ -1547,8 +1551,6 @@ def parser_22e9(payload: str, msg: Message) -> Mapping[str, float | str | None]:
 
 # fan_speed (switch_mode), HVAC
 def parser_22f1(payload: str, msg: Message) -> dict[str, Any]:
-    # ClimaRad VenturaV1x HRU does not send 22F1 for speed, uses 22F4 for mode + step
-
     try:
         assert payload[0:2] in ("00", "63")
         assert not payload[4:] or int(payload[2:4], 16) <= int(payload[4:], 16), (
@@ -1676,16 +1678,19 @@ def parser_22f3(payload: str, msg: Message) -> dict[str, Any]:
 
 # WIP: unknown, HVAC
 def parser_22f4(payload: str, msg: Message) -> dict[str, Any]:
-    # HACK: for dev/test: 37:153226 is ClimaRad Ventura fan/remote
-    payload = payload[8:14] if msg.src.id == "37:153226" else payload[:6]
+    if msg.len == 13 and payload[14:] == "000000000000":
+        # ClimaRad Ventura fan/remote
+        _pl = payload[:4] + payload[12:14] if payload[10:12] == "00" else payload[8:14]
+    else:
+        _pl = payload[:6]
 
     MODE_LOOKUP = {
-        0x00: "off?",
+        0x00: "off",
         0x20: "paused",
         0x40: "auto",
         0x60: "manual",
     }
-    mode = int(payload[2:4], 16) & 0x60
+    mode = int(_pl[2:4], 16) & 0x60
     assert mode in MODE_LOOKUP, mode
 
     RATE_LOOKUP = {
@@ -1696,7 +1701,7 @@ def parser_22f4(payload: str, msg: Message) -> dict[str, Any]:
         0x04: "speed 4",  # "medium-high", or high?
         0x05: "boost",  # "boost", aka purge?
     }
-    rate = int(payload[4:6], 16) & 0x03
+    rate = int(_pl[4:6], 16) & 0x03
     assert mode != 0x60 or rate in RATE_LOOKUP, rate
 
     return {
@@ -1707,21 +1712,12 @@ def parser_22f4(payload: str, msg: Message) -> dict[str, Any]:
 
 # bypass_mode, HVAC
 def parser_22f7(payload: str, msg: Message) -> dict[str, Any]:
-    # RQ --- 37:171871 32:155617 --:------ 22F7 001 00
-    # RP --- 32:155617 37:171871 --:------ 22F7 003 00FF00  # also: 000000, 00C8C8
-
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 0000EF  # bypass off
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 000000
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 00C8EF  # bypass on
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 00C800
-    # .W --- 37:171871 32:155617 --:------ 22F7 003 00FFEF  # bypass auto
-    # .I --- 32:155617 37:171871 --:------ 22F7 003 00FFC8
-
     result = {
-        "bypass_mode": {"00": "off", "C8": "on", "FF": "auto"}.get(payload[2:4]),
+        SZ_BYPASS_MODE: {"00": "off", "C8": "on", "FF": "auto"}.get(payload[2:4]),
     }
     if msg.verb != W_ or payload[4:] not in ("", "EF"):
-        result["bypass_state"] = {"00": "off", "C8": "on"}.get(payload[4:])
+        result[SZ_BYPASS_STATE] = {"00": "off", "C8": "on"}.get(payload[4:])
+        result.update(**parse_bypass_position(payload[4:]))  # type: ignore[arg-type]
 
     return result
 
@@ -2141,7 +2137,7 @@ def parser_3150(payload: str, msg: Message) -> dict | list[dict]:  # TODO: only 
 
 # fan state (ventilation status), HVAC
 def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
-    # NOTE: I have a suspicion that Itho use 0x00-C8 for %, whilst Nuaire use 0x00-64
+    # NOTE: Itho and ClimaRad use 0x00-C8 for %, whilst Nuaire uses 0x00-64
     try:
         assert payload[4:6] == "FF" or int(payload[4:6], 16) <= 200, (
             f"byte 2: {payload[4:6]}"
@@ -2151,10 +2147,10 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
 
     bitmap = int(payload[2:4], 16)
 
-    # NOTE: 31D9[4:6] is fan_rate (itho?) *or* fan_mode (orcon?)
+    # NOTE: 31D9[4:6] is fan_rate (ClimaRad minibox, Itho) *or* fan_mode (Orcon, Vasco)
     result = {
         **parse_exhaust_fan_speed(payload[4:6]),  # itho
-        SZ_FAN_MODE: payload[4:6],  # orcon
+        SZ_FAN_MODE: payload[4:6],  # orcon, vasco/climarad
         "passive": bool(bitmap & 0x02),
         "damper_only": bool(bitmap & 0x04),  # i.e. valve only
         "filter_dirty": bool(bitmap & 0x20),
@@ -2164,6 +2160,22 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
     }
 
     if msg.len == 3:  # usu: I -->20: (no seq#)
+        if (
+            payload[:4] == "0000"
+            and msg._addrs[0] == msg._addrs[2]
+            and msg._addrs[1] == NON_DEV_ADDR
+        ):
+            # _31D9_FAN_INFO for Vasco D60 HRU and ClimaRad minibox REM
+            try:
+                assert int(payload[4:6], 16) & 0xFF in _31D9_FAN_INFO_VASCO, (
+                    f"unknown 31D9 fan_mode: {payload[2:4]}"
+                )
+            except AssertionError as err:
+                _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} ({err})")
+            fan_mode = _31D9_FAN_INFO_VASCO.get(
+                int(payload[4:6], 16) & 0xFF, f"unknown_{payload[4:6]}"
+            )
+            result[SZ_FAN_MODE] = fan_mode  # replace
         return result
 
     try:

@@ -1,5 +1,7 @@
-# This workflow will upload a Python Package using Twine when a release is created
+# This workflow will build a Python Package using Hatch and upload it to PyPi when a release is published
+# No action on a release still in draft
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+# and: https://github.com/pypa/hatch/issues/669 and https://github.com/marketplace/actions/pypi-publish
 
 name: Publish via Hatch
 
@@ -11,34 +13,39 @@ permissions:
   contents: read
 
 jobs:
-  build-and-deploy:
+  build-dist:
+    name: Build release to /dist
     runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13"]
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install hatch
+        run: pipx install hatch
+
+      - name: Build dist
+        run: hatch build
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          name: dist
+          path: dist/
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Build package
-        run: python -m build
-
-      - name: Publish package
-        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    needs: build-dist
+    environment:
+      name: pypi
+      url: https://pypi.org/project/ramses_rf
+    steps:
+      - name: Download dist
+        uses: actions/download-artifact@v5
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
-
+          name: dist
+          path: dist/
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.RF_PYPI_API_TOKEN }}
       - run: echo "🍏 This job's status is ${{ job.status }}."

@@ -96,7 +96,7 @@ def normalise_config(lib_config: dict) -> tuple[str, dict]:
 
     serial_port = lib_config.pop(SZ_SERIAL_PORT, None)
 
-    # fix for: https://github.com/zxdavb/ramses_rf/issues/96
+    # fix for: https://github.com/ramses-rf/ramses_rf/issues/96
     packet_log = lib_config.get(SZ_PACKET_LOG)
     if isinstance(packet_log, str):
         packet_log = {SZ_FILE_NAME: packet_log}

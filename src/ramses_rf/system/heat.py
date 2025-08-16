@@ -873,8 +873,13 @@ class SysMode(SystemBase):  # 2E04
     def set_mode(
         self, system_mode: int | str | None, *, until: dt | str | None = None
     ) -> asyncio.Task[Packet]:
-        """Set a system mode for a specified duration, or indefinitely."""
+        """
+        Set a system mode for a specified duration, or indefinitely.
 
+        :param system_mode: 2-digit item from SYS_MODE_MAP, positional
+        :param until: optional: end of set period
+        :return:
+        """
         cmd = Command.set_system_mode(self.id, system_mode, until=until)
         return self._gwy.send_cmd(cmd, priority=Priority.HIGH, wait_for_reply=True)
 

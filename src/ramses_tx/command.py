@@ -172,7 +172,7 @@ def _normalise_mode(
     until: dt | str | None,
     duration: int | None,
 ) -> str:
-    """Validate the zone_mode, and return a it as a normalised 2-byte code.
+    """Validate the mode and return it as a normalised 2-byte code.
 
     Used by set_dhw_mode (target=active) and set_zone_mode (target=setpoint).
     """
@@ -218,11 +218,6 @@ def _normalise_until(
 
     Used by set_dhw_mode and set_zone_mode.
     """
-    # if until and duration:
-    #     raise exc.CommandInvalid(
-    #         "Invalid args: Only one of until or duration can be set"
-    #     )
-
     if mode == ZON_MODE_MAP.TEMPORARY:
         if duration is not None:
             raise exc.CommandInvalid(
@@ -246,7 +241,7 @@ def _normalise_until(
             f"Invalid args: For mode={mode}, until and duration must both be None"
         )
 
-    return until, duration
+    return until, duration  # TODO return updated mode for ZON_MODE_MAP.TEMPORARY ?
 
 
 class Command(Frame):
@@ -898,7 +893,7 @@ class Command(Frame):
         mode: int | str | None = None,
         active: bool | None = None,
         until: dt | str | None = None,
-        duration: int | None = None,
+        duration: int | None = None,  # never supplied by DhwZone.set_mode()
         **kwargs: Any,
     ) -> Command:
         """Constructor to set/reset the mode of the DHW (c.f. parser_1f41)."""
@@ -912,7 +907,7 @@ class Command(Frame):
             active = None
         if active is not None and not isinstance(active, bool | int):
             raise exc.CommandInvalid(
-                f"Invalid args: active={active}, but must be an bool"
+                f"Invalid args: active={active}, but must be a bool"
             )
 
         until, duration = _normalise_until(mode, active, until, duration)
@@ -1168,7 +1163,7 @@ class Command(Frame):
         mode: int | str | None = None,
         setpoint: float | None = None,
         until: dt | str | None = None,
-        duration: int | None = None,
+        duration: int | None = None,  # never supplied by Zone.set_mode()
     ) -> Command:
         """Constructor to set/reset the mode of a zone (c.f. parser_2349).
 
