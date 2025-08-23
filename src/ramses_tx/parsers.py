@@ -1384,9 +1384,10 @@ def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
         assert msg.verb in (RP, I_) or payload == "00"
         assert payload[10:12] == payload[38:40] and payload[
             10:12
-        ] in (  # auto requested fan speed?
+        ] in (  # auto requested fan speed step?
             "58",
-            "6496",
+            "64",
+            "96",
             "FF",
         ), f"expected req.speed? (58|64|96|FF), not {payload[10:12]}"
         assert payload[20:22] == payload[48:50] and payload[20:22] in (
