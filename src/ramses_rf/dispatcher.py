@@ -268,8 +268,8 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
 
     else:
         logger_xxxx(msg)
-        if gwy._zzz:
-            gwy._zzz.add(msg)
+        if gwy.msg_db:
+            gwy.msg_db.add(msg)
 
 
 # TODO: this needs cleaning up (e.g. handle intervening packet)

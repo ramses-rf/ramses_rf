@@ -129,7 +129,7 @@ class Gateway(Engine):
         self.devices: list[Device] = []
         self.device_by_id: dict[DeviceIdT, Device] = {}
 
-        self._zzz: MessageIndex | None = None  # MessageIndex()
+        self.msg_db: MessageIndex | None = None  # MessageIndex()
 
     def __repr__(self) -> str:
         if not self.ser_name:
@@ -196,8 +196,8 @@ class Gateway(Engine):
     async def stop(self) -> None:
         """Stop the Gateway and tidy up."""
 
-        if self._zzz:
-            self._zzz.stop()
+        if self.msg_db:
+            self.msg_db.stop()
         await super().stop()
 
     def _pause(self, *args: Any) -> None:
@@ -255,10 +255,10 @@ class Gateway(Engine):
             msgs.extend([m for z in system.zones for m in z._msgs.values()])
             # msgs.extend([m for z in system.dhw for m in z._msgs.values()])  # TODO
 
-        if self._zzz:
+        if self.msg_db:
             pkts = {
                 f"{repr(msg._pkt)[:26]}": f"{repr(msg._pkt)[27:]}"
-                for msg in self._zzz.all(include_expired=True)
+                for msg in self.msg_db.all(include_expired=True)
                 if wanted_msg(msg, include_expired=include_expired)
             }
 
@@ -422,7 +422,7 @@ class Gateway(Engine):
         self,
         device_id: DeviceIdT,
         create_device: bool = False,
-    ) -> Device:
+    ) -> Device | Fakeable:
         """Create a faked device."""
 
         if not is_valid_dev_id(device_id):
@@ -437,7 +437,7 @@ class Gateway(Engine):
             dev._make_fake()
             return dev
 
-        raise TypeError(f"The device is not fakable: {device_id}")
+        raise TypeError(f"The device is not fakeable: {device_id}")
 
     @property
     def tcs(self) -> Evohome | None:
@@ -547,14 +547,6 @@ class Gateway(Engine):
 
     def _msg_handler(self, msg: Message) -> None:
         """A callback to handle messages from the protocol stack."""
-        # TODO: Remove this
-        # # HACK: if CLI, double-logging with client.py proc_msg() & setLevel(DEBUG)
-        # if (log_level := _LOGGER.getEffectiveLevel()) < logging.INFO:
-        #     _LOGGER.info(msg)
-        # elif log_level <= logging.INFO and not (
-        #     msg.verb == RQ and msg.src.type == DEV_TYPE_MAP.HGI
-        # ):
-        #     _LOGGER.info(msg)
 
         super()._msg_handler(msg)
 

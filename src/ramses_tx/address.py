@@ -45,7 +45,7 @@ class Address:
         #     device_id = NON_DEVICE_ID
 
         self.id = device_id  # TODO: check is a valid id...
-        self.type = device_id[:2]  # dex, NOTE: remove last
+        self.type = device_id[:2]  # dex, drops 2nd part, incl. ":"
         self._hex_id: str = None  # type: ignore[assignment]
 
         if not self.is_valid(device_id):

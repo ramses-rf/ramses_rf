@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import random
 from collections.abc import Iterable
@@ -177,7 +178,10 @@ class _Entity:
 
 
 class _MessageDB(_Entity):
-    """Maintain/utilize an entity's state database."""
+    """Maintain/utilize an entity's state database.
+
+    Deprecated since 0.50.2, use SQLite in src/ramses_rf/database.py instead
+    """
 
     _gwy: Gateway
     ctl: Controller
@@ -190,13 +194,19 @@ class _MessageDB(_Entity):
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
-        self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx? ?deprecate
+        self._msgs_: dict[
+            Code, Message
+        ] = {}  # code, should be code/ctx? Deprecated since 0.50.2
         self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
+        # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
-        """Store a msg in the DBs."""
+        """Store a msg in the DBs.
+
+        Uses SQLite since 0.50.3
+        """
 
         if not (
             msg.src.id == self.id[:9]
@@ -205,19 +215,23 @@ class _MessageDB(_Entity):
         ):
             return  # ZZZ: don't store these
 
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+            self._gwy.msg_db.add(msg)
+            # ignore any replaced message that might be returned
+
+        # Store msg by code in flat self._msgs_ Dict (deprecated since 0.50.3)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
         if msg.code not in self._msgz_:
+            # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
             self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
         elif msg.verb not in self._msgz_[msg.code]:
+            # Same, 1 level deeper
             self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
-        else:  # if not self._gwy._zzz:
+        else:
+            # Same, replacing previous message
             self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
-        # elif (
-        #     self._msgz[msg.code][msg.verb][msg._pkt._ctx] is not msg
-        # ):  # MsgIdx ensures this
-        #     assert False  # TODO: remove
 
     @property
     def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][indx]
@@ -228,7 +242,7 @@ class _MessageDB(_Entity):
          - a compound ctx (e.g. 0005/000C/0418)
          - True (an array of elements, each with its own idx),
          - False (no idx, is usu. 00),
-         - None (not deteminable, rare)
+         - None (not determinable, rare)
         """
         return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
 
@@ -239,8 +253,8 @@ class _MessageDB(_Entity):
 
         obj: _MessageDB
 
-        if self._gwy._zzz:
-            self._gwy._zzz.rem(msg)
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+            self._gwy.msg_db.rem(msg)
 
         entities: list[_MessageDB] = []
         if isinstance(msg.src, Device):
@@ -261,9 +275,9 @@ class _MessageDB(_Entity):
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a header."""
 
-        # if self._gwy._zzz:
-        #     msgs = self._gwy._zzz.get(hdr=hdr)
-        #     return msgs[0] if msgs else None
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+            msgs = self._gwy.msg_db.get(hdr=hdr)
+            return msgs[0] if msgs else None
 
         msg: Message
         code: Code
@@ -297,6 +311,7 @@ class _MessageDB(_Entity):
     def _msg_value(
         self, code: Code | Iterable[Code], *args: Any, **kwargs: Any
     ) -> dict | list | None:
+        """Deprecated since 0.50.3. Use SQLite query on MessageIndex instead"""
         if isinstance(code, str | tuple):  # a code or a tuple of codes
             return self._msg_value_code(code, *args, **kwargs)
         # raise RuntimeError
@@ -380,6 +395,58 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
+    def _msg_qry_by_code_key(
+        self,
+        code: Code | None = None,
+        key: str | None = None,
+        **kwargs: Any,
+    ) -> str | float | None:
+        if self._gwy.msg_db:
+            code_par: str
+            if code is None:
+                code_par = "*"
+            else:
+                code_par = str(Code)
+            if key is None:
+                key = "*"
+            else:
+                key = "%" + key + "%"
+            # Use SQLite query on MessageIndex
+            sql = """
+                SELECT pl from messages WHERE verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+                AND (code = ?)
+                AND (plk like ?)
+            """
+            for _pl in self._gwy.msg_db.qry_field(
+                sql, (self.id[:9], self.id[:9], code_par, key)
+            ):
+                for d in _pl:
+                    val: object = json.loads(d).get(key)
+                    if isinstance(val, float):
+                        return float(val)
+                    else:
+                        return str(val)
+        return None
+
+    def _msg_qry(self, sql: str) -> list[dict]:
+        """
+        SQLite query for the stored payload on full MessageIndex. See ramses_rf/database.py
+
+        :param sql: SQLite query on MessageIndex. Can include multiple CODEs
+        :return: the value stored for the supplied key in the selected message payload, or empty list if key is not in payload
+        """
+
+        res: list[dict] = []
+        if sql and self._gwy.msg_db:
+            # example query:
+            # """SELECT pl from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
+            # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)"""
+            for _pl in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+                for d in _pl:
+                    res.append(json.loads(d).get)
+        return res
+
     @property
     def traits(self) -> dict:
         """Return the codes seen by the entity."""
@@ -394,19 +461,33 @@ class _MessageDB(_Entity):
 
     @property
     def _msgs(self) -> dict[Code, Message]:
-        if not self._gwy._zzz:
+        """
+        Get a flat Dict af all I/RP messages logged with this device as src or dst.
+
+        :return: nested Dict of messages by Code
+        """
+        if (
+            not self._gwy.msg_db
+        ):  # no central SQLite MessageIndex, deprecated since 0.50.3
             return self._msgs_
 
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
-        return {  # ? use context instead?
-            m.code: m for m in self._gwy._zzz.qry(sql, (self.id[:9], self.id[:9]))
+        return {  # ? use ctx (context) instead of just the address?
+            m.code: m for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9]))
         }  # e.g. 01:123456_HW
 
     @property
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
-        if not self._gwy._zzz:
+        """
+        Get a nested Dict of all I/RP messages logged with this device as src or dst.
+
+        :return: Dict of messages, nested by Code, Verb, Context
+        """
+        if (
+            not self._gwy.msg_db
+        ):  # no central SQLite MessageIndex, deprecated since 0.50.3
             return self._msgz_
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
@@ -437,7 +518,7 @@ class _Discovery(_MessageDB):
         self._supported_cmds_ctx: dict[str, bool | None] = {}
 
         if not gwy.config.disable_discovery:
-            # self._start_discovery_poller()  # Can't use derived classes dont exist yet
+            # self._start_discovery_poller()  # Can't use derived classes don't exist yet
             gwy._loop.call_soon(self._start_discovery_poller)
 
     @property  # TODO: needs tidy up
@@ -464,8 +545,8 @@ class _Discovery(_MessageDB):
         def _to_data_id(msg_id: MsgId | str) -> OtDataId:
             return int(msg_id, 16)  # type: ignore[return-value]
 
-        def _to_msg_id(data_id: OtDataId | int) -> MsgId:
-            return f"{data_id:02X}"  # type: ignore[return-value]
+        # def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
+        #     return f"{data_id:02X}"  # type: ignore[return-value]
 
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
@@ -639,7 +720,7 @@ class _Discovery(_MessageDB):
                 task[_SZ_NEXT_DUE] = msg.dtm + task[_SZ_INTERVAL]
 
             if task[_SZ_NEXT_DUE] > dt_now:
-                continue  # if (most recent) last_msg is is not yet due...
+                continue  # if (most recent) last_msg is not yet due...
 
             # since we may do I/O, check if the code|msg_id is deprecated
             task[_SZ_NEXT_DUE] = dt_now + task[_SZ_INTERVAL]  # might undeprecate later
@@ -732,25 +813,6 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
         # self._sensor: Child = None
         self.child_by_id: dict[str, Child] = {}
         self.childs: list[Child] = []
-
-    # def _handle_msg(self, msg: Message) -> None:
-    #     def eavesdrop_ufh_circuits():
-    #         if msg.code == Code._22C9:
-    #             # .I --- 02:044446 --:------ 02:044446 22C9 024 00-076C0A28-01 01-06720A28-01 02-06A40A28-01 03-06A40A2-801  # NOTE: fragments
-    #             # .I --- 02:044446 --:------ 02:044446 22C9 006 04-07D00A28-01                                               # [{'ufh_idx': '04',...
-    #             circuit_idxs = [c[SZ_UFH_IDX] for c in msg.payload]
-
-    #             for cct_idx in circuit_idxs:
-    #                 self.get_circuit(cct_idx, msg=msg)
-
-    #             # BUG: this will fail with > 4 circuits, as uses two pkts for this msg
-    #             # if [c for c in self.child_by_id if c not in circuit_idxs]:
-    #             #     raise CorruptStateError
-
-    #     super()._handle_msg(msg)
-
-    #     if self._gwy.config.enable_eavesdrop:
-    #         eavesdrop_ufh_circuits()
 
     @property
     def zone_idx(self) -> str:

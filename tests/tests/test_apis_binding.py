@@ -46,7 +46,7 @@ class GatewayStub:
     devices: list[Fakeable] = []
 
     _include: dict[str] = {}
-    _zzz = None
+    msg_db = None
 
     def _add_device(self, dev: Fakeable) -> None:
         self.device_by_id[dev.id] = dev

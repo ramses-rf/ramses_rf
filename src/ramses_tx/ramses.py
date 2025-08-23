@@ -1411,7 +1411,6 @@ _31DA_FAN_INFO: dict[int, str] = {
     0x1F: "-unknown 0x1F-",  # static field, used as filter in parser_31da so keep same
 }
 
-
 #
 ########################################################################################
 # CODES_BY_ZONE_TYPE

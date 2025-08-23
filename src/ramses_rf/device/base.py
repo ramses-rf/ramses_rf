@@ -62,7 +62,7 @@ class DeviceBase(Entity):
 
         # FIXME: ZZZ entities must know their parent device ID and their own idx
         self._z_id = dev_addr.id  # the responsible device is itself
-        self._z_idx = None  # depends upon it's location in the schema
+        self._z_idx = None  # depends upon its location in the schema
 
         self.id: DeviceIdT = dev_addr.id
 
@@ -95,7 +95,7 @@ class DeviceBase(Entity):
 
         if traits.get(SZ_FAKED):  # class & alias are done elsewhere
             if not isinstance(self, Fakeable):
-                raise TypeError(f"Device is not fakable: {self} (traits={traits})")
+                raise TypeError(f"Device is not fakeable: {self} (traits={traits})")
             self._make_fake()
 
         self._scheme = traits.get(SZ_SCHEME)
