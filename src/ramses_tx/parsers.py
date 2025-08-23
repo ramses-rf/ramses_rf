@@ -1382,19 +1382,26 @@ def parser_1fd4(payload: str, msg: Message) -> PayDictT._1FD4:
 def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
     try:
         assert msg.verb in (RP, I_) or payload == "00"
-        assert payload[10:12] == payload[38:40] and payload[10:12] in (  # auto requested fan speed?
+        assert payload[10:12] == payload[38:40] and payload[
+            10:12
+        ] in (  # auto requested fan speed?
             "58",
-            "64"
-            "96",
+            "6496",
             "FF",
         ), f"expected req.speed? (58|64|96|FF), not {payload[10:12]}"
         assert payload[20:22] == payload[48:50] and payload[20:22] in (
             "00",
             "03",
         ), f"expected byte 10 (00|03), not {payload[20:22]}"
-        assert payload[78:80] in ("00", "02"), f"expected byte 39 (00|02), not {payload[78:80]}"
-        assert payload[80:82] in ("01", "08"), f"expected byte 40 (01|08), not {payload[80:82]}"
-        assert payload[82:] in ("00", "40"), f"expected byte 41- (00|40), not {payload[82:]}"
+        assert payload[78:80] in ("00", "02"), (
+            f"expected byte 39 (00|02), not {payload[78:80]}"
+        )
+        assert payload[80:82] in ("01", "08"), (
+            f"expected byte 40 (01|08), not {payload[80:82]}"
+        )
+        assert payload[82:] in ("00", "40"), (
+            f"expected byte 41- (00|40), not {payload[82:]}"
+        )
 
     except AssertionError as err:
         _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} ({err})")
