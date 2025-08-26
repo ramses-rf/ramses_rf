@@ -331,7 +331,7 @@ class Engine:
         )  # may: raise ProtocolError/ProtocolSendFailed
 
     def _msg_handler(self, msg: Message) -> None:
-        # HACK: This is one consequence of an unpleaseant anachronism
+        # HACK: This is one consequence of an unpleasant anachronism
         msg.__class__ = Message  # HACK (next line too)
         msg._gwy = self  # type: ignore[assignment]
 

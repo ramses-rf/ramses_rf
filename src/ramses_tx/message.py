@@ -281,7 +281,7 @@ class MessageBase:
             raise exc.PacketInvalid from err
 
 
-class Message(MessageBase):  # add _expired attr
+class Message(MessageBase):
     """Extend the Message class, so is useful to a stateful Gateway.
 
     Adds _expired attr to the Message class.
