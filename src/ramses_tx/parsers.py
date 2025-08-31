@@ -1383,19 +1383,14 @@ def parser_1fd4(payload: str, msg: Message) -> PayDictT._1FD4:
 def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
     try:
         assert msg.verb in (RP, I_) or payload == "00"
-        assert payload[10:12] == payload[38:40] and payload[
-            10:12
-        ] in (  # auto requested fan speed %. Identical [38:40] for supply?
-            "58",
-            "64",
-            "96",
-            "FF",
-        ), f"expected req.speed (58|64|96|FF), not {payload[10:12]}"
+        assert payload[10:12] == payload[38:40], (
+            f"expected byte 19 {payload[10:12]}, not {payload[38:40]}"
+        )  # auto requested fan speed %. Identical [38:40] is for supply?
         assert payload[20:22] == payload[48:50] and payload[20:22] in (
             "00",  # idle
             "02",  # requested by CO2 level/sensor
             "03",  # requested by humidity level/sensor
-        ), f"expected req.reason (00|03), not {payload[20:22]}"
+        ), f"expected req_reason (00|02|03), not {payload[20:22]}"
         assert payload[78:80] in ("00", "02"), (
             f"expected byte 39 (00|02), not {payload[78:80]}"
         )
