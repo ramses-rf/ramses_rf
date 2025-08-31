@@ -508,6 +508,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
     def remaining_mins(self) -> int | None:
         return self._msg_value(Code._31DA, key=SZ_REMAINING_MINS)
 
+    @property
     def request_fan_speed(self) -> float | None:
         return self._msg_value(Code._2210, key=SZ_REQ_SPEED)
 
