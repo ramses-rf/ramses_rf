@@ -31,6 +31,8 @@ from ramses_rf.const import (
     SZ_REMAINING_DAYS,
     SZ_REMAINING_MINS,
     SZ_REMAINING_PERCENT,
+    SZ_REQ_REASON,
+    SZ_REQ_SPEED,
     SZ_SPEED_CAPABILITIES,
     SZ_SUPPLY_FAN_SPEED,
     SZ_SUPPLY_FLOW,
@@ -505,6 +507,17 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
     @property
     def remaining_mins(self) -> int | None:
         return self._msg_value(Code._31DA, key=SZ_REMAINING_MINS)
+
+    def request_fan_speed(self) -> float | None:
+        return self._msg_value(Code._2210, key=SZ_REQ_SPEED)
+
+    @property
+    def request_src(self) -> str | None:
+        """
+        Orcon, others?
+        :return: source sensor of auto speed request: IDL, CO2 or HUM
+        """
+        return self._msg_value(Code._2210, key=SZ_REQ_REASON)
 
     @property
     def speed_cap(self) -> int | None:

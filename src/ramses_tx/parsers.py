@@ -72,6 +72,7 @@ from .const import (
     SZ_RELAY_DEMAND,
     SZ_REMAINING_DAYS,
     SZ_REMAINING_PERCENT,
+    SZ_REQ_REASON,
     SZ_SETPOINT,
     SZ_SETPOINT_BOUNDS,
     SZ_SYSTEM_MODE,
@@ -1418,7 +1419,7 @@ def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
         **parse_exhaust_fan_speed(
             payload[10:12]
         ),  # for Orcon: 29 hex == 41 decimal divided by 2 gives 20.5 (%)
-        "req_reason": _req,
+        SZ_REQ_REASON: _req,
         "unknown_78": payload[78:80],
         "unknown_80": payload[80:82],
         "unknown_82": payload[82:],
