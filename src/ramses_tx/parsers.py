@@ -2167,6 +2167,7 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
         SZ_FAN_MODE: payload[4:6],  # orcon, vasco/climarad
         "passive": bool(bitmap & 0x02),
         "damper_only": bool(bitmap & 0x04),  # i.e. valve only
+        SZ_BYPASS_MODE: "manual" if bitmap & 0x10 else "auto",
         "filter_dirty": bool(bitmap & 0x20),
         "frost_cycle": bool(bitmap & 0x40),
         "has_fault": bool(bitmap & 0x80),

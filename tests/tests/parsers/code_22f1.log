@@ -3,9 +3,9 @@
 # WIP
 2023-11-04T12:34:14.007611 062  I --- 30:068457 63:262142 --:------ 10E0 038 000001C9001B0000FEFEFFFFFFFF0E0507E2425244472D30324A415330310000000000000000  # {'oem_code': '00', 'manufacturer_sub_id': 'C9', 'product_id': '00', 'date_1': '2018-05-14', 'date_2': '0000-00-00', 'description': 'BRDG-02JAS01'}
 
-2023-11-05T09:59:33.399876 074  I --- --:------ --:------ 20:020521 31D9 003 0000C8  # {'hvac_id': '00', 'exhaust_fan_speed': 1.000, 'fan_mode': 'C8', 'passive': False, 'damper_only': False, 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0]}
+2023-11-05T09:59:33.399876 074  I --- --:------ --:------ 20:020521 31D9 003 0000C8  # {'hvac_id': '00', 'exhaust_fan_speed': 1.000, 'fan_mode': 'C8', 'passive': False, 'damper_only': False, 'bypass_mode': 'auto', 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0]}
 2023-11-05T10:00:43.645038 061  I --- 30:068457 20:020521 --:------ 22F1 003 000205  # {'_mode_idx': '02', '_mode_max': '05', '_scheme': 'orcon', 'fan_mode': 'medium'}
-2023-11-05T10:01:38.150893 076  I --- --:------ --:------ 20:020521 31D9 003 000001  # {'hvac_id': '00', 'exhaust_fan_speed': 0.005, 'fan_mode': '01', 'passive': False, 'damper_only': False, 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0]}
+2023-11-05T10:01:38.150893 076  I --- --:------ --:------ 20:020521 31D9 003 000001  # {'hvac_id': '00', 'exhaust_fan_speed': 0.005, 'fan_mode': '01', 'passive': False, 'damper_only': False, 'bypass_mode': 'auto', 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0]}
 
 # Contrived from ramses_cc issue 76
 2022-06-22T00:00:01.000000 ... RQ --- 18:006402 30:071287 --:------ 22F1 001 00      # {}
