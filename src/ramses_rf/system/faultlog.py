@@ -256,9 +256,9 @@ class FaultLog:  # 0418  # TODO: use a NamedTuple
         pkt._frame = pkt._frame[:50] + idx + pkt._frame[52:]
 
         assert pkt._hdr == cmd.rx_header, f"{self}: Coding error"
-        assert (
-            str(pkt) == pkt._frame[:50] + idx + pkt._frame[52:]
-        ), f"{self}: Coding error"
+        assert str(pkt) == pkt._frame[:50] + idx + pkt._frame[52:], (
+            f"{self}: Coding error"
+        )
 
         msg = Message(pkt)
         msg._payload = {SZ_LOG_IDX: idx, SZ_LOG_ENTRY: None}  # PayDictT._0418_NULL

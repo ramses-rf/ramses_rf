@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-import asyncio
-import time
 import logging
-
+from collections.abc import Callable
 from typing import Any, TypeVar
 
 from ramses_rf import exceptions as exc
@@ -45,14 +43,8 @@ from ramses_rf.const import (
     DevType,
 )
 from ramses_rf.entity_base import class_by_attr
-from ramses_rf.helpers import shrink
-from ramses_rf.schemas import SCH_VCS, SZ_REMOTES, SZ_SENSORS
 from ramses_tx import Address, Command, Message, Packet, Priority
-from ramses_tx.ramses import (
-    CODES_OF_HVAC_DOMAIN_ONLY,
-    HVAC_KLASS_BY_VC_PAIR,
-    _2411_PARAMS_SCHEMA,
-)
+from ramses_tx.ramses import CODES_OF_HVAC_DOMAIN_ONLY, HVAC_KLASS_BY_VC_PAIR
 
 from .base import BatteryState, DeviceHvac, Fakeable
 
@@ -333,101 +325,74 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the HvacVentilator."""
         super().__init__(*args, **kwargs)
-        self._found_codes = set()  # Tracks which message codes we've encountered
-        self._pending_callbacks = []  # List of (code, callback) tuples
+        self._supports_2411 = False  # Flag for 2411 parameter support
+        self._initialized_callback = None  # Called when device is fully initialized
+        self._param_update_callback = None  # Called when 2411 parameters are updated
         self._hgi = None  # Will be set when HGI is available
-        self._cleanup_tasks = []  # Track any cleanup tasks
         self._bound_devices = {}  # Track bound devices (e.g., REM/DIS)
-        self._bound_to = None  # Track which REM/DIS this FAN is bound to
 
-        """
-        _2411_params
-            A dictionary of 2411 parameters.
-            This is only created if the device supports 2411.
-            We need a special way to store these parameters since we cannot rely on
-            the standard msg_value method where only the last msg is stored.
-            Unlike eg the 31DA, the 2411 parameters each have their own RP and I codes.
-            I did concider using _pkt._ctx, but it seems work in progress and i don't know
-            if it would break anything else in the codebase.
-            This _2411_params is straightforward, and only used if there is support anyways.
-        found_codes
-            Whenever a message is received, the code is added to this set.
-            This allows to track support of certain codes (e.g. 2411).
+    def set_initialized_callback(self, callback: Callable[[], None] | None) -> None:
+        """Set a callback to be called when the next message is received.
 
-        Callback Mechanism:
-            The callback system allows other components to be notified when the device is fully initialized.
-            See [callback_mechanism.md](../docs/callback_mechanism.md) for detailed documentation.
-        """
+        The callback will be called exactly once, when the next 2411 message is received.
 
-    def add_initialization_callback(self, callback, code=None):
-        """Add a callback to be called after initialization is complete.
+        We need this to only create 2411 entities for devices that support them (ramses_cc).
+        And we need the device to be fully initialized before we create these entities.
 
         Args:
-            callback: A callable that will be invoked when the device is initialized.
-                     If code is provided, the callback will only be called when that
-                     specific code is processed.
-            code: Optional message code (e.g., Code._2411) that triggers this callback.
-                  If None, the callback will be called for any initialization.
+            callback: A callable that takes no arguments and returns None.
+                     If None, any existing callback will be cleared.
         """
-        if code is None or code in self._found_codes:
+        if callback is not None and not callable(callback):
+            raise ValueError("Callback must be callable or None")
+
+        self._initialized_callback = callback
+        if callback is not None:
+            _LOGGER.debug("Initialization callback set for %s", self.id)
+
+    def _handle_initialized_callback(self):
+        """Handle the initialization callback."""
+        if self._initialized_callback is not None:
+            _LOGGER.debug("2411-Device initialized: %s", self.id)
+            if callable(self._initialized_callback):
+                try:
+                    self._initialized_callback()
+                except Exception as ex:
+                    _LOGGER.warning("Error in initialized_callback: %s", ex)
+                finally:
+                    # Clear the callback so it's only called once
+                    self._initialized_callback = None
+
+    def set_param_update_callback(self, callback):
+        """Set a callback to be called when 2411 parameters are updated.
+
+        Since 2411 parameters are configuration entities, we are not polling for them
+        and we update them immediately after receiving a 2411 message.
+        We don't wait for them, we only process when we see a 2411 response for our device.
+        The request may have come from another REM or DIS, but we will update to that as well.
+
+        Args:
+            callback: A callable that will be invoked with (param_id, value) when a
+                     2411 parameter is updated.
+        """
+        self._param_update_callback = callback
+
+    def _handle_param_update(self, param_id, value):
+        """Handle a parameter update and notify listeners.
+
+        Args:
+            param_id: The ID of the updated parameter
+            value: The new parameter value
+        """
+        if callable(self._param_update_callback):
             try:
-                callback()
+                self._param_update_callback(param_id, value)
             except Exception as ex:
-                _LOGGER.warning("Error in initialization callback: %s", ex)
-        else:
-            self._pending_callbacks.append((code, callback))
-
-    def _process_pending_callbacks(self, code=None):
-        """Process any pending callbacks that match the given code.
-
-        Args:
-            code: The message code that was just processed. If None, processes all
-                  callbacks regardless of code.
-
-        Callbacks are processed in the order they were added. After a callback is
-        successfully processed, its code is marked as initialized, so future callbacks
-        for the same code will be executed immediately.
-        """
-        remaining_callbacks = []
-        processed_codes = set()
-
-        for cb_code, callback in self._pending_callbacks:
-            if code is not None and cb_code is not None and cb_code != code:
-                remaining_callbacks.append((cb_code, callback))
-                continue
-
-            try:
-                callback()
-                # Only mark as processed if no exception was raised
-                if cb_code is not None:
-                    processed_codes.add(cb_code)
-            except Exception as e:
-                _LOGGER.warning(
-                    f"Error in callback for {self} (code={cb_code}): {e}",
-                    exc_info=True,
-                )
-                remaining_callbacks.append((cb_code, callback))
-
-        # Update found codes with all processed codes
-        self._found_codes.update(processed_codes)
-
-        # If we processed a specific code, ensure it's marked as found
-        if code is not None and code not in self._found_codes:
-            self._found_codes.add(code)
-
-        self._pending_callbacks = remaining_callbacks
+                _LOGGER.warning("Error in param_update_callback: %s", ex)
 
     @property
     def supports_2411(self) -> bool:
-        """Return True if this device supports 2411 parameters."""
-        return Code._2411 in self._found_codes
-
-    @property
-    def param_value(self, param_id: str) -> Any:
-        """Get a parameter value, compatible with _msg_value pattern."""
-        if hasattr(self, "_2411_params") and param_id in self._2411_params:
-            return self._2411_params[param_id]
-        return None
+        return self._supports_2411
 
     @property
     def hgi(self):
@@ -437,55 +402,48 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         return self._hgi
 
     def _handle_2411_message(self, msg: Message) -> None:
-        # Initialize the parameters dictionary if it doesn't exist
-        if not hasattr(self, "_2411_params"):
-            self._2411_params = {}
+        """Handle incoming 2411 parameter messages.
 
-        # Mark as supporting 2411 if we get a valid response (RP) or info (I)
-        if msg.verb in (RP, I_):
-            _LOGGER.debug("Processing 2411 message with verb %s", msg.verb)
-            if not self.supports_2411:
-                self._found_codes.add(Code._2411)
-                _LOGGER.info(
-                    "Device %s supports 2411 parameters (detected via %s message)",
-                    self.id,
-                    msg.verb,
-                )
-            # Process parameter value if payload is valid
-            if (
-                isinstance(msg.payload, dict)
-                and "parameter" in msg.payload
-                and "value" in msg.payload
-            ):
-                param_id = msg.payload["parameter"].upper()
-                value = msg.payload["value"]
+        Args:
+            msg: The incoming 2411 message
+        """
+        if not hasattr(msg, "payload") or not isinstance(msg.payload, dict):
+            _LOGGER.debug("Invalid 2411 message format: %s", msg)
+            return
 
-                _LOGGER.debug(
-                    "Processing 2411 parameter: device=%s, param_id=%s, value=%s",
-                    self.id,
-                    param_id,
-                    value,
-                )
+        param_id = msg.payload.get("parameter")
+        param_value = msg.payload.get("value")
 
-                # Store the parameter value in the standard location used by _msg_value
-                old_value = (
-                    self._2411_params.get(param_id)
-                    if hasattr(self, "_2411_params")
-                    else None
-                )
-                self._2411_params[param_id] = value
+        if not param_id or param_value is None:
+            _LOGGER.debug("Missing parameter ID or value in 2411 message: %s", msg)
+            return
 
-                _LOGGER.debug(
-                    "Stored parameter %s value: %s (total params: %d)",
-                    param_id,
-                    value,
-                    len(self._2411_params),
-                )
+        # Create a composite key for this parameter using the normalized ID
+        key = f"2411_{param_id}"
 
-                # Also store in the _params_2411 dictionary for backward compatibility
-                if not hasattr(self, "_params_2411"):
-                    self._params_2411 = {}
-                self._params_2411[param_id] = value
+        # Store the message in the device's message store
+        old_value = self._msgs.get(key)
+        self._msgs[key] = msg
+
+        _LOGGER.debug(
+            "Updated 2411 parameter %s = %s (was: %s) for %s",
+            param_id,
+            param_value,
+            old_value.payload if old_value else None,
+            self.id,
+        )
+
+        # Mark that we support 2411 parameters
+        if not self._supports_2411:
+            self._supports_2411 = True
+            _LOGGER.debug("Device %s supports 2411 parameters", self.id)
+
+        # Round parameter 75 values to 1 decimal place
+        if param_id == "75" and isinstance(param_value, int | float):
+            param_value = round(float(param_value), 1)
+
+        # call the 2411 parameter update callback
+        self._handle_param_update(param_id, param_value)
 
     def _handle_msg(self, msg: Message) -> None:
         """Handle a message from this device.
@@ -498,7 +456,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         """
         super()._handle_msg(msg)
 
-        # Special handling for 2411 parameter messages
+        # Handle 2411 parameter messages
         if msg.code == Code._2411:
             _LOGGER.debug(
                 "Received 2411 message from %s: verb=%s, payload=%s, src=%s, dst=%s",
@@ -510,14 +468,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             )
             self._handle_2411_message(msg)
 
-        # Process callbacks for this specific code
-        if hasattr(msg, "code") and msg.code is not None:
-            self._process_pending_callbacks(code=msg.code)
-
-        # # After first message, mark as initialized and process callbacks
-        # if not self._initialized:
-        #     self._initialized = True
-        #     self._process_pending_callbacks()
+        self._handle_initialized_callback()
 
     def _setup_discovery_cmds(self) -> None:
         super()._setup_discovery_cmds()
@@ -562,6 +513,18 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         Args:
             device_id: The ID of the device to bind
             device_type: The type of device (e.g., 'REM', 'DIS')
+
+        A bound device is needed to be able to send 2411 parameter Set messages,
+        or the device will not accept and respond to them.
+        In HomeAssistant, ramses_cc,
+        you can set a bound device in the device configuration.
+        System schema and known devices example:
+        "32:153289":
+          bound: "37:168270"
+          class: FAN
+        "37:168270":
+          class: REM
+          faked: true
         """
         if device_type not in (DevType.REM, DevType.DIS):
             _LOGGER.warning(
@@ -594,64 +557,55 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         """Get the first bound REM/DIS device ID for this FAN.
 
         Returns:
-            The device ID of the first bound REM/DIS device, or None if none found
+            The device ID of the first bound REM/DIS device, or None
         """
         if not self._bound_devices:
             _LOGGER.debug("No bound devices found for FAN %s", self.id)
             return None
 
-        # Return the first bound device ID
-        device_id = next(iter(self._bound_devices))
-        _LOGGER.debug("Using bound device %s for FAN %s", device_id, self.id)
-        return device_id
+        # Find first REM or DIS device
+        for device_id, device_type in self._bound_devices.items():
+            if device_type in (DevType.REM, DevType.DIS):
+                _LOGGER.debug(
+                    "Found bound %s device %s for FAN %s",
+                    device_type,
+                    device_id,
+                    self.id,
+                )
+                return device_id
 
-    def get_fan_param(self, param_id: str) -> Any:
-        """Get a fan parameter value by ID.
+        _LOGGER.debug("No bound REM or DIS devices found for FAN %s", self.id)
+        return None
 
-        Args:
-            param_id: The parameter ID to get (e.g. '31' or '3E')
-                    Case-insensitive, will be converted to uppercase for lookup
+    def get_fan_param(self, param_id: str) -> Any | None:
+        """Get a fan parameter value from the device's message store.
 
-        Returns:
-            The parameter value if found, None otherwise
+        Note:
+            This method retrieves the parameter payload from the device's message store
+            where 2411 parameters are stored with composite keys. eg: '2411_3F'
         """
         if not self.supports_2411:
             _LOGGER.debug(
-                "Cannot get parameter %s from %s: 2411 not supported", param_id, self.id
+                "Cannot get parameter %s from %s: 2411 parameters not supported",
+                param_id,
+                self.id,
             )
             return None
 
-        # Ensure param_id is uppercase for consistent lookup
-        param_id = param_id.upper()
+        # Ensure param_id is uppercase and strip leading zeros for consistency
+        param_id = (
+            str(param_id).upper().lstrip("0") or "0"
+        )  # Handle case where param_id is "0"
 
-        # Check if we have the parameter in our cache
-        if hasattr(self, "_2411_params") and param_id in self._2411_params:
-            value = self._2411_params[param_id]
-            _LOGGER.debug(
-                "Found cached parameter %s for %s: %s", param_id, self.id, value
-            )
-            return value
+        # Create the composite key for this parameter using the normalized ID
+        key = f"2411_{param_id}"
 
-        # Parameter not in cache, request it
-        _LOGGER.debug("Requesting parameter %s from %s", param_id, self.id)
-        self._send_cmd(Command.from_attrs(RQ, self.id, Code._2411, f"0000{param_id}"))
-        _LOGGER.debug("Sent parameter request for %s to %s", param_id, self.id)
-
-        return None
-
-    # @property
-    # def fan_params(self) -> dict[str, Any]:
-    #     """Return a dictionary of all fan parameters."""
-    #     from ramses_tx.ramses import _2411_PARAMS_SCHEMA
-
-    #     params = {}
-    #     for param_id in _2411_PARAMS_SCHEMA:
-    #         # Ensure param_id is uppercase hex for consistency
-    #         normalized_id = param_id.upper()
-    #         # Use the normalized parameter ID as the key and fetch its value
-    #         params[normalized_id] = self.get_fan_param(normalized_id)
-
-    #     return params
+        # Get the message from the message store
+        msg = self._msgs.get(key)
+        if not msg or not hasattr(msg, "payload"):
+            _LOGGER.debug("No payload found for parameter %s on %s", param_id, self.id)
+            return None
+        return msg.payload
 
     async def set_fan_param(
         self, param_id: str, value: Any, max_retries: int = 2, timeout: float = 5.0
@@ -661,8 +615,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         Args:
             param_id: The parameter ID to set (e.g., '31' or '3E')
             value: The value to set (will be converted to int)
-            max_retries: Maximum number of retry attempts (unused, kept for backward compatibility)
-            timeout: Timeout in seconds for each retry (unused, kept for backward compatibility)
 
         Returns:
             bool: True if the parameter was set successfully, False otherwise
@@ -670,6 +622,9 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         Note:
             This method sends the command directly to the FAN device using the bound REM/DIS device
             as the source. The FAN must be bound to a REM or DIS device for this to work.
+
+            For comfort temperature (param 75), the value is rounded to 0.1°C precision before sending.
+            The FAN device expects values with 0.01°C precision, so we'll multiply by 100 when sending.
         """
         if not self.supports_2411:
             _LOGGER.debug(
@@ -679,16 +634,19 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             )
             return False
 
-        # Ensure param_id is uppercase for consistency
-        param_id = param_id.upper()
+        # Ensure param_id is uppercase and strip leading zeros for consistency
+        param_id = (
+            str(param_id).upper().lstrip("0") or "0"
+        )  # Handle case where param_id is "0"
 
         # Get the bound REM/DIS device ID
         src_id = self.get_bound_rem()
         if not src_id:
             _LOGGER.error(
-                "Cannot set parameter %s on %s: No bound REM/DIS device found. "
-                "The FAN must be bound to a REM or DIS device to set parameters. "
-                "See https://github.com/zxdavb/ramses_cc/wiki/5.-Faking-&-Impersonation for more information.",
+                "Cannot set parameter %s on %s: No bound REM/DIS device found."
+                "The FAN must be bound to a REM or DIS device to set parameters."
+                "Add a 'bound: REM_id' (or DIS_id) to the FAN device configuration."
+                "See https://github.com/ramses-rf/ramses_cc/wiki/5.1-Faking-Sensors#binding-sensors for more information.",
                 param_id,
                 self.id,
             )
@@ -703,9 +661,9 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         )
 
         try:
-            # Convert value to int if it's numeric
+            # Convert value to float first to handle string inputs and decimal values
             try:
-                value_int = int(value)
+                value_float = float(value)
             except (TypeError, ValueError) as err:
                 _LOGGER.error(
                     "Invalid value '%s' for parameter %s on %s: %s",
@@ -716,8 +674,17 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
                 )
                 return False
 
+            # Special handling for comfort temperature (param 75) - round to 0.1°C
+            if param_id.upper() == "75":
+                value_float = round(value_float * 10) / 10  # Round to 0.1°C
+                value_to_send = value_float
+            else:
+                value_to_send = int(
+                    round(value_float)
+                )  # Default behavior for other params
+
             # Create and send the command
-            cmd = Command.set_fan_param(self.id, param_id, value_int, src_id=src_id)
+            cmd = Command.set_fan_param(self.id, param_id, value_to_send, src_id=src_id)
             self._send_cmd(cmd)
             _LOGGER.debug("Sent parameter set command: %s", cmd)
             return True

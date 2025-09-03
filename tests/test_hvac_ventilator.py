@@ -9,10 +9,7 @@ import pytest
 
 from ramses_rf.device.hvac import HvacVentilator
 from ramses_rf.gateway import Gateway
-from ramses_rf.packets import Packet
-from ramses_rf.schemas import SZ_ACTUATOR_CYCLE, SZ_ACTIVE
 from ramses_tx.const import Code
-from ramses_tx.packet import Packet as TxPacket
 
 # Test data
 TEST_DEVICE_ID = "32:123456"
@@ -132,7 +129,7 @@ class TestHvacVentilatorParameterHandling:
         test_value = 42
         hvac_ventilator._parameters[TEST_PARAM_ID] = {
             "value": test_value,
-            "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "last_updated": datetime.datetime.now(datetime.UTC).isoformat(),
             "source": "test",
         }
 

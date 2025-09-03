@@ -7,6 +7,7 @@ Construct a command (packet that is to be sent).
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Iterable
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -50,7 +51,13 @@ from .helpers import (
 )
 from .opentherm import parity
 from .parsers import LOOKUP_PUZZ
-from .ramses import _2411_PARAMS_SCHEMA
+from .ramses import (
+    _2411_PARAMS_SCHEMA,
+    SZ_DATA_TYPE,
+    SZ_MAX_VALUE,
+    SZ_MIN_VALUE,
+    SZ_PRECISION,
+)
 from .version import VERSION
 
 from .const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
@@ -1272,7 +1279,7 @@ class Command(Frame):
                 # For percentage values, validate input is in range
                 if not min_val_scaled <= value_scaled <= max_val_scaled:
                     raise exc.CommandInvalid(
-                        f"Parameter {param_id}: Value {value_scaled/10}% is out of allowed range ({min_val_scaled/10}% to {max_val_scaled/10}%)"
+                        f"Parameter {param_id}: Value {value_scaled / 10}% is out of allowed range ({min_val_scaled / 10}% to {max_val_scaled / 10}%)"
                     )
             elif str(data_type) == "0F":  # %
                 # For other percentage parameters, use the standard scaling
@@ -1285,11 +1292,17 @@ class Command(Frame):
                 # For percentage values, validate input is in range
                 if not min_val_scaled <= value_scaled <= max_val_scaled:
                     raise exc.CommandInvalid(
-                        f"Parameter {param_id}: Value {value_scaled/2}% is out of allowed range ({min_val_scaled/2}% to {max_val_scaled/2}%)"
+                        f"Parameter {param_id}: Value {value_scaled / 2}% is out of allowed range ({min_val_scaled / 2}% to {max_val_scaled / 2}%)"
                     )
             elif str(data_type) == "92":  # °C
                 # Scale temperature values by 100 (21.5°C -> 2150 = 0x0866)
-                value_scaled = int(float(value) * 100)
+                # Round to 0.1°C precision first, then scale
+                value_rounded = (
+                    round(float(value) * 10) / 10
+                )  # Round to 1 decimal place
+                value_scaled = int(
+                    value_rounded * 100
+                )  # Convert to integer (e.g., 21.5 -> 2150)
                 min_val_scaled = int(float(min_val) * 100)
                 max_val_scaled = int(float(max_val) * 100)
                 precision_scaled = int(float(precision) * 100)
@@ -1299,7 +1312,7 @@ class Command(Frame):
                 # For temperature values, validate input is within allowed range
                 if not min_val_scaled <= value_scaled <= max_val_scaled:
                     raise exc.CommandInvalid(
-                        f"Parameter {param_id}: Temperature {value_scaled/100:.1f}°C is out of allowed range ({min_val_scaled/100:.1f}°C to {max_val_scaled/100:.1f}°C)"
+                        f"Parameter {param_id}: Temperature {value_scaled / 100:.1f}°C is out of allowed range ({min_val_scaled / 100:.1f}°C to {max_val_scaled / 100:.1f}°C)"
                     )
             elif (str(data_type) == "00") or (
                 str(data_type) == "10"

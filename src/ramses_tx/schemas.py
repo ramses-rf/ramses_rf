@@ -7,7 +7,6 @@ Schema processor for protocol (lower) layer.
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Callable
 from typing import Any, Final, Never, NewType, TypeAlias, TypedDict, TypeVar
 

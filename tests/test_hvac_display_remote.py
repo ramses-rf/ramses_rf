@@ -2,27 +2,20 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, cast, Dict, Optional, Type, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, create_autospec, patch
 
 import pytest
+
 from ramses_rf.device.hvac import HvacDisplayRemote
-from ramses_rf.exceptions import DeviceNotRecognised, CommandInvalid
+from ramses_rf.exceptions import CommandInvalid, DeviceNotRecognised
 from ramses_rf.gateway import Gateway
 from ramses_tx.command import Command
 from ramses_tx.packet import Packet
-from unittest.mock import (
-    AsyncMock,
-    MagicMock,
-    patch,
-    PropertyMock,
-    call,
-    create_autospec,
-)
 
 # Type checking imports
 if TYPE_CHECKING:
-    from ramses_tx import Priority
+    pass
 
 # Test data
 VALID_DIS_ID = "01:123456"
@@ -111,11 +104,12 @@ class TestHvacDisplayRemote:
         mock_gateway = MagicMock()
         mock_gateway.get_device.return_value = None
 
-        # Patch the device's gateway with our mock
-        with patch.object(device, "_gwy", mock_gateway):
-            # Call the method and expect an exception
-            with pytest.raises(DeviceNotRecognised):
-                await device.get_fan_param(INVALID_FAN_ID, VALID_PARAM_ID)
+        # Patch the device's gateway with our mock and expect an exception
+        with (
+            patch.object(device, "_gwy", mock_gateway),
+            pytest.raises(DeviceNotRecognised),
+        ):
+            await device.get_fan_param(INVALID_FAN_ID, VALID_PARAM_ID)
 
     async def test_get_fan_param_invalid_param_id(
         self, device: HvacDisplayRemote
@@ -129,11 +123,9 @@ class TestHvacDisplayRemote:
         mock_gateway = MagicMock()
         mock_gateway.get_device.return_value = mock_device
 
-        # Patch the device's gateway with our mock
-        with patch.object(device, "_gwy", mock_gateway):
-            # Call the method and expect an exception
-            with pytest.raises(CommandInvalid):
-                await device.get_fan_param(VALID_FAN_ID, INVALID_PARAM_ID)
+        # Patch the device's gateway with our mock and expect an exception
+        with patch.object(device, "_gwy", mock_gateway), pytest.raises(CommandInvalid):
+            await device.get_fan_param(VALID_FAN_ID, INVALID_PARAM_ID)
 
     async def test_set_fan_param_valid(self, device: HvacDisplayRemote) -> None:
         """Test set_fan_param with valid parameters."""
@@ -168,11 +160,12 @@ class TestHvacDisplayRemote:
         mock_gateway = MagicMock()
         mock_gateway.get_device.return_value = None
 
-        # Patch the device's gateway with our mock
-        with patch.object(device, "_gwy", mock_gateway):
-            # Call the method and expect an exception
-            with pytest.raises(DeviceNotRecognised):
-                await device.set_fan_param(INVALID_FAN_ID, VALID_PARAM_ID, 42)
+        # Patch the device's gateway with our mock and expect an exception
+        with (
+            patch.object(device, "_gwy", mock_gateway),
+            pytest.raises(DeviceNotRecognised),
+        ):
+            await device.set_fan_param(INVALID_FAN_ID, VALID_PARAM_ID, 42)
 
     async def test_set_fan_param_invalid_param_id(
         self, device: HvacDisplayRemote
@@ -186,11 +179,9 @@ class TestHvacDisplayRemote:
         mock_gateway = MagicMock()
         mock_gateway.get_device.return_value = mock_device
 
-        # Patch the device's gateway with our mock
-        with patch.object(device, "_gwy", mock_gateway):
-            # Call the method and expect an exception
-            with pytest.raises(CommandInvalid):
-                await device.set_fan_param(VALID_FAN_ID, INVALID_PARAM_ID, 42)
+        # Patch the device's gateway with our mock and expect an exception
+        with patch.object(device, "_gwy", mock_gateway), pytest.raises(CommandInvalid):
+            await device.set_fan_param(VALID_FAN_ID, INVALID_PARAM_ID, 42)
 
     @pytest.mark.parametrize(
         "value,expected_value_int",

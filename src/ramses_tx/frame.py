@@ -127,9 +127,9 @@ class Frame:
             if addrs[0] == NON_DEV_ADDR:
                 assert self.verb == I_, "wrong verb or dst addr should be present"
             elif addrs[2] == NON_DEV_ADDR:
-                assert (
-                    self.verb == I_ or src is not dst
-                ), "wrong verb or dst addr should not be src"
+                assert self.verb == I_ or src is not dst, (
+                    "wrong verb or dst addr should not be src"
+                )
             elif addrs[0] is addrs[2]:
                 assert self.verb == I_, "wrong verb or dst addr should not be src"
             else:
@@ -214,9 +214,9 @@ class Frame:
         if self._has_array_:
             len_ = CODES_WITH_ARRAYS[self.code][0]
 
-            assert (
-                self._len % len_ == 0
-            ), f"{self} < array has length ({self._len}) that is not multiple of {len_}"
+            assert self._len % len_ == 0, (
+                f"{self} < array has length ({self._len}) that is not multiple of {len_}"
+            )
             assert (
                 self.src.type in (DEV_TYPE_MAP.DTS, DEV_TYPE_MAP.DT2)
                 or self.src == self.dst  # DEX

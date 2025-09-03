@@ -1306,7 +1306,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
     },
     "41": {  # slot 04
         SZ_DESCRIPTION: "Medium mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
+        SZ_MIN_VALUE: 0.1,  # Orcon FAN responds with 0.0, but I guess this should be the same as for "42"
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
@@ -1322,7 +1322,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
     },
     "43": {  # slot 06
         SZ_DESCRIPTION: "High mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
+        SZ_MIN_VALUE: 0.1,
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
@@ -1365,7 +1365,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MIN_VALUE: 0.0,
         SZ_MAX_VALUE: 30.0,
         SZ_PRECISION: 0.01,
-        SZ_DATA_TYPE: 92,
+        SZ_DATA_TYPE: "92",
         SZ_DATA_UNIT: "°C",
     },
     "95": {  # slot 08
@@ -1479,4 +1479,10 @@ __all__ = [
     "CODES_SCHEMA",
     "HVAC_KLASS_BY_VC_PAIR",
     "_2411_PARAMS_SCHEMA",
+    "SZ_DESCRIPTION",
+    "SZ_MIN_VALUE",
+    "SZ_MAX_VALUE",
+    "SZ_PRECISION",
+    "SZ_DATA_TYPE",
+    "SZ_DATA_UNIT",
 ]

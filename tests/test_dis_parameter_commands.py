@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
+
 from ramses_rf import Gateway
-from ramses_rf.const import Code
 from ramses_rf.device.hvac import HvacDisplayRemote
 
 # Type checking imports
 if TYPE_CHECKING:
-    from ramses_rf.protocol import Protocol
+    pass
 
 # Type definitions for test data
-MOCKED_PACKET: Dict[str, Any] = {}
-MOCKED_SERIAL_CONFIG: Dict[str, Any] = {}
+MOCKED_PACKET: dict[str, Any] = {}
+MOCKED_SERIAL_CONFIG: dict[str, Any] = {}
 MOCKED_SERIAL_PORT = ""
 TEST_HELPERS_AVAILABLE = False
 
