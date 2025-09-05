@@ -9,7 +9,6 @@ from typing import Any, TypeVar
 
 from ramses_rf import exceptions as exc
 from ramses_rf.const import (
-    FAN_MODE,
     SZ_AIR_QUALITY,
     SZ_AIR_QUALITY_BASIS,
     SZ_BOOST_TIMER,
@@ -328,8 +327,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         self._supports_2411 = False  # Flag for 2411 parameter support
         self._initialized_callback = None  # Called when device is fully initialized
         self._param_update_callback = None  # Called when 2411 parameters are updated
-        self._hgi = None  # Will be set when HGI is available
-        self._bound_devices = {}  # Track bound devices (e.g., REM/DIS)
+        self._hgi: Any | None = None  # Will be set when HGI is available
+        self._bound_devices: dict[str, str] = {}  # Track bound devices (e.g., REM/DIS)
 
     def set_initialized_callback(self, callback: Callable[[], None] | None) -> None:
         """Set a callback to be called when the next message is received.
@@ -350,9 +349,9 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         if callback is not None:
             _LOGGER.debug("Initialization callback set for %s", self.id)
 
-    def _handle_initialized_callback(self):
+    def _handle_initialized_callback(self) -> None:
         """Handle the initialization callback."""
-        if self._initialized_callback is not None:
+        if self._initialized_callback is not None and self.supports_2411:
             _LOGGER.debug("2411-Device initialized: %s", self.id)
             if callable(self._initialized_callback):
                 try:
@@ -363,7 +362,9 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
                     # Clear the callback so it's only called once
                     self._initialized_callback = None
 
-    def set_param_update_callback(self, callback):
+    def set_param_update_callback(
+        self, callback: Callable[[str, Any], None] | None
+    ) -> None:
         """Set a callback to be called when 2411 parameters are updated.
 
         Since 2411 parameters are configuration entities, we are not polling for them
@@ -377,7 +378,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         """
         self._param_update_callback = callback
 
-    def _handle_param_update(self, param_id, value):
+    def _handle_param_update(self, param_id: str, value: Any) -> None:
         """Handle a parameter update and notify listeners.
 
         Args:
@@ -395,7 +396,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         return self._supports_2411
 
     @property
-    def hgi(self):
+    def hgi(self) -> Any | None:
         """Return the HGI device if available."""
         if self._hgi is None and self._gwy and hasattr(self._gwy, "hgi"):
             self._hgi = self._gwy.hgi
@@ -419,11 +420,12 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             return
 
         # Create a composite key for this parameter using the normalized ID
-        key = f"2411_{param_id}"
+        key = f"{Code._2411}_{param_id}"
 
         # Store the message in the device's message store
-        old_value = self._msgs.get(key)
-        self._msgs[key] = msg
+        old_value = self._msgs.get(Code._2411)  # type: ignore[arg-type]
+        self._msgs[Code._2411] = msg  # type: ignore[index]
+        self._msgs[key] = msg  # type: ignore[index]
 
         _LOGGER.debug(
             "Updated 2411 parameter %s = %s (was: %s) for %s",
@@ -584,28 +586,49 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             This method retrieves the parameter payload from the device's message store
             where 2411 parameters are stored with composite keys. eg: '2411_3F'
         """
-        if not self.supports_2411:
-            _LOGGER.debug(
-                "Cannot get parameter %s from %s: 2411 parameters not supported",
-                param_id,
-                self.id,
-            )
-            return None
+        # Always try to get the parameter, even if supports_2411 is False,
+        # as we might have received the parameter already
 
         # Ensure param_id is uppercase and strip leading zeros for consistency
         param_id = (
             str(param_id).upper().lstrip("0") or "0"
         )  # Handle case where param_id is "0"
 
-        # Create the composite key for this parameter using the normalized ID
-        key = f"2411_{param_id}"
+        # Create a composite key for this parameter using the normalized ID
+        key = f"{Code._2411}_{param_id}"
+        # Get the message using the composite key first, fall back to just the code
+        msg = self._msgs.get(key) or self._msgs.get(Code._2411)  # type: ignore[arg-type]
 
-        # Get the message from the message store
-        msg = self._msgs.get(key)
         if not msg or not hasattr(msg, "payload"):
-            _LOGGER.debug("No payload found for parameter %s on %s", param_id, self.id)
+            if not self.supports_2411:
+                _LOGGER.debug(
+                    "Cannot get parameter %s from %s: 2411 parameters not supported",
+                    param_id,
+                    self.id,
+                )
+            else:
+                _LOGGER.debug(
+                    "No payload found for parameter %s on %s", param_id, self.id
+                )
             return None
-        return msg.payload
+
+        # If we have a message but not the specific parameter, try to get it from the payload
+        if param_id and hasattr(msg.payload, "get"):
+            value = msg.payload.get("value")
+            if value is not None:
+                return value
+
+        # If we get here, the parameter wasn't found in the message
+        if not self.supports_2411:
+            _LOGGER.debug(
+                "Parameter %s not found for %s: 2411 parameters not supported",
+                param_id,
+                self.id,
+            )
+        else:
+            _LOGGER.debug("Parameter %s not found in payload for %s", param_id, self.id)
+
+        return None
 
     async def set_fan_param(
         self, param_id: str, value: Any, max_retries: int = 2, timeout: float = 5.0

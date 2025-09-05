@@ -4,7 +4,7 @@
 from ramses_tx import exceptions as exc
 from ramses_tx.command import CODE_API_MAP, Command
 
-EXCLUDED_APIS = ("from_attrs", "_from_attrs", "from_cli")
+EXCLUDED_APIS = ("from_attrs", "_from_attrs", "from_cli", "get_fan_param")
 EXCLUDED_APIS += ()  # APIs not added to the CODE_API_MAP, should be an empty tuple
 
 

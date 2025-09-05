@@ -50,7 +50,9 @@ class MockSerial:  # most of the RF 'mocking' is done in here
     Can use a response table to provide a known Rx for a given Tx sent via `write()`.
     """
 
-    def __init__(self, port: str, loop: asyncio.AbstractEventLoop, **kwargs: Any) -> None:
+    def __init__(
+        self, port: str, loop: asyncio.AbstractEventLoop, **kwargs: Any
+    ) -> None:
         self._loop = loop
 
         self.port = port

@@ -28,7 +28,6 @@ from .const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     RQ,
     W_,
     Code,
-    RF_DOMAIN,
 )
 
 if TYPE_CHECKING:
@@ -48,7 +47,6 @@ __all__ = [
     #
     "I_",
     "RP",
-    "RF_DOMAIN",
     "RQ",
     "W_",
     #
