@@ -423,8 +423,10 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         key = f"{Code._2411}_{param_id}"
 
         # Store the message in the device's message store
-        old_value = self._msgs.get(Code._2411)  # type: ignore[arg-type]
-        self._msgs[Code._2411] = msg  # type: ignore[index]
+        old_value = self._msgs.get(Code._2411)
+        # Use direct assignment for Code._2411 key
+        self._msgs[Code._2411] = msg
+        # For the composite key, we need to bypass type checking
         self._msgs[key] = msg  # type: ignore[index]
 
         _LOGGER.debug(
@@ -593,11 +595,24 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         param_id = (
             str(param_id).upper().lstrip("0") or "0"
         )  # Handle case where param_id is "0"
-
+        # we need some extra workarounds to please mypy
         # Create a composite key for this parameter using the normalized ID
         key = f"{Code._2411}_{param_id}"
+
         # Get the message using the composite key first, fall back to just the code
-        msg = self._msgs.get(key) or self._msgs.get(Code._2411)  # type: ignore[arg-type]
+        msg = None
+
+        # First try to get the specific parameter message
+        try:
+            # Try to access the message directly using the key
+            msg = self._msgs[key]  # type: ignore[index]
+        except (KeyError, TypeError):
+            # If that fails, try to find the message by iterating through the dictionary
+            msg = next((v for k, v in self._msgs.items() if str(k) == key), None)
+
+        # If not found, try to get the general 2411 message
+        if msg is None:
+            msg = self._msgs.get(Code._2411)
 
         if not msg or not hasattr(msg, "payload"):
             if not self.supports_2411:

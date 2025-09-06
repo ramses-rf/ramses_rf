@@ -300,7 +300,9 @@ class _MessageDB(_Entity):
         if isinstance(code, str | tuple):  # a code or a tuple of codes
             return self._msg_value_code(code, *args, **kwargs)
         # raise RuntimeError
-        assert isinstance(code, Message), (
+        assert isinstance(
+            code, Message
+        ), (
             f"Invalid format: _msg_value({code})"
         )  # catch invalidly formatted code, only Message
         return self._msg_value_msg(code, *args, **kwargs)
@@ -312,9 +314,9 @@ class _MessageDB(_Entity):
         key: str | None = None,
         **kwargs: Any,
     ) -> dict | list | None:
-        assert not isinstance(code, tuple) or verb is None, (
-            f"Unsupported: using a tuple ({code}) with a verb ({verb})"
-        )
+        assert (
+            not isinstance(code, tuple) or verb is None
+        ), f"Unsupported: using a tuple ({code}) with a verb ({verb})"
 
         if verb:
             try:
@@ -368,9 +370,9 @@ class _MessageDB(_Entity):
             # .I 101 --:------ --:------ 12:126457 2309 006 0107D0-0207D0  # is a CTL
             msg_dict = msg.payload[0]
 
-        assert (not domain_id and not zone_idx) or (msg_dict.get(idx) == val), (
-            f"{msg_dict} < Coding error: key={idx}, val={val}"
-        )
+        assert (not domain_id and not zone_idx) or (
+            msg_dict.get(idx) == val
+        ), f"{msg_dict} < Coding error: key={idx}, val={val}"
 
         if key:
             return msg_dict.get(key)

@@ -62,20 +62,29 @@ class TestHvacVentilator:
         assert hvac_ventilator._hgi is None
         assert hvac_ventilator._bound_devices == {}
 
-    def test_set_initialized_callback(self, hvac_ventilator: HvacVentilator) -> None:
-        """Test setting the initialized callback."""
-        # Define a mock callback
+    def test_set_initialized_callback_clear(
+        self, hvac_ventilator: HvacVentilator
+    ) -> None:
+        """Test clearing the initialized callback."""
+        # Set a callback first
         mock_callback = MagicMock()
-
-        # Set the callback
         hvac_ventilator.set_initialized_callback(mock_callback)
 
-        # Check that the callback was set
-        assert hvac_ventilator._initialized_callback is mock_callback
-
-        # Clear the callback
+        # Now clear it
         hvac_ventilator.set_initialized_callback(None)
         assert hvac_ventilator._initialized_callback is None
+
+    def test_set_initialized_callback_set(
+        self, hvac_ventilator: HvacVentilator
+    ) -> None:
+        """Test setting the initialized callback."""
+        # Test initial state
+        assert hvac_ventilator._initialized_callback is None
+
+        # Set the callback
+        mock_callback = MagicMock()
+        hvac_ventilator.set_initialized_callback(mock_callback)
+        assert hvac_ventilator._initialized_callback is mock_callback
 
     def test_set_param_update_callback(self, hvac_ventilator: HvacVentilator) -> None:
         """Test setting the parameter update callback."""
