@@ -9,6 +9,7 @@ from ramses_tx.packet import Packet
 
 from .mocked_devices.command import MockCommand as Command
 
+
 def _test_api_good(api, packets):  # NOTE: incl. addr_set check
     """Test a verb|code pair that has a Command constructor."""
 
