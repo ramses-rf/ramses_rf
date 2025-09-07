@@ -1055,8 +1055,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         # instantiate a paho mqtt client
         self.client = mqtt.Client(
-            protocol=mqtt.MQTTv5,
-            callback_api_version=CallbackAPIVersion.VERSION2,  # type: ignore[call-arg]
+            protocol=mqtt.MQTTv5, callback_api_version=CallbackAPIVersion.VERSION2
         )
         self.client.on_connect = self._on_connect
         self.client.on_connect_fail = self._on_connect_fail
@@ -1074,7 +1073,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._connecting = True
         try:
             self.client.connect_async(
-                self._broker_url.hostname,  # type: ignore[arg-type]
+                str(self._broker_url.hostname or "localhost"),
                 self._broker_url.port or 1883,
                 60,
             )

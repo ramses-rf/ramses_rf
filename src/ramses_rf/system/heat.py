@@ -193,19 +193,19 @@ class SystemBase(Parent, Entity):  # 3B00 (multi-relay)
                 this.code in (Code._22D9, Code._3220) and this.verb == RQ
             ):  # TODO: RPs too?
                 # dst could be an Address...
-                if this.src is self.ctl and isinstance(this.dst, OtbGateway):  # type: ignore[unreachable]
+                if this.src == self.ctl and isinstance(this.dst, OtbGateway):  # type: ignore[unreachable]
                     app_cntrl = this.dst  # type: ignore[unreachable]
 
             elif this.code == Code._3EF0 and this.verb == RQ:
                 # dst could be an Address...
-                if this.src is self.ctl and isinstance(
+                if this.src == self.ctl and isinstance(
                     this.dst,  # type: ignore[unreachable]
                     BdrSwitch | OtbGateway,
                 ):
                     app_cntrl = this.dst  # type: ignore[unreachable]
 
             elif this.code == Code._3B00 and this.verb == I_ and prev is not None:
-                if this.src is self.ctl and isinstance(prev.src, BdrSwitch):  # type: ignore[unreachable]
+                if this.src == self.ctl and isinstance(prev.src, BdrSwitch):  # type: ignore[unreachable]
                     if prev.code == this.code and prev.verb == this.verb:  # type: ignore[unreachable]
                         app_cntrl = prev.src
 

@@ -91,7 +91,7 @@ def _create_devices_from_addrs(gwy: Gateway, this: Message) -> None:
     if not gwy.config.enable_eavesdrop:
         return
 
-    if not isinstance(this.dst, Device) and this.src is not gwy.hgi:  # type: ignore[unreachable]
+    if not isinstance(this.dst, Device) and this.src != gwy.hgi:  # type: ignore[unreachable]
         with contextlib.suppress(LookupError):
             this.dst = gwy.get_device(this.dst.id)  # type: ignore[assignment]
 
@@ -188,9 +188,9 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
     def logger_xxxx(msg: Message) -> None:
         if _DBG_FORCE_LOG_MESSAGES:
             _LOGGER.warning(msg)
-        elif msg.src is not gwy.hgi or (msg.code != Code._PUZZ and msg.verb != RQ):
+        elif msg.src != gwy.hgi or (msg.code != Code._PUZZ and msg.verb != RQ):
             _LOGGER.info(msg)
-        elif msg.src is not gwy.hgi or msg.verb != RQ:
+        elif msg.src != gwy.hgi or msg.verb != RQ:
             _LOGGER.info(msg)
         elif _LOGGER.getEffectiveLevel() == logging.DEBUG:
             _LOGGER.info(msg)
@@ -215,7 +215,7 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
         if (
             msg.src._SLUG != DevType.HGI  # avoid: msg.src.id != gwy.hgi.id
             and msg.verb != I_
-            and msg.dst is not msg.src
+            and msg.dst != msg.src
         ):
             # HGI80 can do what it likes
             # receiving an I isn't currently in the schema & so can't yet be tested
@@ -234,10 +234,10 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
         # TODO: only be for fully-faked (not Fakable) dst (it picks up via RF if not)
 
         if msg.code == Code._1FC9 and msg.payload[SZ_PHASE] == SZ_OFFER:
-            devices = [d for d in gwy.devices if d is not msg.src and d._is_binding]
+            devices = [d for d in gwy.devices if d != msg.src and d._is_binding]
 
         elif msg.dst == ALL_DEV_ADDR:  # some offers use dst=63:, so after 1FC9 offer
-            devices = [d for d in gwy.devices if d is not msg.src and d.is_faked]
+            devices = [d for d in gwy.devices if d != msg.src and d.is_faked]
 
         elif msg.dst is not msg.src and isinstance(msg.dst, Fakeable):  # type: ignore[unreachable]
             # to eavesdrop pkts from other devices, but relevant to this device
