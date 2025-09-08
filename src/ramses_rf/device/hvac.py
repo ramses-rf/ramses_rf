@@ -588,10 +588,15 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         param_id = (
             str(param_id).upper().lstrip("0") or "0"
         )  # Handle case where param_id is "0"
-        # we need some extra workarounds to please mypy
-        # Create a composite key for this parameter using the normalized ID
-        key = f"{Code._2411}_{param_id}"
-        msg = self._msgs.get(key)  # type: ignore[arg-type]
+        # Try to get the specific parameter message first
+        msg = None
+
+        # Check if the composite key exists in the messages
+        composite_key = f"{Code._2411}_{param_id}"
+        for k, v in self._msgs.items():
+            if str(k) == composite_key:
+                msg = v
+                break
 
         # If not found, try to get the general 2411 message
         if msg is None:
