@@ -462,14 +462,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         # Handle 2411 parameter messages
         if msg.code == Code._2411:
-            _LOGGER.debug(
-                "Received 2411 message from %s: verb=%s, payload=%s, src=%s, dst=%s",
-                self.id,
-                msg.verb,
-                msg.payload,
-                msg.src,
-                msg.dst,
-            )
             self._handle_2411_message(msg)
 
         self._handle_initialized_callback()
@@ -583,6 +575,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
     def get_fan_param(self, param_id: str) -> Any | None:
         """Get a fan parameter value from the device's message store.
+        (not sending an actual request to device)
 
         Note:
             This method retrieves the parameter payload from the device's message store
@@ -598,36 +591,19 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         # we need some extra workarounds to please mypy
         # Create a composite key for this parameter using the normalized ID
         key = f"{Code._2411}_{param_id}"
-
-        # Get the message using the composite key first, fall back to just the code
-        msg = None
-
-        # First try to get the specific parameter message
-        try:
-            # Try to access the message directly using the key
-            msg = self._msgs[key]  # type: ignore[index]
-        except (KeyError, TypeError):
-            # If that fails, try to find the message by iterating through the dictionary
-            msg = next((v for k, v in self._msgs.items() if str(k) == key), None)
+        msg = self._msgs.get(key)  # type: ignore[arg-type]
 
         # If not found, try to get the general 2411 message
         if msg is None:
             msg = self._msgs.get(Code._2411)
 
         if not msg or not hasattr(msg, "payload"):
-            if not self.supports_2411:
-                _LOGGER.debug(
-                    "Cannot get parameter %s from %s: 2411 parameters not supported",
-                    param_id,
-                    self.id,
-                )
-            else:
-                _LOGGER.debug(
-                    "No payload found for parameter %s on %s", param_id, self.id
-                )
+            _LOGGER.debug(
+                "No payload found for parameter %s on %s", param_id, self.id
+            )
             return None
 
-        # If we have a message but not the specific parameter, try to get it from the payload
+        # If we have a message with a payload, try to get the parameter value from it
         if param_id and hasattr(msg.payload, "get"):
             value = msg.payload.get("value")
             if value is not None:
@@ -649,6 +625,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         self, param_id: str, value: Any, max_retries: int = 2, timeout: float = 5.0
     ) -> bool:
         """Set a fan parameter value with request/response tracking.
+        (with actual sending a message to the device)
 
         Args:
             param_id: The parameter ID to set (e.g., '31' or '3E')
@@ -660,9 +637,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         Note:
             This method sends the command directly to the FAN device using the bound REM/DIS device
             as the source. The FAN must be bound to a REM or DIS device for this to work.
-
-            For comfort temperature (param 75), the value is rounded to 0.1°C precision before sending.
-            The FAN device expects values with 0.01°C precision, so we'll multiply by 100 when sending.
         """
         if not self.supports_2411:
             _LOGGER.debug(

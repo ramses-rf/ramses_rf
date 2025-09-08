@@ -1364,7 +1364,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_DESCRIPTION: "Comfort temperature (°C)",
         SZ_MIN_VALUE: 0.0,
         SZ_MAX_VALUE: 30.0,
-        SZ_PRECISION: 0.01,
+        SZ_PRECISION: 0.01, # this is the actual precision of the FAN device, but mostly rounded to 0.1
         SZ_DATA_TYPE: "92",
         SZ_DATA_UNIT: "°C",
     },

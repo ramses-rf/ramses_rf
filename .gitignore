@@ -188,3 +188,6 @@ cython_debug/
 venv311/
 docs/
 pip
+
+# Local pre-commit config
+.pre-commit-config.yaml
