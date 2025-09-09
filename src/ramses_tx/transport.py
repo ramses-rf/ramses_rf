@@ -1038,6 +1038,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         self._connected = False
         self._connecting = False
+        self._connection_established = False  # Track if initial connection was made
         self._extra[SZ_IS_EVOFW3] = True
 
         # Reconnection settings
@@ -1072,7 +1073,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._connecting = True
         try:
             self.client.connect_async(
-                self._broker_url.hostname,  # type: ignore[arg-type]
+                str(self._broker_url.hostname or "localhost"),
                 self._broker_url.port or 1883,
                 60,
             )
@@ -1139,7 +1140,20 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             self._reconnect_task.cancel()
             self._reconnect_task = None
 
+        # Subscribe to base topic to see 'online' messages
         self.client.subscribe(self._topic_base)  # hope to see 'online' message
+
+        # Also subscribe to data topics with wildcard for reliability after reconnect
+        # This ensures we get data even if we miss the 'online' message
+        if self._topic_base.endswith("/+"):
+            data_wildcard = self._topic_base.replace("/+", "/+/rx")
+            self.client.subscribe(data_wildcard, qos=self._mqtt_qos)
+            _LOGGER.debug(f"Subscribed to data wildcard: {data_wildcard}")
+
+        # If we already have specific topics, re-subscribe to them
+        if hasattr(self, "_topic_sub") and self._topic_sub:
+            self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
+            _LOGGER.debug(f"Re-subscribed to specific topic: {self._topic_sub}")
 
     def _on_connect_fail(
         self,
@@ -1158,19 +1172,36 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self,
         client: mqtt.Client,
         userdata: Any,
-        reason_code: Any,
-        properties: Any | None,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        _LOGGER.warning(f"MQTT disconnected: {reason_code.getName()}")
+        # Handle different paho-mqtt callback signatures
+        reason_code = args[0] if len(args) >= 1 else None
 
+        reason_name = (
+            reason_code.getName()
+            if reason_code is not None and hasattr(reason_code, "getName")
+            else str(reason_code)
+        )
+        _LOGGER.warning(f"MQTT disconnected: {reason_name}")
+
+        was_connected = self._connected
         self._connected = False
 
+        # If we were previously connected and had established communication,
+        # notify that the device is now offline
+        if was_connected and hasattr(self, "_topic_sub") and self._topic_sub:
+            device_topic = self._topic_sub[:-3]  # Remove "/rx" suffix
+            _LOGGER.warning(f"{self}: the MQTT device is offline: {device_topic}")
+
+            # Pause writing since device is offline
+            if hasattr(self, "_protocol"):
+                self._protocol.pause_writing()
+
         # Only attempt reconnection if we didn't deliberately disconnect
-        if not self._closing and not reason_code.is_failure:
-            # This was an unexpected disconnect, schedule reconnection
-            self._schedule_reconnect()
-        elif reason_code.is_failure and not self._closing:
-            # Connection failed, also schedule reconnection
+
+        if not self._closing:
+            # Schedule reconnection for any disconnect (unexpected or failure)
             self._schedule_reconnect()
 
     def _create_connection(self, msg: mqtt.MQTTMessage) -> None:
@@ -1194,7 +1225,12 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
 
-        self._make_connection(gwy_id=msg.topic[-9:])  # type: ignore[arg-type]
+        # Only call connection_made on first connection, not reconnections
+        if not self._connection_established:
+            self._connection_established = True
+            self._make_connection(gwy_id=msg.topic[-9:])  # type: ignore[arg-type]
+        else:
+            _LOGGER.info("MQTT reconnected - protocol connection already established")
 
     # NOTE: self._frame_read() invoked from here
     def _on_message(
@@ -1214,22 +1250,50 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             _LOGGER.info("Rx: %s", msg.payload)
 
         if msg.topic[-3:] != "/rx":  # then, e.g. 'RAMSES/GATEWAY/18:017804'
-            if msg.payload == b"offline" and self._topic_sub.startswith(msg.topic):
-                _LOGGER.warning(
-                    f"{self}: the MQTT device is offline: {self._topic_sub[:-3]}"
-                )
-                self._connected = False
-                self._protocol.pause_writing()
+            if msg.payload == b"offline":
+                # Check if this offline message is for our current device
+                if (
+                    hasattr(self, "_topic_sub")
+                    and self._topic_sub
+                    and msg.topic == self._topic_sub[:-3]
+                ) or not hasattr(self, "_topic_sub"):
+                    _LOGGER.warning(
+                        f"{self}: the ESP device is offline (via LWT): {msg.topic}"
+                    )
+                    # Don't set _connected = False here - that's for MQTT connection, not ESP device
+                    if hasattr(self, "_protocol"):
+                        self._protocol.pause_writing()
 
             # BUG: using create task (self._loop.ct() & asyncio.ct()) causes the
             # BUG: event look to close early
             elif msg.payload == b"online":
                 _LOGGER.info(
-                    f"{self}: the MQTT device is online: {self._topic_sub[:-3]}"
+                    f"{self}: the ESP device is online (via status): {msg.topic}"
                 )
                 self._create_connection(msg)
 
             return
+
+        # Handle data messages - if we don't have connection established yet but get data,
+        # we can infer the gateway from the topic
+        if not self._connection_established and msg.topic.endswith("/rx"):
+            # Extract gateway ID from topic like "RAMSES/GATEWAY/18:123456/rx"
+            topic_parts = msg.topic.split("/")
+            if len(topic_parts) >= 3 and topic_parts[-2] not in ("+", "*"):
+                gateway_id = topic_parts[-2]  # Should be something like "18:123456"
+                _LOGGER.info(
+                    f"Inferring gateway connection from data topic: {gateway_id}"
+                )
+
+                # Set up topics and connection
+                self._topic_pub = f"{'/'.join(topic_parts[:-1])}/tx"
+                self._topic_sub = msg.topic
+                self._extra[SZ_ACTIVE_HGI] = gateway_id
+
+                # Mark as connected and establish protocol connection
+                self._connected = True
+                self._connection_established = True
+                self._make_connection(gwy_id=gateway_id)  # type: ignore[arg-type]
 
         try:
             payload = json.loads(msg.payload)

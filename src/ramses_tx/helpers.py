@@ -798,7 +798,7 @@ def fan_info_flags(flags_list: list[int]) -> int:
     return flag_res
 
 
-# 31DA[38:40]
+# 31DA[38:40], also 2210
 def parse_exhaust_fan_speed(value: HexStr2) -> PayDictT.EXHAUST_FAN_SPEED:
     """Return the exhaust fan speed (% of max speed)."""
     return _parse_fan_speed(SZ_EXHAUST_FAN_SPEED, value)  # type: ignore[return-value]

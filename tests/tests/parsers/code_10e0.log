@@ -8,10 +8,9 @@
 
 
 # The payload changes as the firmware is updated & date_2 is updated
-2019-12-21T18:29:44.104610 057 RP --- 01:145038 18:056026 --:------ 10E0 038 000002FF0163FFFFFFFF140B07E1010807DD45766F20436F6C6F720000000000000000000000  # {'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2017-11-20', 'description': 'Evo Color'}
-2020-05-14T15:41:48.743111 045 RP --- 01:145038 18:013393 --:------ 10E0 038 000002FF0163FFFFFFFF640307E4010807DD45766F20436F6C6F720000000000000000000000  # {'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2020-03-04', 'description': 'Evo Color'}
-2021-01-25T23:23:00.520205 051 RP --- 01:145038 18:140805 --:------ 10E0 038 000002FF0163FFFFFFFF0B0807E4010807DD45766F20436F6C6F720000000000000000000000  # {'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2020-08-11', 'description': 'Evo Color'}
-
+2019-12-21T18:29:44.104610 057 RP --- 01:145038 18:056026 --:------ 10E0 038 000002FF0163FFFFFFFF140B07E1010807DD45766F20436F6C6F720000000000000000000000  # {'description': 'Evo Color', 'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2017-11-20'}
+2020-05-14T15:41:48.743111 045 RP --- 01:145038 18:013393 --:------ 10E0 038 000002FF0163FFFFFFFF640307E4010807DD45766F20436F6C6F720000000000000000000000  # {'description': 'Evo Color', 'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2020-03-04'}
+2021-01-25T23:23:00.520205 051 RP --- 01:145038 18:140805 --:------ 10E0 038 000002FF0163FFFFFFFF0B0807E4010807DD45766F20436F6C6F720000000000000000000000  # {'description': 'Evo Color', 'oem_code': 'FF', 'manufacturer_sub_id': 'FF', 'product_id': '01', 'date_1': '2013-08-01', 'date_2': '2020-08-11'}
 
 #
 # oem_code 'FF' - Honeywell/Resideo CH/DHW
@@ -82,6 +81,8 @@
 
 
 #
+# oem_code '00' / sub-id 'C8' - heat
+2021-12-20T08:24:09.117900 ...  I --- 34:021943 63:262142 --:------ 10E0 038 000001C8380A0100F1FF0C0107E1030B07DE5438375246323032350000000000000000000000  # {'description': 'T87RF2025',           'manufacturer_sub_id': 'C8', 'product_id': '38', 'oem_code': '00', 'date_1': '2014-11-03', 'date_2': '2017-01-12'}
 # oem_code '00' / sub-id 'C9', 30:069468 is a BUVA Boxstream
 2023-11-04T12:34:14.007611 062  I --- 30:068457 63:262142 --:------ 10E0 038 000001C9001B0000FEFEFFFFFFFF0E0507E2425244472D30324A415330310000000000000000  # {'description': 'BRDG-02JAS01',        'manufacturer_sub_id': 'C9', 'product_id': '00', 'date_2': '0000-00-00', 'date_1': '2018-05-14', 'oem_code': '00'}
 2022-01-01T00:00:00.000000 000  I --- 30:069468 63:262142 --:------ 10E0 038 000001C9001B0000FEFEFFFFFFFF0E0507E2425244472D30324A415330310000000000000000  # {'description': 'BRDG-02JAS01',        'manufacturer_sub_id': 'C9', 'product_id': '00', 'date_1': '2018-05-14', 'date_2': '0000-00-00', 'oem_code': '00'}  # BUVA Boxstrea,
@@ -100,6 +101,7 @@
 2022-11-03T22:50:34.060486 ...  I --- 37:255297 63:262142 --:------ 10E0 038 00000100290A0201FFFFFFFFFFFF140407E5564D532D31324842313600000000000000000000  # {'description': 'VMS-12HB16',          'manufacturer_sub_id': '00', 'product_id': '29', 'date_2': '0000-00-00', 'date_1': '2021-04-20', 'oem_code': '01'}  #
 
 # oem_code '65' - ClimaRad HVAC
+2025-08-22T01:24:57.945961 058  I --- 18:154951 63:262142 --:------ 10E0 038 000001C8490F0065FEFEFFFFFFFF120607E4425244472D303252313300000000000000000000  # {'description': 'BRDG-02R13',          'manufacturer_sub_id': 'C8', 'product_id': '49', 'date_1': '2020-06-18', 'date_2': '0000-00-00', 'oem_code': '65'}  # Airios RF Bridge, set for ClimaRad oem 65
 2024-10-09T11:50:24.287879 123  I --- 37:153226 63:262142 --:------ 10E0 038 000001C8830C0A65FEFFFFFFFFFF110C07E4564D442D30375250533133000000000000000000  # {'description': 'VMD-07RPS13',         'manufacturer_sub_id': 'C8', 'product_id': '83', 'date_1': '2020-12-17', 'date_2': '0000-00-00', 'oem_code': '65'}  # ClimaRad VenturaV1x
 2024-10-16T18:43:52.761437 087  I --- 29:099029 63:262142 --:------ 10E0 029 000001C81D150765FFFFFFFFFFFFFFFFFFFF564D432D30375250303100                    # {'description': 'VMC-07RP01',          'manufacturer_sub_id': 'C8', 'product_id': '1D', 'date_1': '0000-00-00', 'date_2': '0000-00-00', 'oem_code': '65'}  # ClimaRad MiniBox Fan
 2024-10-16T21:32:07.084793 073  I --- 29:123150 63:262142 --:------ 10E0 029 000001C8410D0165FFFFFFFFFFFF0D0407DF564D4E2D30374C4D303100                    # {'description': 'VMN-07LM01',          'manufacturer_sub_id': 'C8', 'product_id': '41', 'date_1': '2015-04-13', 'date_2': '0000-00-00', 'oem_code': '65'}  # ClimaRad 4-button remote
@@ -121,12 +123,14 @@
 2019-11-27T22:39:00.000000 ...  I --- 32:139773 63:262142 --:------ 10E0 038 000001C8A2050367FEFFFFFFFFFF1D0807E6564D442D3135524D5338362D3200000000000000  # {'description': 'VMD-15RMS86-2',       'manufacturer_sub_id': 'C8', 'product_id': 'A2', 'oem_code': '67', 'date_1': '2022-08-29', 'date_2': '0000-00-00'}  # {"_SLUG": "HRU", "make": "Orcon", "model": "HRC 425"}
 2019-11-27T22:39:00.000000 ...  I --- 32:137102 63:262142 --:------ 10E0 030 000001C85E0B0567FFFFFFFFFFFFFFFFFFFF564D442D3135525053373500                  # {'description': 'VMD-15RPS75',         'manufacturer_sub_id': 'C8', 'product_id': '5E', 'oem_code': '67', 'date_1': '0000-00-00', 'date_2': '0000-00-00'}  # {"_SLUG": "HRU", "make": "Orcon", "model": "HRC 235"}
 
+2024-03-04T16:54:24.502000 ...  I --- 29:206851 63:262142 --:------ 10E0 029 000001C826090367FFFFFFFFFFFFFFFFFFFF564D432D31355250303100                    # {'description': 'VMC-15RP01',          'manufacturer_sub_id': 'C8', 'oem_code': '67', 'product_id': '26', 'date_1': '0000-00-00', 'date_2': '0000-00-00'}  # Orcon MVS-15RHB fan
+
 # oem_code '6C' - Nuaire HVAC
 2019-11-27T22:39:12.877929 061 RP --- 30:082155 18:013393 --:------ 10E0 038 000001C90011006CFEFFFFFFFFFF090907E0425244472D30324A415330310000000000000000  # {'description': 'BRDG-02JAS01',        'manufacturer_sub_id': 'C9', 'product_id': '00', 'oem_code': '6C', 'date_2': '0000-00-00', 'date_1': '2016-09-09'}  # {"_SLUG": "PIV", "make": "Nuaire", "model": "Drimaster Eco-Heat-HC"}
 2023-04-13T10:43:39.077524 073  I --- 30:098165 63:262142 --:------ 10E0 038 000001C9001D006CFEFEFFFFFFFF120707E3425244472D30324A415330310000000000000000  # {'description': 'BRDG-02JAS01',        'manufacturer_sub_id': 'C9', 'product_id': '00', 'oem_code': '6C', 'date_2': '0000-00-00', 'date_1': '2019-07-18'}  # {"_SLUG": "PIV", "make": "Nuaire", "model": "Drimaster Eco-Heat-HC"}
 2021-10-24T15:45:16.525879 055  I --- 32:168090 63:262142 --:------ 10E0 038 000001C85802016CFFFFFFFFFFFF0C0707E0564D532D32334842333300000000000000000000  # {'description': 'VMS-23HB33',          'manufacturer_sub_id': 'C8', 'product_id': '58', 'oem_code': '6C', 'date_2': '0000-00-00', 'date_1': '2016-07-12'}  # {"_SLUG": "HUM", "make": "Nuaire", "model": "Drimaster RelHum Sensor"}
 2022-01-01T00:00:00.000000 000  I --- 32:172522 63:262142 --:------ 10E0 029 000001C85901016CFFFFFFFFFFFF1F0507E0564D4E2D32334C4D333300                    # {'description': 'VMN-23LM33',          'manufacturer_sub_id': 'C8', 'product_id': '59', 'oem_code': '6C', 'date_2': '0000-00-00', 'date_1': '2016-05-31'}  # {"_SLUG": "???", "make": "Nuaire", "model": None}
-
+2022-02-19T18:00:35.234656 062  I --- 32:206250 63:262142 --:------ 10E0 030 000001C85A01016CFFFFFFFFFFFF010607E0564D4E2D32334C4D48323300                  # {'description': 'VMN-23LMH23',         'manufacturer_sub_id': 'C8', 'product_id': '5A', 'oem_code': '6C', 'date_1': '2016-06-01', 'date_2': '0000-00-00'}
 
 #
 # WIP

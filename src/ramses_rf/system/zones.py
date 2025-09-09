@@ -266,7 +266,7 @@ class DhwZone(ZoneSchedule):  # CS92A
         #     self._get_dhw(sensor=this.dst)
 
         assert (
-            msg.src is self.ctl
+            msg.src == self.ctl
             and msg.code in (Code._0005, Code._000C, Code._10A0, Code._1260, Code._1F41)
             or msg.payload.get(SZ_DOMAIN_ID) in (F9, FA)
             or msg.payload.get(SZ_ZONE_IDX) == "HW"
@@ -633,13 +633,13 @@ class Zone(ZoneSchedule):
                     self._update_schema(**{SZ_CLASS: ZON_ROLE_MAP[ZoneRole.UFH]})
 
             assert (
-                msg.src is self.ctl or msg.src.type == DEV_TYPE_MAP.UFC
+                msg.src == self.ctl or msg.src.type == DEV_TYPE_MAP.UFC
             ) and (  # DEX
                 isinstance(msg.payload, dict)
                 or [d for d in msg.payload if d.get(SZ_ZONE_IDX) == self.idx]
             ), f"msg inappropriately routed to {self}"
 
-        assert (msg.src is self.ctl or msg.src.type == DEV_TYPE_MAP.UFC) and (  # DEX
+        assert (msg.src == self.ctl or msg.src.type == DEV_TYPE_MAP.UFC) and (  # DEX
             isinstance(msg.payload, list)
             or msg.code == Code._0005
             or msg.payload.get(SZ_ZONE_IDX) == self.idx

@@ -72,6 +72,7 @@ from .const import (
     SZ_RELAY_DEMAND,
     SZ_REMAINING_DAYS,
     SZ_REMAINING_PERCENT,
+    SZ_REQ_REASON,
     SZ_SETPOINT,
     SZ_SETPOINT_BOUNDS,
     SZ_SYSTEM_MODE,
@@ -1378,29 +1379,42 @@ def parser_1fd4(payload: str, msg: Message) -> PayDictT._1FD4:
     return {"ticker": int(payload[2:], 16)}
 
 
-# WIP: unknown, HVAC
+# WIP: HVAC auto requests (confirmed for Orcon, others?)
 def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
     try:
         assert msg.verb in (RP, I_) or payload == "00"
-        assert payload[10:12] == payload[38:40] and payload[10:12] in (
-            "58",
-            "96",
-            "FF",
-        ), f"expected (58|96|FF), not {payload[10:12]}"
+        assert payload[10:12] == payload[38:40], (
+            f"expected byte 19 {payload[10:12]}, not {payload[38:40]}"
+        )  # auto requested fan speed %. Identical [38:40] is for supply?
         assert payload[20:22] == payload[48:50] and payload[20:22] in (
-            "00",
-            "03",
-        ), f"expected (00|03), not {payload[10:12]}"
-        assert payload[78:80] in ("00", "02"), f"expected (00|02), not {payload[78:80]}"
-        assert payload[80:82] in ("01", "08"), f"expected (01|08), not {payload[80:82]}"
-        assert payload[82:] in ("00", "40"), f"expected (00|40), not {payload[82:]}"
+            "00",  # idle
+            "02",  # requested by CO2 level/sensor
+            "03",  # requested by humidity level/sensor
+        ), f"expected req_reason (00|02|03), not {payload[20:22]}"
+        assert payload[78:80] in ("00", "02"), (
+            f"expected byte 39 (00|02), not {payload[78:80]}"
+        )
+        assert payload[80:82] in ("01", "08"), (
+            f"expected byte 40 (01|08), not {payload[80:82]}"
+        )
+        assert payload[82:] in ("00", "40"), (
+            f"expected byte 41- (00|40), not {payload[82:]}"
+        )
 
     except AssertionError as err:
         _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} ({err})")
 
+    _req = "IDL"
+    if payload[20:22] == "02":
+        _req = "CO2"
+    elif payload[20:22] == "03":
+        _req = "HUM"
+
     return {
-        "unknown_10": payload[10:12],
-        "unknown_20": payload[20:22],
+        **parse_exhaust_fan_speed(
+            payload[10:12]
+        ),  # for Orcon: 29 hex == 41 decimal divided by 2 gives 20.5 (%)
+        SZ_REQ_REASON: _req,
         "unknown_78": payload[78:80],
         "unknown_80": payload[80:82],
         "unknown_82": payload[82:],

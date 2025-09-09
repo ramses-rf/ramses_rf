@@ -6,15 +6,30 @@
 
 
 ####################################################################################################
-# 1. For reference, 10E0s (if any), oem_code='65' (Note: REM/FAN won't RP|10E0):
+# 1A. For reference, 10E0s (if any), oem_code='65' (Note: REM/FAN won't RP|10E0):
 2024-10-16T21:32:07.084793 073  I --- 29:123150 63:262142 --:------ 10E0 029 000001C8410D0165FFFFFFFFFFFF0D0407DF564D4E2D30374C4D303100                    # {'description': 'VMN-07LM01', 'manufacturer_sub_id': 'C8', 'product_id': '41', 'date_1': '2015-04-13', 'date_2': '0000-00-00', 'oem_code': '65'}  # ClimaRad 4-button remote
 2024-10-09T11:50:24.287879 123  I --- 37:153226 63:262142 --:------ 10E0 038 000001C8830C0A65FEFFFFFFFFFF110C07E4564D442D30375250533133000000000000000000  # {'description': 'VMD-07RPS13', 'manufacturer_sub_id': 'C8', 'product_id': '83', 'date_1': '2020-12-17', 'date_2': '0000-00-00', 'oem_code': '65'}  # ClimaRad VenturaV1x
-
+2025-08-22T01:24:57.945961 058  I --- 18:154951 63:262142 --:------ 10E0 038 000001C8490F0065FEFEFFFFFFFF120607E4425244472D303252313300000000000000000000  # {'description': 'BRDG-02R13', 'manufacturer_sub_id': 'C8', 'product_id': '49', 'date_1': '2020-06-18', 'date_2': '0000-00-00', 'oem_code': '65'}  # Airios RF Bridge, set for ClimaRad oem 65
 
 
 ####################################################################################################
-# 2. The handshake - faked in ramses_rf (NB: FAN|W|1FC9|00):
-# actual remote 1FC9 packet gets no response. Ventura is known to only bind to a CO2 sensor
+# 2A. The handshake - Ventura/slave to RF Bridge (oem 65)
+# Ventura in binding mode: press 2 buttons above Auto for 4 secs > flashing red symbol
+# RF Bridge only active after 15 minutes power on (firmware update period)
+2025-08-17T15:43:38.086338 064  I --- 18:154951 --:------ 18:154951 1FC9 018 0022F44A5D476510E04A5D47001FC94A5D47              # {'phase': 'offer', 'bindings': [['00', '22F4', '18:154951'], ['65', '10E0', '18:154951'], ['00', '1FC9', '18:154951']]}
+
+2025-08-17T15:43:39.118990 061  W --- 37:153226 18:154951 --:------ 1FC9 012 0031D996568A00230996568A                          # {'phase': 'accept', 'bindings': [['00', '31D9', '37:153226'], ['00', '2309', '37:153226']]}
+# system sync from bridge, unrelated?:
+2025-08-17T15:44:55.418472 061  I --- 18:154951 --:------ 18:154951 1F09 003 0006B3                                            # {}
+# second 1FC9 from slave
+2025-08-17T15:46:04.045829 060  I --- 37:153226 --:------ 37:153226 1FC9 030 0031D996568A0031E096568A002E1096568A6510E096568A001FC996568A  # {}
+
+# A subsequent slave|I|10E0 *is required* for a successful bind???:
+2025-08-17T15:46:40.363292 059  I --- 37:153226 63:262142 --:------ 10E0 038 000001C8830C0A65FEFFFFFFFFFF110C07E4564D442D30375250533133000000000000000000  # {'oem_code': '65', 'manufacturer_sub_id': 'C8', 'product_id': '83', 'date_1': '2020-12-17', 'date_2': '0000-00-00', 'description': 'VMD-07RPS13'}
+
+
+# 2B. The handshake - REM faked in ramses_rf to Ventura (NB: FAN|W|1FC9|00):
+# actual REM 1FC9 packet gets no response. Ventura is known to only bind to a CO2 sensor or an RF Bridge (oem 65)
 2024-11-09T18:33:29.744238 ...  I --- 29:123160 --:------ 29:123160 1FC9 018 0022F175E1180010E075E118001FC975E118
 # extended 1FC9. Added 1298 and 22F4, got response from HRU
 2024-11-09T18:32:41.837359 000  I --- 29:123160 --:------ 29:123160 1FC9 024 00129875E1180022F175E1180022F475E118001FC975E118  # {}
