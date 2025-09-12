@@ -790,11 +790,9 @@ def fan_info_to_byte(info: str) -> int:
 
 def fan_info_flags(flags_list: list[int]) -> int:
     flag_res: int = 0
-    i: int = 0
-    for x in range(7, 4, -1):  # x=7, 6 and 5
-        if flags_list[i] == 1:
-            flag_res |= 1 << x  # set bits
-        i += 1
+    for index, shft in enumerate(range(7, 4, -1)):  # index = 7, 6 and 5
+        if flags_list[index] == 1:
+            flag_res |= 1 << shft  # set bits
     return flag_res
 
 
