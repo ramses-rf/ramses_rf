@@ -143,6 +143,8 @@ class ExhaustFlow(TypedDict):
 
 
 class _VentilationState(
+    ExhaustFanSpeed,
+    FanInfo,
     AirQuality,
     Co2Level,
     ExhaustTemp,
@@ -151,8 +153,6 @@ class _VentilationState(
     OutdoorTemp,
     Capabilities,
     BypassPosition,
-    FanInfo,
-    ExhaustFanSpeed,
     SupplyFanSpeed,
     RemainingMins,
     PostHeater,
@@ -162,6 +162,7 @@ class _VentilationState(
 ):
     indoor_humidity: _HexToTempT
     outdoor_humidity: _HexToTempT
+    extra: NotRequired[str | None]
 
 
 # These are payload-specific...
