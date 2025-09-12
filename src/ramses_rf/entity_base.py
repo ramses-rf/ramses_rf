@@ -356,10 +356,10 @@ class _MessageDB(_Entity):
                 msg = self._msgs[key]
             except KeyError:
                 msg = None
-            #else:
-                # msg = max(msgs.values()) if msgs else None
-                #msg = msgs if msgs else None
-                # we already found the most recent in index query
+            # else:
+            # msg = max(msgs.values()) if msgs else None
+            # msg = msgs if msgs else None
+            # we already found the most recent in index query
         elif isinstance(code, tuple):
             msgs = [m for m in self._msgs.values() if m.code in code]
             msg = (
@@ -446,12 +446,17 @@ class _MessageDB(_Entity):
             latest: dt = dt(0, 0, 0)
             val: object = None
 
-            for dtm, code in self._gwy.msg_db.qry_field(  # mypy error: Unpacking a string is disallowed  [misc]
+            for (
+                dtm,
+                code,
+            ) in self._gwy.msg_db.qry_field(  # mypy error: Unpacking a string is disallowed  [misc]
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
                 if dtm > latest:  # only use most recently received
                     val = self._msg_value_msg(self._msgs_[Code(code)])
-                    latest = dtm  #  mypy error: Cannot determine type of "dtm"  [has-type]
+                    latest = (
+                        dtm  #  mypy error: Cannot determine type of "dtm"  [has-type]
+                    )
 
             if isinstance(val, float):
                 return float(val)
