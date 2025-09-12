@@ -2220,7 +2220,7 @@ def parser_31d9(payload: str, msg: Message) -> dict[str, Any]:
 # ventilation state (extended), HVAC
 def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
     # see: https://github.com/python/typing/issues/1445
-    return {  # type: ignore[typeddict-unknown-key]
+    result = {
         **parse_exhaust_fan_speed(payload[38:40]),  # maybe 31D9[4:6] for some?
         **parse_fan_info(payload[36:38]),  # 22F3-ish
         #
@@ -2240,6 +2240,13 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
         **parse_pre_heater(payload[48:50]),
         **parse_supply_flow(payload[50:54]),  # NOTE: is supply, not exhaust
         **parse_exhaust_flow(payload[54:58]),  # NOTE: order switched from others
+    }
+    if len(payload) == 58:
+        return result
+
+    return {
+        **result,
+        "_extra": payload[58:],  # sporadic [58:60] always 00
     }
 
     # From an Orcon 15RF Display
