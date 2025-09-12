@@ -164,6 +164,7 @@ class _VentilationState(
     outdoor_humidity: _HexToTempT
     extra: NotRequired[str | None]
 
+
 # These are payload-specific...
 class _empty(TypedDict):
     pass
