@@ -2223,7 +2223,6 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
     result = {
         **parse_exhaust_fan_speed(payload[38:40]),  # maybe 31D9[4:6] for some?
         **parse_fan_info(payload[36:38]),  # 22F3-ish
-        #
         **parse_air_quality(payload[2:6]),  # 12C8[2:6]
         **parse_co2_level(payload[6:10]),  # 1298[2:6]
         **parse_indoor_humidity(payload[10:12]),  # 12A0?
@@ -2242,12 +2241,10 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
         **parse_exhaust_flow(payload[54:58]),  # NOTE: order switched from others
     }
     if len(payload) == 58:
-        return result
+        return result  # type: ignore[return-value]
 
-    return {
-        **result,
-        "_extra": payload[58:],  # sporadic [58:60] always 00
-    }
+    result.update({"_extra": payload[58:]})  # sporadic [58:60] always 00
+    return result  # type: ignore[return-value]
 
     # From an Orcon 15RF Display
     #  1 Software version
