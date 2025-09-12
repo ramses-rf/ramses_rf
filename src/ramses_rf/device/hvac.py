@@ -964,8 +964,23 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             for k, v in self._msgs[Code._31D9].payload.items():
                 if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
                     return v
-        # # continue to 31DA
-        return str(self._msg_value(Code._31DA, key=SZ_FAN_INFO))  # Itho lookup
+        # continue to 31DA
+        # return str(self._msg_value(Code._31DA, key=SZ_FAN_INFO))  # Itho lookup
+
+        # Use SQLite query on MessageIndex
+        sql = """
+            SELECT pl from messages WHERE verb in (' I', 'RP')
+            AND (src = ? OR dst = ?)
+            AND (code = Code._31DA)
+            AND (plk like %SZ_FAN_INFO%)
+        """
+        for item in self._msg_qry(sql):
+            for k, v in item:
+                if k == SZ_FAN_INFO:
+                    return str(
+                        v
+                    )  # display description on climate entity, e.g. "speed 2, medium", localize in UI
+        return None
 
     @property
     def indoor_humidity(self) -> float | None:
@@ -981,6 +996,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
                 assert isinstance(v, (float | type(None)))
                 return v
+        # return self._msg_qry_by_code_key(Code._31DA, key=SZ_INDOOR_HUMIDITY)
         return self._msg_value((Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY)
 
     @property
