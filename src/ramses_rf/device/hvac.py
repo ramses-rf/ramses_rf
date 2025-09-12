@@ -981,8 +981,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
                 assert isinstance(v, (float | type(None)))
                 return v
-        return self._msg_qry_by_code_key(Code._31DA, key=SZ_INDOOR_HUMIDITY)
-        # return self._msg_value((Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY)
+        # return self._msg_qry_by_code_key(Code._31DA, key=SZ_INDOOR_HUMIDITY)
+        return self._msg_value((Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY)
 
     @property
     def indoor_temp(self) -> float | None:
