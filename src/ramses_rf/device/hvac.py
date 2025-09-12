@@ -463,7 +463,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
                     return v
             # continue to 31DA
-#        return str(self._msg_value(Code._31DA, key=SZ_FAN_INFO))  # Itho lookup
+        #        return str(self._msg_value(Code._31DA, key=SZ_FAN_INFO))  # Itho lookup
+
         # Use SQLite query on MessageIndex
         sql = """
             SELECT pl from messages WHERE verb in (' I', 'RP')
@@ -477,7 +478,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                     return str(
                         v
                     )  # display description on climate entity, e.g. "speed 2, medium", localize in UI
-
+        return None
 
     @property
     def indoor_humidity(self) -> float | None:
