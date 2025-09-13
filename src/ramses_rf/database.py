@@ -43,12 +43,12 @@ def _setup_db_adapters() -> None:
         """Convert ISO 8601 datetime to datetime.datetime object."""
         return dt.fromisoformat(val.decode())
 
-    sqlite3.register_converter("dtm", convert_datetime)
+    sqlite3.register_converter("DTM", convert_datetime)
 
 
 def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type-arg]
     """
-    Copy payload keys for fast query check
+    Copy payload keys for fast query check.
 
     :param parsed_payload: pre-parsed message payload dict
     :return: string of payload keys, separated by the | char
@@ -71,17 +71,23 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
 
 
 class MessageIndex:
-    """A simple in-memory SQLite3 database for indexing messages."""
+    """A simple in-memory SQLite3 database for indexing RF messages.
+    Index holds the latest message to & from all devices by header
+    (example of a hdr: 000C|RP|01:223036|0208)."""
 
     def __init__(self) -> None:
         """Instantiate a message database/index."""
 
         self._msgs: MsgDdT = OrderedDict()
 
-        self._cx = sqlite3.connect(":memory:")  # Connect to a SQLite DB in memory
+        # Connect to a SQLite DB in memory
+        self._cx = sqlite3.connect(
+            ":memory:", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        )
+        # detect_types should retain dt type on store/retrieve
         self._cu = self._cx.cursor()  # Create a cursor
 
-        _setup_db_adapters()  # dtm adapter/converter
+        _setup_db_adapters()  # DTM adapter/converter
         self._setup_db_schema()
 
         self._lock = asyncio.Lock()
@@ -132,10 +138,10 @@ class MessageIndex:
         - plk the keys stored in the parsed payload, separated by the | char
         """
 
-        self._cu.execute(
+        self._cu.execute(  # TABLE line 1 was: dtm TEXT(26) NOT NULL PRIMARY KEY,
             """
             CREATE TABLE messages (
-                dtm    TEXT(26) NOT NULL PRIMARY KEY,
+                dtm    DTM      NOT NULL PRIMARY KEY,
                 verb   TEXT(2)  NOT NULL,
                 src    TEXT(9)  NOT NULL,
                 dst    TEXT(9)  NOT NULL,
@@ -161,6 +167,11 @@ class MessageIndex:
         """Periodically remove stale messages from the index."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
+            """
+            Delete all messages from the using the MessageIndex older than a given delta.
+            :param dt_now: current timestamp
+            :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
+            """
             dtm = (dt_now - _cutoff).isoformat(timespec="microseconds")
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm => ?", (dtm,))
@@ -185,7 +196,7 @@ class MessageIndex:
             await housekeeping(self._last_housekeeping)
 
     def add(self, msg: Message) -> Message | None:
-        """Add a single message to the index.
+        """Add a single message to the MessageIndex.
 
         Returns any message that was removed because it had the same header.
 
@@ -318,8 +329,10 @@ class MessageIndex:
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[str]:
-        """Return a list of message field values from the index, given sql and parameters."""
+    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
+        """
+        :returns: a list of message field values from the index, given sql and parameters.
+        """
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")

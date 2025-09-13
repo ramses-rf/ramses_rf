@@ -144,7 +144,7 @@ class Actuator(DeviceHeat):  # 3EF0, 3EF1 (for 10:/13:)
         if self._gwy.config.disable_discovery:
             return
 
-        # TODO: why are we doing this here? Should simply use dscovery poller!
+        # TODO: why are we doing this here? Should simply use discovery poller!
         if msg.code == Code._3EF0 and msg.verb == I_ and not self.is_faked:
             # lf._send_cmd(Command.get_relay_demand(self.id), qos=QOS_LOW)
             self._send_cmd(

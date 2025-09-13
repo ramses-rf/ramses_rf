@@ -188,24 +188,25 @@ class _MessageDB(_Entity):
 
     # These attr used must be in this class, and the Entity base class
     _z_id: DeviceIdT
-    _z_idx: DevIndexT | None  # e.g. 03, HW, is None for CTL, TCS
+    _z_idx: DevIndexT | None  # e.g. 03, HW. Is None for CTL, TCS
 
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
-        self._msgs_: dict[
-            Code, Message
-        ] = {}  # code, should be code/ctx? Deprecated since 0.51.6
-        self._msgz_: dict[
+        self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
+
+        self._msgz_: dict[  # TODO remove.
+            # _msgz_ is only used in this module, but
+            # _msgz also in: client, base, device.heat,
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
-        # Deprecated as of 0.51.6 replaced by SQLite index, see ramses_rf/database.py
+        # Deprecated as of 0.51.6 Use SQLite index instead, see ramses_rf/database.py
         # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
         """Store a msg in the DBs.
 
-        Uses SQLite since 0.51.6
+        Uses SQLite MessageIndex since 0.51.6
         """
 
         if not (
@@ -219,7 +220,7 @@ class _MessageDB(_Entity):
             self._gwy.msg_db.add(msg)  # only an index on _msgs_
             # ignore any replaced message that might be returned
 
-        # Store msg by code in flat self._msgs_ Dict (deprecated since 0.51.6)
+        # Store msg by code in flat self._msgs_ dict (stores all latest payloads)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
@@ -272,15 +273,18 @@ class _MessageDB(_Entity):
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
             with contextlib.suppress(KeyError):
+                # TODO remove all refs to _msgz_
                 del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
-        """Return a msg, if any, that matches a header."""
+        """Return a msg, if any, that matches a given header."""
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             msgs = self._gwy.msg_db.get(hdr=hdr)
+            # only 1 result expected since hdr is a unique key
             return msgs[0] if msgs else None
 
+        # TODO the rest of this can go once we mode to MessageIndex
         msg: Message
         code: Code
         verb: VerbT
@@ -446,17 +450,13 @@ class _MessageDB(_Entity):
             latest: dt = dt(0, 0, 0)
             val: object = None
 
-            for (
-                dtm,
-                code,
-            ) in self._gwy.msg_db.qry_field(  # mypy error: Unpacking a string is disallowed  [misc]
+            for rec in self._gwy.msg_db.qry_field(
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
-                if dtm > latest:  # only use most recently received
+                _LOGGER.debug(f"Fetched from db: {rec}")
+                if rec[0] > latest:  # only use most recently received
                     val = self._msg_value_msg(self._msgs_[Code(code)])
-                    latest = (
-                        dtm  #  mypy error: Cannot determine type of "dtm"  [has-type]
-                    )
+                    latest = rec[0]
 
             if isinstance(val, float):
                 return float(val)
@@ -466,13 +466,13 @@ class _MessageDB(_Entity):
 
     def _msg_qry(self, sql: str) -> list[dict]:
         """
-        SQLite query for the stored payload on full MessageIndex. See ramses_rf/database.py
+        SQLite custom query for the stored payload on the full MessageIndex.
+        See ramses_rf/database.py
 
         :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
-        :return: the value stored for the supplied key in the selected message payload,
-        or empty list if key is not in payload
+        :return: the value stored for the supplied key in the selected message payload, or empty list if key is not in payload
         """
-        # not used yet
+        # not used yet as of 0.51.6
 
         res: list[dict] = []
         if sql and self._gwy.msg_db:
@@ -480,11 +480,10 @@ class _MessageDB(_Entity):
             # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
             # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)"""
             for code in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
-                for pl in self._msgs_[Code(code)]:
-                    # error: "Message" has no attribute "__iter__" (not iterable)  [attr-defined]
+                pl = self._msgs_[Code(code)].payload
 
-                    # fetch from payloads dict by code key and add to res
-                    res.append(pl.get(code))  # only if newer?
+                # fetch from payloads dict by code key and add to res
+                res.append(pl.get(code))  # only if newer, handled by MessageIndex
         return res
 
     @property
@@ -525,8 +524,9 @@ class _MessageDB(_Entity):
         :return: Dict of messages, nested by Code, Verb, Context
         """
         if not self._gwy.msg_db:
-            # no central SQLite MessageIndex, deprecated since 0.51.6
-            return self._msgz_
+            # no central SQLite MessageIndex?
+            _LOGGER.warning("Missing MessageIndex")
+            return self._msgz_  # deprecated since 0.51.6
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
@@ -682,7 +682,9 @@ class _Discovery(_MessageDB):
 
     async def discover(self) -> None:
         def find_latest_msg(hdr: HeaderT, task: dict) -> Message | None:
-            """Return the latest message for a header from any source (not just RPs)."""
+            """
+            :return: the latest message for a header from any source (not just RPs).
+            """
             msgs: list[Message] = [
                 m
                 for m in [self._get_msg_by_hdr(hdr[:5] + v + hdr[7:]) for v in (I_, RP)]
