@@ -215,6 +215,7 @@ def ConvertNullToDict() -> Callable[[_T | None], _T | dict[Never, Never]]:
 
 
 SZ_ALIAS: Final = "alias"
+SZ_BOUND_TO: Final = "bound"
 SZ_CLASS: Final = "class"
 SZ_FAKED: Final = "faked"
 SZ_SCHEME: Final = "scheme"
@@ -296,6 +297,8 @@ def sch_global_traits_dict_factory(
             vol.Optional(SZ_CLASS, default="HVC"): vol.Any(
                 None, *hvac_slugs, *(str(DEV_TYPE_MAP[s]) for s in hvac_slugs)
             ),  # TODO: consider removing None
+            # Add 'bound' trait for FAN devices
+            vol.Optional(SZ_BOUND_TO): vol.Any(None, vol.Match(DEVICE_ID_REGEX.ANY)),
         }
     )
     SCH_TRAITS_HVAC = SCH_TRAITS_HVAC.extend(

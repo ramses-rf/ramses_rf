@@ -39,6 +39,7 @@ from ramses_tx.schemas import (  # noqa: F401
     SCH_TRAITS as SCH_TRAITS,
     SZ_ALIAS as SZ_ALIAS,
     SZ_BLOCK_LIST,
+    SZ_BOUND_TO as SZ_BOUND_TO,
     SZ_CLASS as SZ_CLASS,
     SZ_DISABLE_SENDING,
     SZ_ENFORCE_KNOWN_LIST,
