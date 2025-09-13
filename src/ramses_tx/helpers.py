@@ -479,6 +479,13 @@ def parse_valve_demand(
     return {SZ_HEAT_DEMAND: result}
 
 
+AIR_QUALITY_BASIS: dict[str, str] = {
+    "10": "voc",  # volatile compounds
+    "20": "co2",  # carbon dioxide
+    "40": "rel_humidity",  # relative humidity
+}
+
+
 # 31DA[2:6] and 12C8[2:6]
 def parse_air_quality(value: HexStr4) -> PayDictT.AIR_QUALITY:
     """Return the air quality (%): poor (0.0) to excellent (1.0).
@@ -505,13 +512,19 @@ def parse_air_quality(value: HexStr4) -> PayDictT.AIR_QUALITY:
     assert level <= 1.0, value[:2]  # TODO: raise exception
 
     assert value[2:] in ("10", "20", "40"), value[2:]  # TODO: remove assert
-    basis = {
-        "10": "voc",  # volatile compounds
-        "20": "co2",  # carbon dioxide
-        "40": "rel_humidity",  # relative humidity
-    }.get(value[2:], f"unknown_{value[2:]}")  # TODO: remove get/unknown
+
+    basis: str = AIR_QUALITY_BASIS.get(
+        value[2:], f"unknown_{value[2:]}"
+    )  # TODO: remove get/unknown
 
     return {SZ_AIR_QUALITY: level, SZ_AIR_QUALITY_BASIS: basis}
+
+
+def air_quality_code(desc: str) -> str:
+    for k, v in AIR_QUALITY_BASIS.items():
+        if v == desc:
+            return k
+    return "00"
 
 
 # 31DA[6:10] and 1298[2:6]
@@ -657,6 +670,26 @@ def _parse_hvac_temp(param_name: str, value: HexStr4) -> Mapping[str, float | No
     return {param_name: temp}
 
 
+ABILITIES = {
+    15: "off",
+    14: "low_med_high",  # 3,2,1 = high,med,low?
+    13: "timer",
+    12: "boost",
+    11: "auto",
+    10: "speed_4",
+    9: "speed_5",
+    8: "speed_6",
+    7: "speed_7",
+    6: "speed_8",
+    5: "speed_9",
+    4: "speed_10",
+    3: "auto_night",
+    2: "reserved",
+    1: "post_heater",
+    0: "pre_heater",
+}
+
+
 # 31DA[30:34]
 def parse_capabilities(value: HexStr4) -> PayDictT.CAPABILITIES:
     """Return the speed capabilities (a bitmask).
@@ -672,25 +705,6 @@ def parse_capabilities(value: HexStr4) -> PayDictT.CAPABILITIES:
     if value == "7FFF":  # TODO: Not implemented???
         return {SZ_SPEED_CAPABILITIES: None}
 
-    ABILITIES = {
-        15: "off",
-        14: "low_med_high",  # 3,2,1 = high,med,low?
-        13: "timer",
-        12: "boost",
-        11: "auto",
-        10: "speed_4",
-        9: "speed_5",
-        8: "speed_6",
-        7: "speed_7",
-        6: "speed_8",
-        5: "speed_9",
-        4: "speed_10",
-        3: "auto_night",
-        2: "reserved",
-        1: "post_heater",
-        0: "pre_heater",
-    }
-
     # assert value in ("0002", "4000", "4808", "F000", "F001", "F800", "F808"), value
 
     return {
@@ -698,6 +712,16 @@ def parse_capabilities(value: HexStr4) -> PayDictT.CAPABILITIES:
             v for k, v in ABILITIES.items() if int(value, 16) & 2**k
         ]
     }
+
+
+def capability_bits(cap_list: list[str]) -> int:
+    # 0xF800 = 0b1111100000000000
+    cap_res: int = 0
+    for cap in cap_list:
+        for k, v in ABILITIES.items():
+            if v == cap:
+                cap_res |= 2**k  # set bit
+    return cap_res
 
 
 # 31DA[34:36]
@@ -755,6 +779,21 @@ def parse_fan_info(value: HexStr2) -> PayDictT.FAN_INFO:
         ],  # lookup description from code
         "_unknown_fan_info_flags": flags,
     }
+
+
+def fan_info_to_byte(info: str) -> int:
+    for k, v in _31DA_FAN_INFO.items():
+        if v == info:
+            return int(k) & 0x1F
+    return 0x0000
+
+
+def fan_info_flags(flags_list: list[int]) -> int:
+    flag_res: int = 0
+    for index, shft in enumerate(range(7, 4, -1)):  # index = 7, 6 and 5
+        if flags_list[index] == 1:
+            flag_res |= 1 << shft  # set bits
+    return flag_res
 
 
 # 31DA[38:40], also 2210

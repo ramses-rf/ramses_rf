@@ -39,6 +39,10 @@ from .const import (
 )
 from .frame import Frame, pkt_header
 from .helpers import (
+    air_quality_code,
+    capability_bits,
+    fan_info_flags,
+    fan_info_to_byte,
     hex_from_bool,
     hex_from_double,
     hex_from_dtm,
@@ -1320,6 +1324,109 @@ class Command(Frame):
         dt_str = hex_from_dtm(datetime, is_dst=is_dst, incl_seconds=True)
         return cls.from_attrs(W_, ctl_id, Code._313F, f"0060{dt_str}")
 
+    @classmethod  # constructor for I|31DA
+    def get_hvac_fan_31da(
+        cls,
+        dev_id: DeviceIdT | str,
+        hvac_id: str,
+        bypass_position: float | None,
+        air_quality: int | None,
+        co2_level: int | None,
+        indoor_humidity: float | None,
+        outdoor_humidity: float | None,
+        exhaust_temp: float | None,
+        supply_temp: float | None,
+        indoor_temp: float | None,
+        outdoor_temp: float | None,
+        speed_capabilities: list[str],
+        fan_info: str,
+        _unknown_fan_info_flags: list[int],  # skip? as starts with _
+        exhaust_fan_speed: float | None,
+        supply_fan_speed: float | None,
+        remaining_mins: int | None,
+        post_heat: int | None,
+        pre_heat: int | None,
+        supply_flow: float | None,
+        exhaust_flow: float | None,
+        **kwargs: Any,  # option: air_quality_basis: str | None,
+    ) -> Command:
+        """Constructor to announce hvac fan (state, temps, flows, humidity etc.) of a HRU (31DA)."""
+        # 00 EF00 7FFF 34 33 0898 0898 088A 0882 F800 00 15 14 14 0000 EF EF 05F5 0613:
+        # {"hvac_id": '00', 'bypass_position': 0.000, 'air_quality': None,
+        # 'co2_level': None, 'indoor_humidity': 0.52, 'outdoor_humidity': 0.51,
+        # 'exhaust_temp': 22.0, 'supply_temp': 22.0, 'indoor_temp': 21.86,
+        # 'outdoor_temp': 21.78, 'speed_capabilities': ['off', 'low_med_high',
+        # 'timer', 'boost', 'auto'], 'fan_info': 'away',
+        # '_unknown_fan_info_flags': [0, 0, 0], 'exhaust_fan_speed': 0.1,
+        # 'supply_fan_speed': 0.1, 'remaining_mins': 0, 'post_heat': None,
+        # 'pre_heat': None, 'supply_flow': 15.25, 'exhaust_flow': 15.55},
+
+        air_quality_basis: str = kwargs.pop("air_quality_basis", "00")
+        extra: str = kwargs.pop("_extra", "")
+        assert not kwargs, kwargs
+
+        payload = hvac_id
+        payload += (
+            f"{(int(air_quality * 200)):02X}" if air_quality is not None else "EF"
+        )
+        payload += (
+            f"{air_quality_code(air_quality_basis)}"
+            if air_quality_basis is not None
+            else "00"
+        )
+        payload += f"{co2_level:04X}" if co2_level is not None else "7FFF"
+        payload += (
+            hex_from_percent(indoor_humidity, high_res=False)
+            if indoor_humidity is not None
+            else "EF"
+        )
+        payload += (
+            hex_from_percent(outdoor_humidity, high_res=False)
+            if outdoor_humidity is not None
+            else "EF"
+        )
+        payload += hex_from_temp(exhaust_temp) if exhaust_temp is not None else "7FFF"
+        payload += hex_from_temp(supply_temp) if supply_temp is not None else "7FFF"
+        payload += hex_from_temp(indoor_temp) if indoor_temp is not None else "7FFF"
+        payload += hex_from_temp(outdoor_temp) if outdoor_temp is not None else "7FFF"
+        payload += (
+            f"{capability_bits(speed_capabilities):04X}"
+            if speed_capabilities is not None
+            else "7FFF"
+        )
+        payload += (
+            hex_from_percent(bypass_position, high_res=True)
+            if bypass_position is not None
+            else "EF"
+        )
+        payload += (
+            f"{(fan_info_to_byte(fan_info) | fan_info_flags(_unknown_fan_info_flags)):02X}"
+            if fan_info is not None
+            else "EF"
+        )
+        payload += (
+            hex_from_percent(exhaust_fan_speed, high_res=True)
+            if exhaust_fan_speed is not None
+            else "FF"
+        )
+        payload += (
+            hex_from_percent(supply_fan_speed, high_res=True)
+            if supply_fan_speed is not None
+            else "FF"
+        )
+        payload += f"{remaining_mins:04X}" if remaining_mins is not None else "7FFF"
+        payload += f"{int(post_heat * 200):02X}" if post_heat is not None else "EF"
+        payload += f"{int(pre_heat * 200):02X}" if pre_heat is not None else "EF"
+        payload += (
+            f"{(int(supply_flow * 100)):04X}" if supply_flow is not None else "7FFF"
+        )
+        payload += (
+            f"{(int(exhaust_flow * 100)):04X}" if exhaust_flow is not None else "7FFF"
+        )
+        payload += extra
+
+        return cls._from_attrs(I_, Code._31DA, payload, addr0=dev_id, addr2=dev_id)
+
     @classmethod  # constructor for RQ|3220
     def get_opentherm_data(cls, otb_id: DeviceIdT | str, msg_id: int | str) -> Command:
         """Constructor to get (Read-Data) opentherm msg value (c.f. parser_3220)."""
@@ -1412,7 +1519,7 @@ CODE_API_MAP = {
     f"{I_}|{Code._1FC9}": Command.put_bind,
     f"{W_}|{Code._1FC9}": Command.put_bind,  # NOTE: same class method as I|1FC9
     f"{W_}|{Code._22F7}": Command.set_bypass_position,
-    f"{I_}|{Code._1298}": Command.put_co2_level,
+    f"{I_}|{Code._1298}": Command.put_co2_level,  # .         has a test
     f"{RQ}|{Code._1F41}": Command.get_dhw_mode,
     f"{W_}|{Code._1F41}": Command.set_dhw_mode,  # .          has a test
     f"{RQ}|{Code._10A0}": Command.get_dhw_params,
@@ -1421,7 +1528,7 @@ CODE_API_MAP = {
     f"{I_}|{Code._1260}": Command.put_dhw_temp,  # .          has a test (empty)
     f"{I_}|{Code._22F1}": Command.set_fan_mode,
     f"{W_}|{Code._2411}": Command.set_fan_param,
-    f"{I_}|{Code._12A0}": Command.put_indoor_humidity,
+    f"{I_}|{Code._12A0}": Command.put_indoor_humidity,  # .   has a test
     f"{RQ}|{Code._1030}": Command.get_mix_valve_params,
     f"{W_}|{Code._1030}": Command.set_mix_valve_params,  # .  has a test
     f"{RQ}|{Code._3220}": Command.get_opentherm_data,
@@ -1451,4 +1558,5 @@ CODE_API_MAP = {
     f"{W_}|{Code._2309}": Command.set_zone_setpoint,  # .     has a test
     f"{RQ}|{Code._30C9}": Command.get_zone_temp,
     f"{RQ}|{Code._12B0}": Command.get_zone_window_state,
+    f"{I_}|{Code._31DA}": Command.get_hvac_fan_31da,  # .     has a test
 }  # TODO: RQ|0404 (Zone & DHW)
