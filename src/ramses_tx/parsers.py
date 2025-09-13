@@ -2971,8 +2971,12 @@ _PAYLOAD_PARSERS = {
 
 
 def parse_payload(msg: Message) -> dict | list[dict]:
+    """
+    Apply the appropriate parser defined in this module to the message.
+    :param msg: a Message object containing packet data and extra attributes
+    :return: a dict of key: value pairs or a list of them, e.g. {'temperature': 21.5}
+    """
     result: dict | list[dict]
-
     result = _PAYLOAD_PARSERS.get(msg.code, parser_unknown)(msg._pkt.payload, msg)
     if isinstance(result, dict) and msg.seqn.isnumeric():  # e.g. 22F1/3
         result["seqx_num"] = msg.seqn
