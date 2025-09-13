@@ -788,7 +788,7 @@ class MsgId(StrEnum):
     _7F = "7F"
 
 
-# StrEnum is intended include all known codes, see: test suite, code schema in ramses.py
+# StrEnum is intended to include all known codes, see: test suite, code schema in ramses.py
 @verify(EnumCheck.UNIQUE)
 class Code(StrEnum):
     _0001 = "0001"
