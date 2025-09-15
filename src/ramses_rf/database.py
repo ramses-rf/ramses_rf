@@ -148,7 +148,7 @@ class MessageIndex:
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT     NOT NULL,
                 hdr    TEXT     NOT NULL UNIQUE
-                plk    TEXT     NOT NULL, # str of included keys
+                plk    TEXT     NOT NULL, # str of keywords in payload
             )
             """
         )
@@ -159,7 +159,6 @@ class MessageIndex:
         self._cu.execute("CREATE INDEX idx_code ON messages (code)")
         self._cu.execute("CREATE INDEX idx_ctx ON messages (ctx)")
         self._cu.execute("CREATE INDEX idx_hdr ON messages (hdr)")
-        # self._cu.execute("CREATE INDEX idx_plk ON messages (plk)")
 
         self._cx.commit()
 
@@ -196,12 +195,12 @@ class MessageIndex:
             await housekeeping(self._last_housekeeping)
 
     def add(self, msg: Message) -> Message | None:
-        """Add a single message to the MessageIndex.
-
-        Returns any message that was removed because it had the same header.
-
-        Throws a warning if there is a duplicate dtm.
-        """  # TODO: eventually, may be better to use SqlAlchemy
+        """
+        Add a single message to the MessageIndex.
+        Logs a warning if there is a duplicate dtm.
+        :returns: any message that was removed because it had the same header
+        """
+        # TODO: eventually, may be better to use SqlAlchemy
 
         dup: tuple[Message, ...] = tuple()  # avoid UnboundLocalError
         old: Message | None = None  # avoid UnboundLocalError
@@ -231,7 +230,10 @@ class MessageIndex:
         return old
 
     def _insert_into(self, msg: Message) -> Message | None:
-        """Insert a message into the index (and return any message replaced by hdr)."""
+        """
+        Insert a message into the index.
+        :returns: any message replaced (by ssame hdr)
+        """
 
         msgs = self._delete_from(hdr=msg._pkt._hdr)
 
@@ -261,7 +263,7 @@ class MessageIndex:
     ) -> tuple[Message, ...] | None:
         """Remove a set of message(s) from the index.
 
-        Returns any messages that were removed.
+        :returns: any messages that were removed.
         """
 
         if bool(msg) ^ bool(kwargs):
@@ -288,7 +290,8 @@ class MessageIndex:
         return msgs
 
     def _delete_from(self, **kwargs: str) -> tuple[Message, ...]:
-        """Remove message(s) from the index (and return any messages removed)."""
+        """Remove message(s) from the index.
+        :returns: any messages that were removed"""
 
         msgs = self._select_from(**kwargs)
 
@@ -300,7 +303,7 @@ class MessageIndex:
         return msgs
 
     def get(self, msg: Message | None = None, **kwargs: str) -> tuple[Message, ...]:
-        """Return a set of message(s) from the index."""
+        """:returns: a set of message(s) from the index."""
 
         if not (bool(msg) ^ bool(kwargs)):
             raise ValueError("Either a Message or kwargs should be provided, not both")
@@ -310,7 +313,8 @@ class MessageIndex:
         return self._select_from(**kwargs)
 
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
-        """Select message(s) from the index (and return any such messages)."""
+        """Select message(s) from the index.
+        :returns: any such messages"""
 
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
@@ -319,8 +323,8 @@ class MessageIndex:
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-    def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
-        """Return a set of message(s) from the index, given sql and parameters."""
+    def qry(self, sql: str, parameters: tuple[dt, ...]) -> tuple[Message, ...]:
+        """Get a set of message dtm(s) from the index, given sql and parameters."""
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
@@ -331,7 +335,7 @@ class MessageIndex:
 
     def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
         """
-        :returns: a list of message field values from the index, given sql and parameters.
+        Get a list of message field values from the index, given sql and parameters.
         """
 
         if "SELECT" not in sql:
@@ -342,13 +346,13 @@ class MessageIndex:
         return self._cu.fetchall()
 
     def all(self, include_expired: bool = False) -> tuple[Message, ...]:
-        """Return all messages from the index."""
+        """Get all messages from the index."""
 
         self._cu.execute("SELECT * FROM messages")
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
     def clr(self) -> None:
-        """Clear the message index (remove all messages)."""
+        """Clear the message index (remove indexes of all messages)."""
 
         self._cu.execute("DELETE FROM messages")
         self._cx.commit()
