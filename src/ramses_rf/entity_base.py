@@ -345,7 +345,7 @@ class _MessageDB(_Entity):
 
         :param code: filter messages by Code or a tuple of Codes, optional
         :param verb: filter on I, RQ, RP, optional, only with a single Code
-        :param key: value keyword to retrieve
+        :param key: value keyword to retrieve, not with verb RQ
         :param kwargs: not used for now
         :return: a dict containing key: value pairs, or a list of those
         """
@@ -354,16 +354,20 @@ class _MessageDB(_Entity):
         )
 
         if verb:
+            if verb == "RQ":
+                # must be a single code
+                assert not isinstance(code, tuple) or verb is None, (
+                    f"Unsupported: using a keyword ({key}) with verb RQ. Ignoring key"
+                )
+                key = None
             try:
                 # msgs = self._msgz[code][verb] # deprecated since 0.51.6
-                key = Code(self._msg_qry_by_code_key(code, verb))
-                msg = self._msgs[key]
+                lookup = Code(self._msg_qry_by_code_key(code, verb))
+                msg = self._msgs[lookup]
             except KeyError:
                 msg = None
             # else:
             # msg = max(msgs.values()) if msgs else None
-            # msg = msgs if msgs else None
-            # we already found the most recent in index query
         elif isinstance(code, tuple):
             msgs = [m for m in self._msgs.values() if m.code in code]
             msg = (
@@ -455,7 +459,12 @@ class _MessageDB(_Entity):
             ):
                 _LOGGER.debug(f"Fetched from db: {rec}")
                 if rec[0] > latest:  # only use most recently received
-                    val = self._msg_value_msg(self._msgs_[Code(code)])
+                    val_dict = self._msg_value_msg(
+                        self._msgs_[Code(code)]
+                    )  # from str to Code
+                    # can this be more direct?
+                    val = val_dict.get(code)  # pick value of 1st dict entry
+                    _LOGGER.debug(f"Extracted val %s for code %s", val, code)
                     latest = rec[0]
 
             if isinstance(val, float):
@@ -463,6 +472,8 @@ class _MessageDB(_Entity):
             else:
                 return str(val)
         return None
+
+    # SQLite methods, since 0.51.6
 
     def _msg_qry(self, sql: str) -> list[dict]:
         """
@@ -488,7 +499,7 @@ class _MessageDB(_Entity):
 
     @property
     def traits(self) -> dict:
-        """Return the codes seen by the entity."""
+        """Get the codes seen by the entity."""
 
         codes = {
             k: (CODES_SCHEMA[k][SZ_NAME] if k in CODES_SCHEMA else None)
