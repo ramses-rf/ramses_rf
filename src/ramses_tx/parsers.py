@@ -2347,7 +2347,7 @@ def parser_3210(payload: str, msg: Message) -> PayDictT._3210:
     return {SZ_TEMPERATURE: hex_to_temp(payload[2:])}
 
 
-# opentherm_msg, from OTB (and some RND)
+# opentherm_msg, from OTB (and OT_RND)
 def parser_3220(payload: str, msg: Message) -> dict[str, Any]:
     try:
         ot_type, ot_id, ot_value, ot_schema = decode_frame(payload[2:10])

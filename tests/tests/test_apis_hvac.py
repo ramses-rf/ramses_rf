@@ -338,7 +338,7 @@ GET_31DA_KWARGS = {
         "supply_temp": 20.08,
         "indoor_temp": 23.76,
         "outdoor_temp": 18.47,
-        "speed_capabilities": ['off', 'low_med_high', 'timer', 'boost', 'post_heater'],
+        "speed_capabilities": ["off", "low_med_high", "timer", "boost", "post_heater"],
         "bypass_position": 0.85,
         "fan_info": "speed 2, medium",
         "_unknown_fan_info_flags": [0, 0, 0],

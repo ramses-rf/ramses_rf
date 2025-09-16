@@ -95,7 +95,7 @@ class _Entity:
     """The ultimate base class for Devices/Zones/Systems.
 
     This class is mainly concerned with:
-     - if the entity can Rx packets (e.g. can the HGI send it an RQ)
+     - if the entity can Rx packets (e.g. can the HGI send it an RQ?)
     """
 
     _SLUG: str = None  # type: ignore[assignment]
@@ -125,7 +125,7 @@ class _Entity:
             )  # TODO: take whitelist into account
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
-        """Store a msg in _msgs[code] (only latest I/RP) and _msgz[code][verb][ctx]."""
+        """Store a msg in _msgs[code] (only latest I/RP) and in central MessageIndex."""
 
         raise NotImplementedError
 
@@ -186,21 +186,22 @@ class _MessageDB(_Entity):
     ctl: Controller
     tcs: Evohome
 
-    # These attr used must be in this class, and the Entity base class
+    # These attr used must be in this class
     _z_id: DeviceIdT
-    _z_idx: DevIndexT | None  # e.g. 03, HW. Is None for CTL, TCS
+    _z_idx: DevIndexT | None  # e.g. 03, HW. Is None for CTL, TCS.
 
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
 
-        self._msgz_: dict[  # TODO remove.
-            # _msgz_ is only used in this module, but
-            # _msgz also in: client, base, device.heat,
+        # Deprecated as of 0.51.6 Use SQLite index instead, see ramses_rf/database.py
+        # _msgz_ is only used in this module, but
+        # _msgz (calling _msgz_) also in: client, base, device.heat
+        # TODO(eb): remove
+        self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
-        # Deprecated as of 0.51.6 Use SQLite index instead, see ramses_rf/database.py
         # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
@@ -220,20 +221,21 @@ class _MessageDB(_Entity):
             self._gwy.msg_db.add(msg)  # only an index on _msgs_
             # ignore any replaced message that might be returned
 
-        # Store msg by code in flat self._msgs_ dict (stores all latest payloads)
+        # Store msg by code in flat self._msgs_ dict (stores all latest payloads by code)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
-        # TODO(eb): remove all refs to _msgz_
-        if msg.code not in self._msgz_:
-            # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
-            self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
-        elif msg.verb not in self._msgz_[msg.code]:
-            # Same, 1 level deeper
-            self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
-        else:
-            # Same, replacing previous message
-            self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
+        # TODO(eb): remove all refs to _msgz_ from code base
+        # store msg in nested dict
+        # if msg.code not in self._msgz_:
+        #     # Store msg verb + ctx by code in nested self._msgz_ dict (deprecated)
+        #     self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
+        # elif msg.verb not in self._msgz_[msg.code]:
+        #     # Same, 1 level deeper
+        #     self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
+        # else:
+        #     # Same, replacing previous message
+        #     self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
     def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][index]
@@ -273,7 +275,7 @@ class _MessageDB(_Entity):
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
             with contextlib.suppress(KeyError):
-                # TODO remove all refs to _msgz_
+                # TODO remove all refs to _msgz_ / _msgz
                 del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
@@ -284,7 +286,7 @@ class _MessageDB(_Entity):
             # only 1 result expected since hdr is a unique key
             return msgs[0] if msgs else None
 
-        # TODO the rest of this can go once we mode to MessageIndex
+        # TODO the rest of this can go once we move to MessageIndex
         msg: Message
         code: Code
         verb: VerbT
@@ -425,6 +427,8 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
+    # SQLite methods, since 0.51.6
+
     def _msg_qry_by_code_key(
         self,
         code: Code | None = None,
@@ -437,7 +441,7 @@ class _MessageDB(_Entity):
         :param code: (optional) the message Code to use, e.g. 31DA
         :param key: the message keyword to fetch the value for, e.g. SZ_HUMIDITY
         :param kwargs: not used as of 0.51.6
-        :return: a single string or float value
+        :return: a single string or float value or None when qry returned empty
         """
         if self._gwy.msg_db:
             code_par: str
@@ -459,11 +463,15 @@ class _MessageDB(_Entity):
             ):
                 _LOGGER.debug(f"Fetched from db: {rec}")
                 if rec[0] > latest:  # only use most recently received
-                    val_dict = self._msg_value_msg(
+                    val_msg = self._msg_value_msg(
                         self._msgs_[Code(code)]
-                    )  # from str to Code
-                    # can this be more direct?
-                    val = val_dict.get(code)  # pick value of 1st dict entry
+                    )  # from str to Code. Can this be more direct?
+                    if isinstance(rec, list):
+                        val = val_msg[0]  # pick first item
+                    elif isinstance(rec, dict):
+                        val = val_msg.get(code)  # pick value of 1st dict entry
+                    else:
+                        return None
                     _LOGGER.debug(f"Extracted val %s for code %s", val, code)
                     latest = rec[0]
 
@@ -472,8 +480,6 @@ class _MessageDB(_Entity):
             else:
                 return str(val)
         return None
-
-    # SQLite methods, since 0.51.6
 
     def _msg_qry(self, sql: str) -> list[dict]:
         """
@@ -512,9 +518,9 @@ class _MessageDB(_Entity):
     @property
     def _msgs(self) -> dict[Code, Message]:
         """
-        Get a flat Dict af all I/RP messages logged with this device as src or dst.
+        Get a flat dict af all I/RP messages logged with this device as src or dst.
 
-        :return: nested Dict of messages by Code
+        :return: nested dict of messages by Code
         """
         if not self._gwy.msg_db:
             # no central SQLite MessageIndex, deprecated since 0.51.6
@@ -530,9 +536,10 @@ class _MessageDB(_Entity):
     @property
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
         """
-        Get a nested Dict of all I/RP messages logged with this device as src or dst.
+        Get a nested dict of all I/RP messages logged with this device as either src or dst.
+        Temporary replacement for direct _msgz_ access.
 
-        :return: Dict of messages, nested by Code, Verb, Context
+        :return: dict of messages, nested by Code, Verb, Context
         """
         if not self._gwy.msg_db:
             # no central SQLite MessageIndex?

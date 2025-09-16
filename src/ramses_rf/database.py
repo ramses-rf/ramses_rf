@@ -303,7 +303,7 @@ class MessageIndex:
         return msgs
 
     def get(self, msg: Message | None = None, **kwargs: str) -> tuple[Message, ...]:
-        """:returns: a set of message(s) from the index."""
+        """Get a set of message(s) from the index."""
 
         if not (bool(msg) ^ bool(kwargs)):
             raise ValueError("Either a Message or kwargs should be provided, not both")
@@ -312,9 +312,21 @@ class MessageIndex:
 
         return self._select_from(**kwargs)
 
+    def _contains(self, **kwargs: str) -> bool:
+        """
+        :return: True if code is present, False when qry returned empty
+        """
+        # adapted from _select_from()
+        sql = "SELECT dtm FROM messages WHERE "
+        sql += " AND ".join(f"{k} = ?" for k in kwargs)
+
+        self._cu.execute(sql, tuple(kwargs.values()))
+
+        return tuple(self._msgs[row[0]] for row in self._cu.fetchall()) is not None
+
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
         """Select message(s) from the index.
-        :returns: any such messages"""
+        :returns: a tuple of qualifying messages"""
 
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
@@ -323,8 +335,8 @@ class MessageIndex:
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-    def qry(self, sql: str, parameters: tuple[dt, ...]) -> tuple[Message, ...]:
-        """Get a set of message dtm(s) from the index, given sql and parameters."""
+    def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
+        """Get a tuple of messages from the index, given sql and parameters."""
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
@@ -333,7 +345,9 @@ class MessageIndex:
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
+    def qry_field(
+        self, sql: str, parameters: tuple[str, ...]
+    ) -> list[tuple[dt, str, ...]]:
         """
         Get a list of message field values from the index, given sql and parameters.
         """
