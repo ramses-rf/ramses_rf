@@ -53,15 +53,15 @@ async def assert_code_in_device_msgindex(
     for _ in range(int(max_sleep / ASSERT_CYCLE_TIME)):
         await asyncio.sleep(ASSERT_CYCLE_TIME)
         if (
-            (dev := gwy.device_by_id.get(dev_id))
+            (_ := gwy.device_by_id.get(dev_id))
             and gwy.msg_db
-            and gwy.msg_db._contains(dev_id=dev_id, code=code)
+            and gwy.msg_db.contains(dev_id=dev_id, code=code)
         ) != test_not:
             break
     assert (
-        (dev := gwy.device_by_id.get(dev_id))
+        (_ := gwy.device_by_id.get(dev_id))
         and gwy.msg_db
-        and gwy.msg_db._contains(dev_id=dev_id, code=code)
+        and gwy.msg_db.contains(dev_id=dev_id, code=code)
     ) != test_not  # TODO: fix me
 
 
