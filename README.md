@@ -46,6 +46,6 @@ pip install -e .
 
 The CLI is called ``client.py`` and is included in the code root.
 It has options to monitor and parse Ramses-II traffic to screen or a log file, and to parse a file containing Ramses-II messages to the screen.
-See the [client.py CLI wiki page](https://github.com/ramses-rf/ramses_rf/wiki/The-client.py-command-line) for instructions.
+See the [client.py CLI wiki page](https://github.com/ramses-rf/ramses_rf/wiki/2.-The-client.py-command-line) for instructions.
 
 For code development, some more setup is required. Please follow the steps in our [Developer's Resource](README-developers.md)
