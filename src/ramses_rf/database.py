@@ -345,9 +345,7 @@ class MessageIndex:
 
         return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-    def qry_field(
-        self, sql: str, parameters: tuple[str, ...]
-    ) -> list[tuple[dt, str, ...]]:
+    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
         """
         Get a list of message field values from the index, given sql and parameters.
         """
