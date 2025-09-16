@@ -125,10 +125,11 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
 
     await gwy.stop()
 
-    for dev in gwy.devices:  # TODO: ZZZ project should pass this test
+    for dev in gwy.devices:  # TODO: SQLite refactor should pass this test
         if dev._gwy.msg_db:
             assert sorted(dev._msgs) == sorted(dev._msgs_), dev
             assert sorted(dev._msgz) == sorted(dev._msgz_), dev
+            # for database.py refactor 0.51.6
 
 
 async def test_shuffle_from_log_file(dir_name: Path) -> None:
