@@ -405,7 +405,7 @@ class Gateway(Engine):
                     _LOGGER.warning(f"The device is not fakeable: {dev}")
 
         # TODO: the exact order of the following may need refining...
-        # TODO: some will be done my devices themselves?
+        # TODO: some will be done by devices themselves?
 
         # if schema:  # Step 2: Only controllers have a schema...
         #     dev._update_schema(**schema)  # TODO: schema/traits
