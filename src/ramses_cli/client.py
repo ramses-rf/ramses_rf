@@ -438,17 +438,14 @@ def print_summary(gwy: Gateway, **kwargs: Any) -> None:
 
     if kwargs.get("show_crazys"):
         for device in [d for d in gwy.devices if d.type == DEV_TYPE_MAP.CTL]:
-            for code, verbs in device._msgz.items():
-                if code in (Code._0005, Code._000C):
-                    for verb in verbs.values():
-                        for pkt in verb.values():
-                            print(f"{pkt}")
+            for msg in gwy.msg_db._select_from(device=device.id, code=Code._0005):
+                print(f"{msg._pkt}")
+            for msg in gwy.msg_db._select_from(device=device.id, code=Code._000C):
+                print(f"{msg._pkt}")
             print()
         for device in [d for d in gwy.devices if d.type == DEV_TYPE_MAP.UFC]:
-            for code in device._msgz.values():
-                for verb in code.values():
-                    for pkt in verb.values():
-                        print(f"{pkt}")
+            for msg in gwy.msg_db._select_from(device=device.id):
+                print(f"{msg._pkt}")
             print()
 
 

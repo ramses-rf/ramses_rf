@@ -635,7 +635,8 @@ def _to_msg_id(data_id: OtDataId) -> MsgId:
     return f"{data_id:02X}"
 
 
-# NOTE: config.use_native_ot should enforces sends, but not reads from _msgz DB
+# NOTE: config.use_native_ot should enforce sends, but not reads from _msgz DB
+# TODO replace _msgz by SQLite database qry
 class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
     """The OTB class, specifically an OpenTherm Bridge (R8810A Bridge)."""
 
@@ -668,7 +669,8 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
 
         self._child_id = FC  # NOTE: domain_id
 
-        self._msgz[Code._3220] = {RP: {}}  # _msgz[Code._3220][RP][msg_id]
+        # TODO replace _msgz by SQLite database qry
+        self._msgz[Code._3220] = {RP: {}}
 
         # lf._use_ot = self._gwy.config.use_native_ot
         self._msgs_ot: dict[MsgId, Message] = {}
