@@ -312,9 +312,9 @@ class MessageIndex:
 
         return self._select_from(**kwargs)
 
-    def _contains(self, **kwargs: str) -> bool:
+    def contains(self, **kwargs: str) -> bool:
         """
-        :return: True if code is present, False when qry returned empty
+        :return: True if at least one message fitting the given conditions is present, False when qry returned empty
         """
         # adapted from _select_from()
         sql = "SELECT dtm FROM messages WHERE "
@@ -322,7 +322,7 @@ class MessageIndex:
 
         self._cu.execute(sql, tuple(kwargs.values()))
 
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall()) is not None
+        return self._cu.fetchall() is not None
 
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
         """Select message(s) from the index.

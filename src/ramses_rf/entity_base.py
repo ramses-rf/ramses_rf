@@ -461,7 +461,7 @@ class _MessageDB(_Entity):
             for rec in self._gwy.msg_db.qry_field(
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
-                _LOGGER.debug(f"Fetched from db: {rec}")
+                _LOGGER.debug("Fetched from db: %s", rec)
                 if rec[0] > latest:  # only use most recently received
                     val_msg = self._msg_value_msg(
                         self._msgs_[Code(code)]
@@ -472,7 +472,7 @@ class _MessageDB(_Entity):
                         val = val_msg.get(code)  # pick value of 1st dict entry
                     else:
                         return None
-                    _LOGGER.debug(f"Extracted val %s for code %s", val, code)
+                    _LOGGER.debug("Extracted val %s for code %s", val, code)
                     latest = rec[0]
 
             if isinstance(val, float):
