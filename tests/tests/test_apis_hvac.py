@@ -154,7 +154,7 @@ SET_22F7_KWARGS = {
 
 # new tests
 def test_get() -> None:
-    for test_pkts in (GET_12A0_KWARGS, GET_1298_KWARGS):
+    for test_pkts in (GET_12A0_KWARGS, GET_1298_KWARGS, GET_31DA_KWARGS):
         pkt = list(test_pkts)[0]
         api = CODE_API_MAP[f"{pkt[4:6]}|{pkt[41:45]}"]
         _test_api_one(api, test_pkts)
@@ -324,28 +324,28 @@ GET_31DA_KWARGS = {
         "exhaust_flow": None,
         "_extra": "00",
     },
-    # f"...  I --- {HRU} {NUL} {HRU} 31DA 030 00EF007FFFEFEF080607D809480737F002AA02344000005CEF7FFF7FFF00": {'hvac_id': '00', 'exhaust_fan_speed': 0.26, 'fan_info': 'speed 2, medium', '_unknown_fan_info_flags': [0, 0, 0], 'air_quality': None, 'co2_level': None, 'indoor_humidity': None, 'outdoor_humidity': None, 'exhaust_temp': 20.54, 'supply_temp': 20.08, 'indoor_temp': 23.76, 'outdoor_temp': 18.47, 'speed_capabilities': ['off', 'low_med_high', 'timer', 'boost', 'post_heater'], 'bypass_position': 0.85, 'supply_fan_speed': 0.32, 'remaining_mins': 0, 'post_heat': 0.46, 'pre_heat': None, 'supply_flow': None, 'exhaust_flow': None, '_extra': '00'}, # Only problem: supply_temp: 07D8 (20.08) instead of 07D8 (20.09), assume test fails over a rounding error, must skip
-    f"...  I --- {HRU} {NUL} {HRU} 31DA 029 21EF007FFF41EF7FFF7FFF7FFF7FFF0002EF18FFFF000000EF7FFF7FFF": {
+    f"...  I --- {HRU} {NUL} {HRU} 31DA 030 21EF007FFF41EF080607D709480737F002AA0234400000005C7FFF7FFF00": {
         "hvac_id": "21",
-        "exhaust_fan_speed": None,
-        "supply_fan_speed": None,
+        "exhaust_fan_speed": 0.26,
+        "supply_fan_speed": 0.32,
         "supply_flow": None,
         "exhaust_flow": None,
         "air_quality": None,
         "co2_level": None,
         "indoor_humidity": 0.65,
         "outdoor_humidity": None,
-        "exhaust_temp": None,
-        "supply_temp": None,
-        "indoor_temp": None,
-        "outdoor_temp": None,
-        "speed_capabilities": ["post_heater"],
-        "bypass_position": None,
-        "fan_info": "auto",
+        "exhaust_temp": 20.54,
+        "supply_temp": 20.08,
+        "indoor_temp": 23.76,
+        "outdoor_temp": 18.47,
+        "speed_capabilities": ["off", "low_med_high", "timer", "boost", "post_heater"],
+        "bypass_position": 0.85,
+        "fan_info": "speed 2, medium",
         "_unknown_fan_info_flags": [0, 0, 0],
         "remaining_mins": 0,
         "post_heat": 0.0,
-        "pre_heat": None,
+        "pre_heat": 0.46,
+        "_extra": "00",
     },
 }
 
