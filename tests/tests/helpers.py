@@ -94,11 +94,11 @@ async def load_test_gwy(dir_name: Path, **kwargs: Any) -> Gateway:
     if config:
         kwargs.update(config)
 
-    with open(f"{dir_name}/packet.log") as f:
-        gwy = Gateway(None, input_file=f, **kwargs)
-        await gwy.start()
+    path = f"{dir_name}/packet.log"
+    gwy = Gateway(None, input_file=path, **kwargs)
+    await gwy.start()
 
-        await gwy._protocol.wait_for_connection_lost()  # until packet log is EOF
+    await gwy._protocol.wait_for_connection_lost()  # until packet log is EOF
 
     # if hasattr(
     #     gwy.pkt_transport.serial, "mock_devices"
