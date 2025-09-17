@@ -134,7 +134,7 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
             sql = """
                 SELECT dtm from messages WHERE verb in (' I', 'RP')
                 AND (src = ? OR dst = ?) """
-            assert len(gwy.msg_db.qry_field(sql, (dev.id[:9], dev.id[:9]))) == len(
+            assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:9], dev.id[:9]))) == len(
                 dev._msgs_
             ), dev
 
