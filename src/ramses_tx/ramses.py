@@ -871,11 +871,14 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._000A: {RP: {}},
         Code._000C: {RP: {}},
         Code._1FC9: {I_: {}},
+        Code._1FD4: {I_: {}},  # Spider Autotemp, slave 'ticker'
         Code._10E0: {I_: {}, RP: {}},
         Code._22C9: {I_: {}},  # NOTE: No RP
         Code._22D0: {I_: {}, RP: {}},
         Code._2309: {RP: {}},
+        Code._3110: {I_: {}},  # Spider Autotemp
         Code._3150: {I_: {}},
+        Code._4E01: {I_: {}},  # Spider Autotemp Zone controller
     },
     DevType.TRV: {  # e.g. HR92/HR91: Radiator Controller
         Code._0001: {W_: {r"^0[0-9A-F]"}},

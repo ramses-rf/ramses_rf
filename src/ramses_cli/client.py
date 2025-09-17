@@ -483,7 +483,6 @@ async def async_main(command: str, lib_kwargs: dict, **kwargs: Any) -> None:
             print(f"{COLORS.get(msg.verb)}{dtm} {msg}"[:con_cols])
 
     serial_port, lib_kwargs = normalise_config(lib_kwargs)
-    assert isinstance(lib_kwargs.get(SZ_INPUT_FILE), str)
 
     if kwargs["restore_schema"]:
         print(" - restoring client schema from a HA cache...")

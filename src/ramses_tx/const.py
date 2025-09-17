@@ -442,7 +442,7 @@ DEV_TYPE_MAP = attr_dict_factory(
         "HEAT_ZONE_ACTUATORS": ("00", "02", "04", "13"),
         "THM_DEVICES": ("03", "12", "22", "34"),
         "TRV_DEVICES": ("00", "04"),
-        "CONTROLLERS": ("01", "12", "22", "23", "34"),  # potentially controllers
+        "CONTROLLERS": ("01", "02", "12", "22", "23", "34"),  # potentially controllers
         "PROMOTABLE_SLUGS": (DevType.DEV, DevType.HEA, DevType.HVC),
         "HVAC_SLUGS": {
             DevType.CO2: "co2_sensor",

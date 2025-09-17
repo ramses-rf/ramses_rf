@@ -22,9 +22,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 async def test_log_file(f_name: Path):
-    with open(f_name) as f:
-        gwy = Gateway(None, input_file=f, config={})
-        await gwy.start()
+    path = str(f_name)
+    gwy = Gateway(None, input_file=path, config={})
+    await gwy.start()
 
     assert shrink(gwy.schema) == shrink(SCHEMA_EMPTY)
 
