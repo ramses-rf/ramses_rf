@@ -198,7 +198,7 @@ class _MessageDB(_Entity):
         # Deprecated as of 0.51.6 Use SQLite index instead, see ramses_rf/database.py
         # _msgz_ is only used in this module, but
         # _msgz (calling _msgz_) also in: client, base, device.heat
-        # TODO(eb): remove
+        # TODO(eb): remove after 0.51.6
         self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
@@ -438,12 +438,13 @@ class _MessageDB(_Entity):
         """
         Retrieve from the msgs dict the most current value of a specific keyword.
 
-        :param code: (optional) the message Code to use, e.g. 31DA
-        :param key: the message keyword to fetch the value for, e.g. SZ_HUMIDITY
+        :param key: a single message keyword to fetch the value for, e.g. SZ_HUMIDITY
+        :param code: (optional) a single message Code to use, e.g. 31DA
         :param kwargs: not used as of 0.51.6
         :return: a single string or float value or None when qry returned empty
         """
         if self._gwy.msg_db:
+            assert key is not None, "key=value required for _msg_qry_by_code_key()"
             code_par: str
             code_par = "*" if code is None else str(Code)
             key = "*" if key is None else "%" + key + "%"
