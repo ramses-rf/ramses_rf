@@ -1391,15 +1391,18 @@ def parser_2210(payload: str, msg: Message) -> dict[str, Any]:
             "02",  # requested by CO2 level/sensor
             "03",  # requested by humidity level/sensor
         ), f"expected req_reason (00|02|03), not {payload[20:22]}"
-        assert payload[78:80] in ("00", "02"), (
-            f"expected byte 39 (00|02), not {payload[78:80]}"
-        )
-        assert payload[80:82] in ("01", "08"), (
-            f"expected byte 40 (01|08), not {payload[80:82]}"
-        )
-        assert payload[82:] in ("00", "40"), (
-            f"expected byte 41- (00|40), not {payload[82:]}"
-        )
+        assert payload[78:80] in (
+            "00",
+            "02",
+        ), f"expected byte 39 (00|02), not {payload[78:80]}"
+        assert payload[80:82] in (
+            "01",
+            "08",
+        ), f"expected byte 40 (01|08), not {payload[80:82]}"
+        assert payload[82:] in (
+            "00",
+            "40",
+        ), f"expected byte 41- (00|40), not {payload[82:]}"
 
     except AssertionError as err:
         _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} ({err})")

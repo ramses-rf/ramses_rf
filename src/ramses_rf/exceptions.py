@@ -72,11 +72,45 @@ class DeviceNotFaked(SystemInconsistent):
     HINT = "faking is configured in the known_list"
 
 
-class ForeignGatewayError(_RamsesUpperError):
+class ForeignGatewayError(SystemInconsistent):
     """Raised when a foreign gateway is detected.
 
     These devices may not be gateways (set a class), or belong to a neighbour (exclude
-    via block_list/known_list), or should be allowed (known_list).
-    """
+    via block_list/known_list), or should be allowed (known_list)."""
 
     HINT = "consider enforcing a known_list"
+
+
+class DeviceNotRecognised(_RamsesUpperError):
+    """Raised when a device is not recognized.
+
+    This typically happens when trying to interact with a device that doesn't exist
+    or is not properly configured in the system."""
+
+    HINT = "check the device ID and ensure the device is properly configured"
+
+
+class CommandInvalid(_RamsesUpperError):
+    """Raised when an invalid command is sent to a device.
+
+    This can happen if the command format is incorrect or if the command is not
+    supported by the target device."""
+
+    HINT = "verify the command format and ensure it's supported by the device"
+
+
+class SendFailure(_RamsesUpperError):
+    """Raised when a command fails to be sent to a device.
+
+    This typically indicates a communication issue with the device or gateway."""
+
+    HINT = "check the device connection and try again"
+
+
+class SendPriority(_RamsesUpperError):
+    """Raised when the command queue is full.
+
+    This happens when too many commands are queued for sending and the queue
+    has reached its maximum capacity."""
+
+    HINT = "wait for pending commands to complete and try again"
