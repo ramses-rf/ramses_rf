@@ -517,9 +517,6 @@ class _ReadTransport(_BaseTransport):
 
         self._this_pkt: Packet | None = None
         self._prev_pkt: Packet | None = None
-        # Duplicate suppression & simple tracing (helps avoid/log double processing)
-        self._last_frame_sig: tuple[str, str] | None = None  # (dtm_str, frame)
-        self._rx_seq: int = 0
 
         for key in (SZ_ACTIVE_HGI, SZ_SIGNATURE):
             self._extra[key] = None
