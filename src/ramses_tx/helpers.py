@@ -470,7 +470,7 @@ def parse_valve_demand(
     if int(value, 16) & 0xF0 == 0xF0:
         return _faulted_device(SZ_HEAT_DEMAND, value)
 
-    result = int(value, 16) / 200  # c.f. hex_to_percentage
+    result = int(value, 16) / 200  # c.f. hex_to_percent
     if result == 1.01:  # HACK - does it mean maximum?
         result = 1.0
     elif result > 1.0:
@@ -606,12 +606,9 @@ def _parse_hvac_humidity(
     if int(value, 16) & 0xF0 == 0xF0:
         return _faulted_sensor(param_name, value)
 
-    percentage = int(value, 16) / 100  # TODO: confirm not 200
-    assert percentage <= 1.0, value  # TODO: raise exception if > 1.0?
+    percentage = hex_to_percent(value, False)  # TODO: confirm not /200
 
-    result: dict[str, float | str | None] = {
-        param_name: percentage
-    }  # was: percent_from_hex(value, high_res=False)
+    result: dict[str, float | str | None] = {param_name: percentage}
     if temp:
         result |= {SZ_TEMPERATURE: hex_to_temp(temp)}
     if dewpoint:
@@ -881,7 +878,7 @@ def _parse_fan_heater(param_name: str, value: HexStr2) -> Mapping[str, float | N
     if int(value, 16) & 0xF0 == 0xF0:
         return _faulted_sensor(param_name, value)  # type: ignore[return-value]
 
-    percentage = int(value, 16) / 200  # Siber DF EVO 2 is /200, not /100 (?Others)
+    percentage = int(value, 16) / 200  # Siber DF EVO 2 is /200, not /100 (Others?)
     assert percentage <= 1.0, value  # TODO: raise exception if > 1.0?
 
     return {param_name: percentage}  # was: percent_from_hex(value, high_res=False)

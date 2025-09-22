@@ -1,0 +1,3 @@
+# evohome from cesar.florin HCC80 (UFC) controlled via round thermostat talking to a BDR91 relay. FC = max all zones
+2025-09-09T18:54:03.198471 061  I --- 02:033545 --:------ 02:033545 0008 002 FA00  # {'domain_id': 'FA', 'relay_demand': 0.0}
+2025-09-09T18:55:18.250506 078  I --- 02:033545 --:------ 02:033545 0008 002 FC00  # {'domain_id': 'FC', 'relay_demand': 0.0}

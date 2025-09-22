@@ -27,3 +27,6 @@
 
 # VenturaV1x (VMD-07RPS13, no heater, only HRU)
 2024-10-14T20:59:09.716874 060  I --- 37:153226 --:------ 37:153226 3150 006 00F201F202F2          # [{'zone_idx': '00', 'heat_demand_fault': 'unavailable'}, {'zone_idx': '01', 'heat_demand_fault': 'unavailable'}, {'zone_idx': '02', 'heat_demand_fault': 'unavailable'}]
+
+# evohome from cesar.florin HCC80 (UFC) controlled via round thermostat talking to a BDR91 relay. FC = max all zones
+2025-09-09T18:55:18.458534 079  I --- 02:033545 --:------ 02:033545 3150 002 FC00                  # {'domain_id': 'FC', 'heat_demand': 0.0}

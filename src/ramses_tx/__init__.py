@@ -138,7 +138,7 @@ if TYPE_CHECKING:
 async def set_pkt_logging_config(**config: Any) -> Logger:
     """
     Set up ramses packet logging to a file or port.
-    Must runs async in executor to prevent HA blocking call opening packet log file (issue #200)
+    Must run async in executor to prevent HA blocking call opening packet log file (issue #200)
 
     :param config: if file_name is included, opens packet_log file
     :return: a logging.Logger

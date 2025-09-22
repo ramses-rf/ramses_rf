@@ -1033,6 +1033,8 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._topic_base = validate_topic_path(self._broker_url.path)
         self._topic_pub = ""
         self._topic_sub = ""
+        # Track if we've subscribed to a wildcard data topic (e.g. ".../+/rx")
+        self._data_wildcard_topic = ""
 
         self._mqtt_qos = int(parse_qs(self._broker_url.query).get("qos", ["0"])[0])
 
@@ -1143,17 +1145,30 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         # Subscribe to base topic to see 'online' messages
         self.client.subscribe(self._topic_base)  # hope to see 'online' message
 
-        # Also subscribe to data topics with wildcard for reliability after reconnect
-        # This ensures we get data even if we miss the 'online' message
-        if self._topic_base.endswith("/+"):
+        # Also subscribe to data topics with wildcard for reliability, but only
+        # until a specific device topic is known. Once _topic_sub is set, avoid
+        # overlapping subscriptions that would duplicate messages.
+        if self._topic_base.endswith("/+") and not (
+            hasattr(self, "_topic_sub") and self._topic_sub
+        ):
             data_wildcard = self._topic_base.replace("/+", "/+/rx")
             self.client.subscribe(data_wildcard, qos=self._mqtt_qos)
+            self._data_wildcard_topic = data_wildcard
             _LOGGER.debug(f"Subscribed to data wildcard: {data_wildcard}")
 
         # If we already have specific topics, re-subscribe to them
         if hasattr(self, "_topic_sub") and self._topic_sub:
             self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
             _LOGGER.debug(f"Re-subscribed to specific topic: {self._topic_sub}")
+            # If we had a wildcard subscription, drop it to prevent duplicates
+            if getattr(self, "_data_wildcard_topic", ""):
+                try:
+                    self.client.unsubscribe(self._data_wildcard_topic)
+                    _LOGGER.debug(
+                        f"Unsubscribed data wildcard after specific subscribe: {self._data_wildcard_topic}"
+                    )
+                finally:
+                    self._data_wildcard_topic = ""
 
     def _on_connect_fail(
         self,
@@ -1225,6 +1240,17 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
 
+        # If we previously subscribed to a wildcard data topic, unsubscribe now
+        # to avoid duplicate delivery (wildcard and specific both matching)
+        if getattr(self, "_data_wildcard_topic", ""):
+            try:
+                self.client.unsubscribe(self._data_wildcard_topic)
+                _LOGGER.debug(
+                    f"Unsubscribed data wildcard after device online: {self._data_wildcard_topic}"
+                )
+            finally:
+                self._data_wildcard_topic = ""
+
         # Only call connection_made on first connection, not reconnections
         if not self._connection_established:
             self._connection_established = True
@@ -1294,6 +1320,21 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
                 self._connected = True
                 self._connection_established = True
                 self._make_connection(gwy_id=gateway_id)  # type: ignore[arg-type]
+
+                # Ensure we subscribe specifically to the device topic and drop the
+                # wildcard subscription to prevent duplicates
+                try:
+                    self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
+                except Exception as err:  # pragma: no cover - defensive
+                    _LOGGER.debug(f"Error subscribing specific topic: {err}")
+                if getattr(self, "_data_wildcard_topic", ""):
+                    try:
+                        self.client.unsubscribe(self._data_wildcard_topic)
+                        _LOGGER.debug(
+                            f"Unsubscribed data wildcard after inferring device: {self._data_wildcard_topic}"
+                        )
+                    finally:
+                        self._data_wildcard_topic = ""
 
         try:
             payload = json.loads(msg.payload)

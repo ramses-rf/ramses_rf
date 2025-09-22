@@ -1,4 +1,4 @@
-# Only Itho Daalderop Spider 02/21: seems to send the 3110 command classes - thanks to @tomkooij
+# Only Itho Daalderop Spider 02/21: send the 3110 command classes - thanks to @tomkooij
 
 # Note: sent by 30: (HVAC) as well
 # 2023-11-04T00:00:15.182886 063  I --- 30:068457 --:------ 30:068457 3110 004 01000010  # {"_idx": "01", 'mode': 'heating', 'demand': 0.0}

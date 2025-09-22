@@ -4,3 +4,6 @@
 
 # another pair that is in heating mode:
 2023-03-18T23:53:26.811524 037  W --- 21:033160 02:250704 --:------ 22D0 008 0304001E14030020  # {'zone_idx': '03', 'idx': '03', '_flags': [0, 0, 0, 0, 0, 1, 0, 0], 'cool_mode': False, 'heat_mode': True,  'is_active': False, '_unknown': '001E14030020'}
+
+# evohome from cesar.florin HCC80 (UFC) controlled via round thermostat talking to a BDR91 relay
+2025-09-09T18:54:03.354496 061  I --- 02:033545 --:------ 02:033545 22D0 004 00000002          # {'zone_idx': '00', 'idx': '00', '_flags': [0, 0, 0, 0, 0, 0, 0, 0], 'cool_mode': False, 'heat_mode': False, 'is_active': False, '_unknown': '0002'}
