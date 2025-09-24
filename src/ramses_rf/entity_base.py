@@ -177,9 +177,8 @@ class _Entity:
 
 
 class _MessageDB(_Entity):
-    """Maintain/utilize an entity's state database.
-
-    Deprecated since 0.51.6, use SQLite in src/ramses_rf/database.py instead
+    """
+    Maintain/utilize an entity's state database.
     """
 
     _gwy: Gateway
