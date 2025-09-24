@@ -488,7 +488,7 @@ class _MessageDB(_Entity):
         See ramses_rf/database.py
 
         :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
-        :return: the value stored for the supplied key in the selected message payload, or empty list if key is not in payload
+        :return: list of dicts for the supplied key(s) in the selected message payload, or empty list if key is not in payload
         """
         # not used yet as of 0.51.6
 
