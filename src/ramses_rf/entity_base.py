@@ -320,7 +320,8 @@ class _MessageDB(_Entity):
         self, code: Code | Iterable[Code], *args: Any, **kwargs: Any
     ) -> dict | list | None:
         """
-        Get the value from the database or from a Message object provided
+        Get the value from the database or from a Message object provided.
+
         :param code: filter messages by Code or a tuple of codes (optional)
         :param args: Message (optional)
         :param kwargs: zone to filter on (optional)
@@ -433,26 +434,31 @@ class _MessageDB(_Entity):
 
     def _msg_qry_by_code_key(
         self,
-        code: Code | None = None,
+        code: Code | [Code] | None = None,
         key: str | None = None,
         **kwargs: Any,
-    ) -> str | float | None:
+    ) -> Code | None:
         """
-        Retrieve from the _msgs dict the most current value of a specific code & keyword combi,
-        or the first key's value when no key is specified.
+        Retrieve from the MessageIndex the most current key for a code & keyword combination.
 
-        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY
-        :param code: (optional) a single message Code to use, e.g. 31DA
+        :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
+        :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
         :param kwargs: not used as of 0.51.7
-        :return: a single string or float value or None when qry returned empty
+        :return: Code of most recent query result message or None when query returned empty
         """
         if self._gwy.msg_db:
-            # assert key is not None, "key=value required for _msg_qry_by_code_key()"
-            code_par: str = "*" if code is None else str(code)
+            code_par: str = ""
+            if code is None:
+                code_par = "*"
+            elif isinstance(code, tuple):
+                for cd in code:
+                    code_par += cd + " OR code = "
+                code_par = code_par[:-11]  # trim last OR
+            else:
+                code_par = str(code)
             key = "*" if key is None else "%" + key + "%"
-            # * will return first key value in pl
 
-            # Use SQLite query on MessageIndex
+            # SQLite query on MessageIndex
             sql = """
                 SELECT dtm, code from messages WHERE verb in (' I', 'RP')
                 AND (src = ? OR dst = ?)
@@ -460,29 +466,46 @@ class _MessageDB(_Entity):
                 AND (plk like ?)
             """
             latest: dt = dt(0, 0, 0)
-            val: object = None
+            res = None
 
             for rec in self._gwy.msg_db.qry_field(
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
                 _LOGGER.debug("Fetched from index: %s", rec)
-                if rec[0] > latest:  # only use most recently received
-                    val_msg = self._msg_value_msg(
-                        self._msgs_[Code(rec[1])],
-                        key=key,  # key may be wildcard *
-                    )
-                    if val_msg:
-                        val = val_msg[0]
-                        _LOGGER.debug(
-                            "Extracted val %s for code %s, key %s", val, code, key
-                        )
-                    latest = rec[0]  # record's dtm field
+                if rec[0] > latest:  # dtm, only use most recent
+                    res = Code(rec[1])
+                    latest = rec[0]
+            return res
 
-            if isinstance(val, float):
-                return float(val)
-            else:
-                return str(val)
-        return None
+    def _msg_value_qry_by_code_key(
+        self,
+        code: Code | None = None,
+        key: str | None = None,
+        **kwargs: Any,
+    ) -> str | float | None:
+        """
+        Retrieve from the _msgs dict the most current value of a specific code & keyword combination
+        or the first key's value when no key is specified.
+
+        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY
+        :param code: (optional) a single message Code to use, e.g. 31DA
+        :param kwargs: not used as of 0.51.7
+        :return: a single string or float value or None when qry returned empty
+        """
+        val: object = None
+        res = self._msg_qry_by_code_key(code, key)
+        val_msg = self._msg_value_msg(
+            self._msgs_[res],
+            key=key,  # key may be wildcard *
+        )
+        if val_msg:
+            val = val_msg[0]
+            _LOGGER.debug("Extracted val %s for code %s, key %s", val, code, key)
+
+        if isinstance(val, float):
+            return float(val)
+        else:
+            return str(val)
 
     def _msg_qry(self, sql: str) -> list[dict]:
         """
@@ -1036,7 +1059,7 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
             if SZ_ZONE_IDX not in msg.payload:
                 return
 
-            if isinstance(self, Device):  # FIXME: a mess...
+            if isinstance(self, Device):  # FIXME: a mess... see issue ramses_cc #249
                 # the following is a mess - may just be better off deprecating it
                 if self.type in DEV_TYPE_MAP.HEAT_ZONE_ACTUATORS:
                     self.set_parent(msg.dst, child_id=msg.payload[SZ_ZONE_IDX])
