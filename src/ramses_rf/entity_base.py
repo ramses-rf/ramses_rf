@@ -195,10 +195,10 @@ class _MessageDB(_Entity):
 
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
 
-        # Deprecated as of 0.51.6 Use SQLite index instead, see ramses_rf/database.py
+        # Deprecated as of 0.51.7 Use SQLite index instead, see ramses_rf/database.py
         # _msgz_ is only used in this module, but
         # _msgz (calling _msgz_) also in: client, base, device.heat
-        # TODO(eb): remove after 0.51.6
+        # TODO(eb): remove after 0.51.7
         self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
         ] = {}  # code/verb/ctx, should be code/ctx/verb?
@@ -207,7 +207,7 @@ class _MessageDB(_Entity):
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
         """Store a msg in the DBs.
 
-        Uses SQLite MessageIndex since 0.51.6
+        Uses SQLite MessageIndex since 0.51.7
         """
 
         if not (
@@ -363,7 +363,7 @@ class _MessageDB(_Entity):
                 )
                 key = None
             try:
-                # msgs = self._msgz[code][verb] # deprecated since 0.51.6
+                # msgs = self._msgz[code][verb] # deprecated since 0.51.7
                 lookup = Code(self._msg_qry_by_code_key(code, verb))
                 msg = self._msgs[lookup]
             except KeyError:
@@ -419,6 +419,8 @@ class _MessageDB(_Entity):
             f"{msg_dict} < Coding error: key={idx}, val={val}"
         )
 
+        if key == "*":  # from a SQLite wildcard query, return first/only k,v
+            return msg_dict
         if key:
             return msg_dict.get(key)
         return {
@@ -427,7 +429,7 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
-    # SQLite methods, since 0.51.6
+    # SQLite methods, since 0.51.7
 
     def _msg_qry_by_code_key(
         self,
@@ -436,18 +438,19 @@ class _MessageDB(_Entity):
         **kwargs: Any,
     ) -> str | float | None:
         """
-        Retrieve from the msgs dict the most current value of a specific keyword.
+        Retrieve from the _msgs dict the most current value of a specific code & keyword combi,
+        or the first key's value when no key is specified.
 
-        :param key: a single message keyword to fetch the value for, e.g. SZ_HUMIDITY
+        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY
         :param code: (optional) a single message Code to use, e.g. 31DA
-        :param kwargs: not used as of 0.51.6
+        :param kwargs: not used as of 0.51.7
         :return: a single string or float value or None when qry returned empty
         """
         if self._gwy.msg_db:
-            assert key is not None, "key=value required for _msg_qry_by_code_key()"
-            code_par: str
-            code_par = "*" if code is None else str(Code)
+            # assert key is not None, "key=value required for _msg_qry_by_code_key()"
+            code_par: str = "*" if code is None else str(code)
             key = "*" if key is None else "%" + key + "%"
+            # * will return first key value in pl
 
             # Use SQLite query on MessageIndex
             sql = """
@@ -462,19 +465,18 @@ class _MessageDB(_Entity):
             for rec in self._gwy.msg_db.qry_field(
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
-                _LOGGER.debug("Fetched from db: %s", rec)
+                _LOGGER.debug("Fetched from index: %s", rec)
                 if rec[0] > latest:  # only use most recently received
                     val_msg = self._msg_value_msg(
-                        self._msgs_[Code(code)]
-                    )  # from str to Code. Can this be more direct?
-                    if isinstance(rec, list):
-                        val = val_msg[0]  # pick first item
-                    elif isinstance(rec, dict):
-                        val = val_msg.get(code)  # pick value of 1st dict entry
-                    else:
-                        return None
-                    _LOGGER.debug("Extracted val %s for code %s", val, code)
-                    latest = rec[0]
+                        self._msgs_[Code(rec[1])],
+                        key=key,  # key may be wildcard *
+                    )
+                    if val_msg:
+                        val = val_msg[0]
+                        _LOGGER.debug(
+                            "Extracted val %s for code %s, key %s", val, code, key
+                        )
+                    latest = rec[0]  # record's dtm field
 
             if isinstance(val, float):
                 return float(val)
@@ -484,25 +486,34 @@ class _MessageDB(_Entity):
 
     def _msg_qry(self, sql: str) -> list[dict]:
         """
-        SQLite custom query for the stored payload on the full MessageIndex.
+        SQLite custom query for an entity's stored payloads using the full MessageIndex.
         See ramses_rf/database.py
 
         :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
-        :return: list of dicts for the supplied key(s) in the selected message payload, or empty list if key is not in payload
+        :return: list of payload dicts from the selected messages, or empty list
         """
-        # not used yet as of 0.51.6
+        # not used yet as of 0.51.7
 
         res: list[dict] = []
         if sql and self._gwy.msg_db:
             # example query:
             # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
             # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)"""
-            for code in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
-                pl = self._msgs_[Code(code)].payload
+            for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+                _pl = self._msgs_[Code(rec[0])].payload
 
-                # fetch from payloads dict by code key and add to res
-                res.append(pl.get(code))  # only if newer, handled by MessageIndex
+                # add payload dict to res
+                res.append(_pl)  # only if newer, handled by MessageIndex
         return res
+
+    def _msg_count(self, sql: str) -> int:
+        """
+        Get the number of messages in a query result.
+
+        :param sql: custom SQLite query on MessageIndex.
+        :return: amount of messages in entity's database, 0 for no results
+        """
+        return len(self._msg_qry(sql))
 
     @property
     def traits(self) -> dict:
@@ -524,7 +535,7 @@ class _MessageDB(_Entity):
         :return: nested dict of messages by Code
         """
         if not self._gwy.msg_db:
-            # no central SQLite MessageIndex, deprecated since 0.51.6
+            # no central SQLite MessageIndex, deprecated since 0.51.7
             return self._msgs_
 
         sql = """
@@ -545,7 +556,7 @@ class _MessageDB(_Entity):
         if not self._gwy.msg_db:
             # no central SQLite MessageIndex?
             _LOGGER.warning("Missing MessageIndex")
-            return self._msgz_  # deprecated since 0.51.6
+            return self._msgz_  # deprecated since 0.51.7
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
