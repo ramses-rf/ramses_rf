@@ -448,14 +448,38 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
     @property
     def fan_info(self) -> str | None:
         """
-        Extract fan info description from _31D9 or _31DA message payload, e.g. "speed 2, medium".
+        Extract fan info description from MessageIndex _31D9 or _31DA payload,
+        e.g. "speed 2, medium".
         By its name, the result is picked up by a sensor in HA Climate UI.
         Some manufacturers (Orcon, Vasco) include the fan mode (auto, manual), others don't (Itho).
 
-        :return: a string describing fan mode, speed
+        :return: string describing fan mode, speed
         """
+
+        # Use SQLite query on MessageIndex
+        sql = """
+            SELECT code from messages WHERE verb in (' I', 'RP')
+            AND (src = ? OR dst = ?)
+            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
+            AND (plk like %SZ_FAN_MODE%)
+        """
+        res_mode: list = self._msg_qry(sql)
+        # SQLite query on MessageIndex
+        _LOGGER.info(f"{res_mode} # FAN_MODE FETCHED from MessageIndex")  # DEBUG
+
+        sql = """
+            SELECT code from messages WHERE verb in (' I', 'RP')
+            AND (src = ? OR dst = ?)
+            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
+            AND (plk like %SZ_FAN_RATE% OR plk like %SZ_FAN_RATE%)
+        """
+        res_rate: list = self._msg_qry(sql)
+        # SQLite query on MessageIndex
+        _LOGGER.info(f"{res_rate} # FAN_RATE FETCHED from MessageIndex")  # DEBUG
+
         if Code._31D9 in self._msgs:
-            # Itho, Vasco D60 and ClimaRad (MiniBox fan) send mode/speed in _31D9
+            # was a dict by Code
+            # Itho, Vasco D60 and ClimaRad minibox send mode/speed in _31D9
             v: str
             for k, v in self._msgs[Code._31D9].payload.items():
                 if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
@@ -477,6 +501,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
                 assert isinstance(v, (float | type(None)))
                 return v
+        # return self._msg_qry_by_code_key(Code._31DA, key=SZ_INDOOR_HUMIDITY)
         return self._msg_value((Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY)
 
     @property
