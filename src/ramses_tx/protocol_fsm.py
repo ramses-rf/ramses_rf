@@ -291,7 +291,7 @@ class ProtocolContext:
         # may want to set some instance variables, according to type of transport
         self._state.connection_made()
 
-    # TODO: Should we clear the buffer if connection is lost (and apoligise to senders?
+    # TODO: Should we clear the buffer if connection is lost (and apologise to senders?
     def connection_lost(self, err: ExceptionT | None) -> None:
         self._state.connection_lost()
 

@@ -223,7 +223,7 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
         SZ_NAME: "device_info",
         I_: r"^(00|FF)([0-9A-F]{30,})?$",  # r"^[0-9A-F]{32,}$" might be OK
         RQ: r"^00$",  # NOTE: 63 seen (no RP), some devices will accept [0-9A-F]{2}
-        # RP: r"^[0-9A-F]{2}([0-9A-F]){30,}$",  # NOTE: indx same as RQ
+        # RP: r"^[0-9A-F]{2}([0-9A-F]){30,}$",  # NOTE: index same as RQ
         SZ_LIFESPAN: False,
     },
     Code._10E1: {  # device_id
@@ -480,6 +480,7 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
         SZ_NAME: "fan_params",
         I_: r"^(00|01|15|16|17|21)00[0-9A-F]{6}([0-9A-F]{8}){4}[0-9A-F]{4}$",
         RQ: r"^(00|01|15|16|17|21)00[0-9A-F]{2}((00){19})?$",
+        RP: r"^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{4})?$",
         W_: r"^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{4})?$",
     },
     Code._2420: {  # unknown_2420, from OTB
@@ -1220,6 +1221,7 @@ SZ_MIN_VALUE: Final = "min_value"
 SZ_MAX_VALUE: Final = "max_value"
 SZ_PRECISION: Final = "precision"
 SZ_DATA_TYPE: Final = "data_type"
+SZ_DATA_UNIT: Final = "data_unit"
 
 _22F1_MODE_ITHO: dict[str, str] = {
     "00": "off",  # not seen
@@ -1271,6 +1273,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 1800,
         SZ_PRECISION: 30,
         SZ_DATA_TYPE: "10",
+        SZ_DATA_UNIT: "days",
     },
     "3D": {  # slot 00
         SZ_DESCRIPTION: "Away mode Supply fan rate (%)",
@@ -1278,6 +1281,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 0.4,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "3E": {  # slot 01
         SZ_DESCRIPTION: "Away mode Exhaust fan rate (%)",
@@ -1285,6 +1289,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 0.4,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "3F": {  # slot 02
         SZ_DESCRIPTION: "Low mode Supply fan rate (%)",
@@ -1292,6 +1297,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 0.8,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "40": {  # slot 03
         SZ_DESCRIPTION: "Low mode Exhaust fan rate (%)",
@@ -1299,13 +1305,15 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 0.8,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "41": {  # slot 04
         SZ_DESCRIPTION: "Medium mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
+        SZ_MIN_VALUE: 0.1,  # Orcon FAN responds with 0.0, but I guess this should be the same as for "42"
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "42": {  # slot 05
         SZ_DESCRIPTION: "Medium mode Exhaust fan rate (%)",
@@ -1313,13 +1321,15 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "43": {  # slot 06
         SZ_DESCRIPTION: "High mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
+        SZ_MIN_VALUE: 0.1,
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "44": {  # slot 07
         SZ_DESCRIPTION: "High mode Exhaust fan rate (%)",
@@ -1327,6 +1337,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
     "4E": {  # slot 0A
         SZ_DESCRIPTION: "Moisture scenario position (0=medium, 1=high)",
@@ -1334,13 +1345,15 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 1,
         SZ_PRECISION: 1,
         SZ_DATA_TYPE: "00",
+        SZ_DATA_UNIT: "",
     },
     "52": {  # slot 0B
         SZ_DESCRIPTION: "Sensor sensitivity (%)",
         SZ_MIN_VALUE: 0,
         SZ_MAX_VALUE: 25.0,
         SZ_PRECISION: 0.1,
-        SZ_DATA_TYPE: "0F",
+        SZ_DATA_TYPE: "01",
+        SZ_DATA_UNIT: "%",
     },
     "54": {  # slot 0C
         SZ_DESCRIPTION: "Moisture sensor overrun time (mins)",
@@ -1348,13 +1361,15 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 60,
         SZ_PRECISION: 1,
         SZ_DATA_TYPE: "00",
+        SZ_DATA_UNIT: "min",
     },
     "75": {  # slot 0D
         SZ_DESCRIPTION: "Comfort temperature (°C)",
         SZ_MIN_VALUE: 0.0,
         SZ_MAX_VALUE: 30.0,
         SZ_PRECISION: 0.01,
-        SZ_DATA_TYPE: 92,
+        SZ_DATA_TYPE: "92",
+        SZ_DATA_UNIT: "°C",
     },
     "95": {  # slot 08
         SZ_DESCRIPTION: "Boost mode Supply/exhaust fan rate (%)",
@@ -1362,6 +1377,7 @@ _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
         SZ_MAX_VALUE: 1.0,
         SZ_PRECISION: 0.005,
         SZ_DATA_TYPE: "0F",
+        SZ_DATA_UNIT: "%",
     },
 }
 
@@ -1456,3 +1472,19 @@ _31DA_FAN_INFO: dict[int, str] = {
 # RAMSES_ZONES_ALL = RAMSES_ZONES.pop("ALL")
 # RAMSES_ZONES_DHW = RAMSES_ZONES[ZON_ROLE.DHW]
 # [RAMSES_ZONES[k].update(RAMSES_ZONES_ALL) for k in RAMSES_ZONES if k != ZON_ROLE.DHW]
+
+__all__ = [
+    "CODES_BY_DEV_SLUG",
+    "CODES_SCHEMA",
+    "CODE_NAME_LOOKUP",
+    "CODES_BY_DEV_SLUG",
+    "CODES_SCHEMA",
+    "HVAC_KLASS_BY_VC_PAIR",
+    "_2411_PARAMS_SCHEMA",
+    "SZ_DESCRIPTION",
+    "SZ_MIN_VALUE",
+    "SZ_MAX_VALUE",
+    "SZ_PRECISION",
+    "SZ_DATA_TYPE",
+    "SZ_DATA_UNIT",
+]

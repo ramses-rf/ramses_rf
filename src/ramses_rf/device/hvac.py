@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any, TypeVar
 
 from ramses_rf import exceptions as exc
@@ -41,8 +42,6 @@ from ramses_rf.const import (
     DevType,
 )
 from ramses_rf.entity_base import class_by_attr
-from ramses_rf.helpers import shrink
-from ramses_rf.schemas import SCH_VCS, SZ_REMOTES, SZ_SENSORS
 from ramses_tx import Address, Command, Message, Packet, Priority
 from ramses_tx.ramses import CODES_OF_HVAC_DOMAIN_ONLY, HVAC_KLASS_BY_VC_PAIR
 
@@ -76,10 +75,22 @@ _HvacSensorBaseT = TypeVar("_HvacSensorBaseT", bound="HvacSensorBase")
 
 
 class HvacRemoteBase(DeviceHvac):
+    """Base class for HVAC remote control devices.
+
+    This class serves as a base for all remote control devices in the HVAC domain.
+    It provides common functionality and interfaces for remote control operations.
+    """
+
     pass
 
 
 class HvacSensorBase(DeviceHvac):
+    """Base class for HVAC sensor devices.
+
+    This class serves as a base for all sensor devices in the HVAC domain.
+    It provides common functionality for sensor data collection and processing.
+    """
+
     pass
 
 
@@ -87,12 +98,22 @@ class CarbonDioxide(HvacSensorBase):  # 1298
     """The CO2 sensor (cardinal code is 1298)."""
 
     @property
-    def co2_level(self) -> int | None:  # 1298
+    def co2_level(self) -> int | None:
+        """Return the CO2 level in ppm.
+
+        :return: The CO2 level in parts per million (ppm), or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._1298, key=SZ_CO2_LEVEL)
 
     @co2_level.setter
     def co2_level(self, value: int | None) -> None:
-        """Fake the CO2 level of the sensor."""
+        """Set a fake CO2 level for the sensor.
+
+        :param value: The CO2 level in ppm to set, or None to clear the fake value
+        :type value: int | None
+        :raises TypeError: If the sensor is not in faked mode
+        """
 
         if not self.is_faked:
             raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
@@ -102,6 +123,11 @@ class CarbonDioxide(HvacSensorBase):  # 1298
 
     @property
     def status(self) -> dict[str, Any]:
+        """Return the status of the CO2 sensor.
+
+        :return: A dictionary containing the sensor's status including CO2 level
+        :rtype: dict[str, Any]
+        """
         return {
             **super().status,
             SZ_CO2_LEVEL: self.co2_level,
@@ -112,12 +138,22 @@ class IndoorHumidity(HvacSensorBase):  # 12A0
     """The relative humidity sensor (12A0)."""
 
     @property
-    def indoor_humidity(self) -> float | None:  # 12A0
+    def indoor_humidity(self) -> float | None:
+        """Return the indoor relative humidity.
+
+        :return: The indoor relative humidity as a percentage (0-100), or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._12A0, key=SZ_INDOOR_HUMIDITY)
 
     @indoor_humidity.setter
     def indoor_humidity(self, value: float | None) -> None:
-        """Fake the indoor humidity of the sensor."""
+        """Set a fake indoor humidity value for the sensor.
+
+        :param value: The humidity percentage to set (0-100), or None to clear the fake value
+        :type value: float | None
+        :raises TypeError: If the sensor is not in faked mode
+        """
 
         if not self.is_faked:
             raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
@@ -127,6 +163,11 @@ class IndoorHumidity(HvacSensorBase):  # 12A0
 
     @property
     def status(self) -> dict[str, Any]:
+        """Return the status of the indoor humidity sensor.
+
+        :return: A dictionary containing the sensor's status including humidity level
+        :rtype: dict[str, Any]
+        """
         return {
             **super().status,
             SZ_INDOOR_HUMIDITY: self.indoor_humidity,
@@ -142,11 +183,21 @@ class PresenceDetect(HvacSensorBase):  # 2E10
 
     @property
     def presence_detected(self) -> bool | None:
+        """Return the presence detection status.
+
+        :return: True if presence is detected, False if not, None if status is unknown
+        :rtype: bool | None
+        """
         return self._msg_value(Code._2E10, key=SZ_PRESENCE_DETECTED)
 
     @presence_detected.setter
     def presence_detected(self, value: bool | None) -> None:
-        """Fake the presence state of the sensor."""
+        """Set a fake presence detection state for the sensor.
+
+        :param value: The presence state to set (True/False), or None to clear the fake value
+        :type value: bool | None
+        :raises TypeError: If the sensor is not in faked mode
+        """
 
         if not self.is_faked:
             raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
@@ -156,6 +207,11 @@ class PresenceDetect(HvacSensorBase):  # 2E10
 
     @property
     def status(self) -> dict[str, Any]:
+        """Return the status of the presence sensor.
+
+        :return: A dictionary containing the sensor's status including presence detection state
+        :rtype: dict[str, Any]
+        """
         return {
             **super().status,
             SZ_PRESENCE_DETECTED: self.presence_detected,
@@ -166,6 +222,7 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
     """The filter state sensor (10D0)."""
 
     def _setup_discovery_cmds(self) -> None:
+        """Set up the discovery commands for the filter change sensor."""
         super()._setup_discovery_cmds()
 
         self._add_discovery_cmd(
@@ -174,12 +231,22 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
 
     @property
     def filter_remaining(self) -> int | None:
+        """Return the remaining days until filter change is needed.
+
+        :return: Number of days remaining until filter change, or None if not available
+        :rtype: int | None
+        """
         _val = self._msg_value(Code._10D0, key=SZ_REMAINING_DAYS)
         assert isinstance(_val, (int | type(None)))
         return _val
 
     @property
     def filter_remaining_percent(self) -> float | None:
+        """Return the remaining filter life as a percentage.
+
+        :return: Percentage of filter life remaining (0-100), or None if not available
+        :rtype: float | None
+        """
         _val = self._msg_value(Code._10D0, key=SZ_REMAINING_PERCENT)
         assert isinstance(_val, (float | type(None)))
         return _val
@@ -191,6 +258,11 @@ class RfsGateway(DeviceHvac):  # RFS: (spIDer gateway)
     _SLUG: str = DevType.RFS
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the RFS gateway.
+
+        :param args: Positional arguments passed to the parent class
+        :param kwargs: Keyword arguments passed to the parent class
+        """
         super().__init__(*args, **kwargs)
 
         self.ctl = None
@@ -207,15 +279,30 @@ class HvacHumiditySensor(BatteryState, IndoorHumidity, Fakeable):  # HUM: I/12A0
     _SLUG: str = DevType.HUM
 
     @property
-    def temperature(self) -> float | None:  # Celsius
+    def temperature(self) -> float | None:
+        """Return the current temperature in Celsius.
+
+        :return: The temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._12A0, key=SZ_TEMPERATURE)
 
     @property
-    def dewpoint_temp(self) -> float | None:  # Celsius
+    def dewpoint_temp(self) -> float | None:
+        """Return the dewpoint temperature in Celsius.
+
+        :return: The dewpoint temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._12A0, key="dewpoint_temp")
 
     @property
     def status(self) -> dict[str, Any]:
+        """Return the status of the humidity sensor.
+
+        :return: A dictionary containing the sensor's status including temperature and humidity
+        :rtype: dict[str, Any]
+        """
         return {
             **super().status,
             SZ_TEMPERATURE: self.temperature,
@@ -236,6 +323,12 @@ class HvacCarbonDioxideSensor(CarbonDioxide, Fakeable):  # CO2: I/1298
     # .I --- 29:181813 32:155617 --:------ 1FC9 001 00
 
     async def initiate_binding_process(self) -> Packet:
+        """Initiate the binding process for the CO2 sensor.
+
+        :return: The packet sent to initiate binding
+        :rtype: Packet
+        :raises exc.BindingError: If binding fails
+        """
         return await super()._initiate_binding_process(
             (Code._31E0, Code._1298, Code._2E10)
         )
@@ -259,13 +352,24 @@ class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
         )
 
     @property
-    def fan_rate(self) -> str | None:  # 22F1
-        # NOTE: WIP: rate can be int or str
+    def fan_rate(self) -> str | None:
+        """Return the current fan rate setting.
+
+        :return: The fan rate as a string, or None if not available
+        :rtype: str | None
+        :note: This is a work in progress - rate can be either int or str
+        """
         return self._msg_value(Code._22F1, key="rate")
 
     @fan_rate.setter
-    def fan_rate(self, value: int) -> None:  # NOTE: value can be int or str, not None
-        """Fake a fan rate from a remote (to a FAN, is a WIP)."""
+    def fan_rate(self, value: int) -> None:
+        """Set a fake fan rate for the remote control.
+
+        :param value: The fan rate to set (can be int or str, but not None)
+        :type value: int
+        :raises TypeError: If the remote is not in faked mode
+        :note: This is a work in progress
+        """
 
         if not self.is_faked:  # NOTE: some remotes are stateless (i.e. except seqn)
             raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
@@ -278,10 +382,20 @@ class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
 
     @property
     def fan_mode(self) -> str | None:
+        """Return the current fan mode.
+
+        :return: The fan mode as a string, or None if not available
+        :rtype: str | None
+        """
         return self._msg_value(Code._22F1, key=SZ_FAN_MODE)
 
     @property
     def boost_timer(self) -> int | None:
+        """Return the remaining boost timer in minutes.
+
+        :return: The remaining boost time in minutes, or None if boost is not active
+        :rtype: int | None
+        """
         return self._msg_value(Code._22F3, key=SZ_BOOST_TIMER)
 
     @property
@@ -304,10 +418,15 @@ class HvacDisplayRemote(HvacRemote):  # DIS
     #     )
 
 
-class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
+class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     """The FAN (ventilation) class.
 
     The cardinal codes are 31D9, 31DA.  Signature is RP/31DA.
+
+    Also handles 2411 parameter messages for configuration.
+    Since 2411 is not supported by all vendors, discovery is used to determine if it is supported.
+    Since more than 1 different parameters can be sent on 2411 messages,
+    we will process these in the dedicated _handle_2411_message method.
     """
 
     # Itho Daalderop (NL)
@@ -319,24 +438,201 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     _SLUG: str = DevType.FAN
 
-    def _handle_msg(self, *args: Any, **kwargs: Any) -> None:
-        return super()._handle_msg(*args, **kwargs)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the HvacVentilator.
 
-    def _update_schema(self, **schema: Any) -> None:
-        """Update a FAN with new schema attrs.
-
-        Raise an exception if the new schema is not a superset of the existing schema.
+        :param args: Positional arguments passed to the parent class
+        :param kwargs: Keyword arguments passed to the parent class
         """
+        super().__init__(*args, **kwargs)
+        self._supports_2411 = False  # Flag for 2411 parameter support
+        self._initialized_callback = None  # Called when device is fully initialized
+        self._param_update_callback = None  # Called when 2411 parameters are updated
+        self._hgi: Any | None = None  # Will be set when HGI is available
+        self._bound_devices: dict[str, str] = {}  # Track bound devices (e.g., REM/DIS)
 
-        schema = shrink(SCH_VCS(schema))
+    def set_initialized_callback(self, callback: Callable[[], None] | None) -> None:
+        """Set a callback to be executed when the next message (any) is received.
 
-        for dev_id in schema.get(SZ_REMOTES, {}):
-            self._gwy.get_device(dev_id)
+        The callback will be used exactly once to indicate that the device is fully functional.
+        In ramses_cc, 2411 entities are created - on the fly - only for devices that support them.
 
-        for dev_id in schema.get(SZ_SENSORS, {}):
-            self._gwy.get_device(dev_id)
+        :param callback: A callable that takes no arguments and returns None.
+                         If None, any existing callback will be cleared.
+        :type callback: Callable[[], None] | None
+        :raises ValueError: If the callback is not callable and not None
+        """
+        if callback is not None and not callable(callback):
+            raise ValueError("Callback must be callable or None")
+
+        self._initialized_callback = callback
+        if callback is not None:
+            _LOGGER.debug("Initialization callback set for %s", self.id)
+
+    def _handle_initialized_callback(self) -> None:
+        """Handle the initialization callback.
+
+        This method is called when the device has been fully initialized and
+        is ready to process commands. It triggers any registered initialization
+        callbacks and performs necessary setup for 2411 parameter support.
+        """
+        if self._initialized_callback is not None and self.supports_2411:
+            _LOGGER.debug("2411-Device initialized: %s", self.id)
+            if callable(self._initialized_callback):
+                try:
+                    self._initialized_callback()
+                except Exception as ex:
+                    _LOGGER.warning("Error in initialized_callback: %s", ex)
+                finally:
+                    # Clear the callback so it's only called once
+                    self._initialized_callback = None
+
+    def set_param_update_callback(
+        self, callback: Callable[[str, Any], None] | None
+    ) -> None:
+        """Set a callback to be called when 2411 parameters are updated.
+
+        This method registers a callback function that will be invoked whenever
+        a 2411 parameter is updated. The callback receives the parameter ID and
+        its new value as arguments.
+
+        Since 2411 parameters are configuration entities, we are not polling for them
+        and we update them immediately after receiving a 2411 message. We don't wait for them,
+        we only process when we see a 2411 response for our device. The request may have come
+        from another REM or DIS, but we will update to that as well.
+
+        :param callback: A callable that will be invoked with (param_id, value) when a
+                         2411 parameter is updated, or None to clear the current callback
+        :type callback: Callable[[str, Any], None] | None
+        """
+        self._param_update_callback = callback
+
+    def _handle_param_update(self, param_id: str, value: Any) -> None:
+        """Handle a parameter update and notify listeners.
+
+        This method processes parameter updates and notifies any registered
+        callbacks of the change. It ensures thread safety and handles any
+        exceptions that may occur during callback execution.
+
+        :param param_id: The ID of the parameter that was updated
+        :type param_id: str
+        :param value: The new value of the parameter
+        :type value: Any
+        """
+        if callable(self._param_update_callback):
+            try:
+                self._param_update_callback(param_id, value)
+            except Exception as ex:
+                _LOGGER.warning("Error in param_update_callback: %s", ex)
+
+    @property
+    def supports_2411(self) -> bool:
+        """Return whether this device supports 2411 parameters.
+
+        :return: True if the device supports 2411 parameters, False otherwise
+        :rtype: bool
+        """
+        return self._supports_2411
+
+    @property
+    def hgi(self) -> Any | None:
+        """Return the HGI (Home Gateway Interface) device if available.
+
+        The HGI device provides additional functionality for certain operations.
+
+        :return: The HGI device instance, or None if not available
+        :rtype: Any | None
+        """
+        if self._hgi is None and self._gwy and hasattr(self._gwy, "hgi"):
+            self._hgi = self._gwy.hgi
+        return self._hgi
+
+    def _handle_2411_message(self, msg: Message) -> None:
+        """Handle incoming 2411 parameter messages.
+
+        This method processes 2411 parameter update messages, updates the device's
+        message store, and triggers any registered parameter update callbacks.
+        It handles parameter value normalization and validation.
+
+        :param msg: The incoming 2411 message
+        :type msg: Message
+        """
+        if not hasattr(msg, "payload") or not isinstance(msg.payload, dict):
+            _LOGGER.debug("Invalid 2411 message format: %s", msg)
+            return
+
+        param_id = msg.payload.get("parameter")
+        param_value = msg.payload.get("value")
+
+        if not param_id or param_value is None:
+            _LOGGER.debug("Missing parameter ID or value in 2411 message: %s", msg)
+            return
+
+        # Create a composite key for this parameter using the normalized ID
+        key = f"{Code._2411}_{param_id}"
+
+        # Store the message in the device's message store
+        old_value = self._msgs.get(Code._2411)
+        # Use direct assignment for Code._2411 key
+        self._msgs[Code._2411] = msg
+        # For the composite key, we need to bypass type checking
+        self._msgs[key] = msg  # type: ignore[index]
+
+        _LOGGER.debug(
+            "Updated 2411 parameter %s = %s (was: %s) for %s",
+            param_id,
+            param_value,
+            old_value.payload if old_value else None,
+            self.id,
+        )
+
+        # Mark that we support 2411 parameters
+        if not self._supports_2411:
+            self._supports_2411 = True
+            _LOGGER.debug("Device %s supports 2411 parameters", self.id)
+
+        # Round parameter 75 values to 1 decimal place
+        if param_id == "75" and isinstance(param_value, int | float):
+            param_value = round(float(param_value), 1)
+
+        # call the 2411 parameter update callback
+        self._handle_param_update(param_id, param_value)
+
+    def _handle_msg(self, msg: Message) -> None:
+        """Handle a message from this device.
+
+        This method processes incoming messages for the device, with special
+        handling for 2411 parameter messages. It updates the device state and
+        triggers any necessary callbacks.
+
+        After handling the messages, it calls the initialized callback if set to notify that
+        the device was fully initialized.
+
+        :param msg: The incoming message to process
+        :type msg: Message
+        """
+        super()._handle_msg(msg)
+
+        # Handle 2411 parameter messages
+        if msg.code == Code._2411:
+            _LOGGER.debug(
+                "Received 2411 message from %s: verb=%s, payload=%s, src=%s, dst=%s",
+                self.id,
+                msg.verb,
+                msg.payload,
+                msg.src,
+                msg.dst,
+            )
+            self._handle_2411_message(msg)
+
+        self._handle_initialized_callback()
 
     def _setup_discovery_cmds(self) -> None:
+        """Set up discovery commands for the RFS gateway.
+
+        This method initializes the discovery commands needed to identify and
+        communicate with the RFS gateway device.
+        """
         super()._setup_discovery_cmds()
 
         # RP --- 32:155617 18:005904 --:------ 22F1 003 000207
@@ -344,14 +640,25 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
             Command.from_attrs(RQ, self.id, Code._22F1, "00"), 60 * 60 * 24, delay=15
         )  # to learn scheme: orcon/itho/other (04/07/0?)
 
+        # Add a single discovery command for all parameters (3F likely to be supported if any)
+        # The handler will process the response and update the appropriate parameter and
+        # also set the supports_2411 flag
+        _LOGGER.debug("Adding single discovery command for all 2411 parameters")
+        self._add_discovery_cmd(
+            Command.from_attrs(RQ, self.id, Code._2411, "00003F"),
+            interval=60 * 60 * 24,  # Check daily
+            delay=40,  # Initial delay before first discovery
+        )
+
+        # Standard discovery commands for other codes
         for code in (
-            Code._2210,
-            Code._22E0,
-            Code._22E5,
-            Code._22E9,
-            Code._22F2,
-            Code._22F4,
-            Code._22F8,
+            Code._2210,  # Air quality
+            Code._22E0,  # Bypass position
+            Code._22E5,  # Remaining minutes
+            Code._22E9,  # Speed cap
+            Code._22F2,  # Post heat
+            Code._22F4,  # Pre heat
+            Code._22F8,  # Air quality base
         ):
             self._add_discovery_cmd(
                 Command.from_attrs(RQ, self.id, code, "00"), 60 * 30, delay=15
@@ -362,12 +669,171 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
                 Command.from_attrs(RQ, self.id, code, "00"), 60 * 30, delay=30
             )
 
+    def add_bound_device(self, device_id: str, device_type: str) -> None:
+        """Add a bound device to this FAN.
+
+        This method registers a REM or DIS device as bound to this FAN device.
+        Bound devices are required for certain operations like setting parameters.
+
+        A bound device is needed to be able to send 2411 parameter Set messages,
+        or the device will not accept and respond to them.
+        In HomeAssistant, ramses_cc, you can set a bound device in the device configuration.
+
+        System schema and known devices example:
+        "32:153289":
+          bound: "37:168270"
+          class: FAN
+        "37:168270":
+          class: REM
+          faked: true
+
+        :param device_id: The unique identifier of the device to bind
+        :type device_id: str
+        :param device_type: The type of device (must be 'REM' or 'DIS')
+        :type device_type: str
+        :raises ValueError: If the device type is not 'REM' or 'DIS'
+        """
+        if device_type not in (DevType.REM, DevType.DIS):
+            _LOGGER.warning(
+                "Cannot bind device %s of type %s to FAN %s: must be REM or DIS",
+                device_id,
+                device_type,
+                self.id,
+            )
+            return
+
+        self._bound_devices[device_id] = device_type
+        _LOGGER.info("Bound %s device %s to FAN %s", device_type, device_id, self.id)
+
+    def remove_bound_device(self, device_id: str) -> None:
+        """Remove a bound device from this FAN.
+
+        This method unregisters a previously bound device from this FAN.
+
+        :param device_id: The unique identifier of the device to unbind
+        :type device_id: str
+        """
+        if device_id in self._bound_devices:
+            device_type = self._bound_devices.pop(device_id)
+            _LOGGER.info(
+                "Removed bound %s device %s from FAN %s",
+                device_type,
+                device_id,
+                self.id,
+            )
+
+    def get_bound_rem(self) -> str | None:
+        """Get the first bound REM/DIS device ID for this FAN.
+
+        This method retrieves the device ID of the first bound REM or DIS device.
+        Bound devices are required for certain operations like setting parameters.
+
+        :return: The device ID of the first bound REM or DIS device, or None if none found
+        :rtype: str | None
+        """
+        if not self._bound_devices:
+            _LOGGER.debug("No bound devices found for FAN %s", self.id)
+            return None
+
+        # Find first REM or DIS device
+        for device_id, device_type in self._bound_devices.items():
+            if device_type in (DevType.REM, DevType.DIS):
+                _LOGGER.debug(
+                    "Found bound %s device %s for FAN %s",
+                    device_type,
+                    device_id,
+                    self.id,
+                )
+                return device_id
+
+        _LOGGER.debug("No bound REM or DIS devices found for FAN %s", self.id)
+        return None
+
+    def get_fan_param(self, param_id: str) -> Any | None:
+        """Retrieve a fan parameter value from the device's message store.
+
+        This method attempts to fetch a specific parameter value for a FAN device from the
+        stored messages. It first looks for the parameter using a composite key (e.g., '2411_3F')
+        and falls back to checking the general 2411 message if needed.
+
+        :param param_id: The parameter ID to retrieve.
+        :type param_id: str
+        :return: The parameter value if found, None otherwise
+        :rtype: Any | None
+        """
+        # Ensure param_id is uppercase and strip leading zeros for consistency
+        param_id = (
+            str(param_id).upper().lstrip("0") or "0"
+        )  # Handle case where param_id is "0"
+        # we need some extra workarounds to please mypy
+        # Create a composite key for this parameter using the normalized ID
+        key = f"{Code._2411}_{param_id}"
+
+        # Get the message using the composite key first, fall back to just the code
+        msg = None
+
+        # First try to get the specific parameter message
+        try:
+            # Try to access the message directly using the key
+            msg = self._msgs[key]  # type: ignore[index]
+        except (KeyError, TypeError):
+            # If that fails, try to find the message by iterating through the dictionary
+            msg = next((v for k, v in self._msgs.items() if str(k) == key), None)
+
+        # If not found, try to get the general 2411 message
+        if msg is None:
+            msg = self._msgs.get(Code._2411)
+
+        if not msg or not hasattr(msg, "payload"):
+            if not self.supports_2411:
+                _LOGGER.debug(
+                    "Cannot get parameter %s from %s: 2411 parameters not supported",
+                    param_id,
+                    self.id,
+                )
+            else:
+                _LOGGER.debug(
+                    "No payload found for parameter %s on %s", param_id, self.id
+                )
+            return None
+
+        # If we have a message but not the specific parameter, try to get it from the payload
+        if param_id and hasattr(msg.payload, "get"):
+            value = msg.payload.get("value")
+            if value is not None:
+                return value
+
+        # If we get here, the parameter wasn't found in the message
+        if not self.supports_2411:
+            _LOGGER.debug(
+                "Parameter %s not found for %s: 2411 parameters not supported",
+                param_id,
+                self.id,
+            )
+        else:
+            _LOGGER.debug("Parameter %s not found in payload for %s", param_id, self.id)
+
+        return None
+
     @property
     def air_quality(self) -> float | None:
+        """Return the current air quality measurement.
+
+        :return: The air quality measurement as a float, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_AIR_QUALITY)
 
     @property
     def air_quality_base(self) -> float | None:
+        """Return the base air quality measurement.
+
+        This represents the baseline or raw air quality measurement before any
+        processing or normalization.
+
+        :return: The base air quality measurement, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_AIR_QUALITY_BASIS)
 
     @property
@@ -396,6 +862,11 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def co2_level(self) -> int | None:
+        """Return the CO2 level in parts per million (ppm).
+
+        :return: The CO2 level in ppm, or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._31DA, key=SZ_CO2_LEVEL)
 
     @property
@@ -419,10 +890,20 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def exhaust_flow(self) -> float | None:
+        """Return the current exhaust air flow rate.
+
+        :return: The exhaust air flow rate in m³/h, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_EXHAUST_FLOW)
 
     @property
     def exhaust_temp(self) -> float | None:
+        """Return the current exhaust air temperature.
+
+        :return: The exhaust air temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_EXHAUST_TEMP)
 
     @property
@@ -481,10 +962,22 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def indoor_temp(self) -> float | None:
+        """Return the current indoor temperature.
+
+        :return: The indoor temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_INDOOR_TEMP)
 
     @property
     def outdoor_humidity(self) -> float | None:
+        """Return the outdoor relative humidity.
+
+        Handles special case for Ventura devices that send humidity data in 12A0 messages.
+
+        :return: The outdoor relative humidity as a percentage (0-100), or None if not available
+        :rtype: float | None
+        """
         if Code._12A0 in self._msgs and isinstance(
             self._msgs[Code._12A0].payload, list
         ):  # FAN Ventura sends RH/temps as a list; element [1] contains outdoor_hum
@@ -495,22 +988,47 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def outdoor_temp(self) -> float | None:
+        """Return the outdoor temperature in Celsius.
+
+        :return: The outdoor temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_OUTDOOR_TEMP)
 
     @property
     def post_heat(self) -> int | None:
+        """Return the post-heat status.
+
+        :return: The post-heat status as an integer, or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._31DA, key=SZ_POST_HEAT)
 
     @property
     def pre_heat(self) -> int | None:
+        """Return the pre-heat status.
+
+        :return: The pre-heat status as an integer, or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._31DA, key=SZ_PRE_HEAT)
 
     @property
     def remaining_mins(self) -> int | None:
+        """Return the remaining minutes for the current operation.
+
+        :return: The remaining minutes as an integer, or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._31DA, key=SZ_REMAINING_MINS)
 
     @property
     def request_fan_speed(self) -> float | None:
+        """Return the requested fan speed.
+
+        :return: The requested fan speed as a percentage, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._2210, key=SZ_REQ_SPEED)
 
     @property
@@ -523,18 +1041,40 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def speed_cap(self) -> int | None:
+        """Return the speed capabilities of the fan.
+
+        :return: The speed capabilities as an integer, or None if not available
+        :rtype: int | None
+        """
         return self._msg_value(Code._31DA, key=SZ_SPEED_CAPABILITIES)
 
     @property
     def supply_fan_speed(self) -> float | None:
+        """Return the supply fan speed.
+
+        :return: The supply fan speed as a percentage, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_SUPPLY_FAN_SPEED)
 
     @property
     def supply_flow(self) -> float | None:
+        """Return the supply air flow rate.
+
+        :return: The supply air flow rate in m³/h, or None if not available
+        :rtype: float | None
+        """
         return self._msg_value(Code._31DA, key=SZ_SUPPLY_FLOW)
 
     @property
     def supply_temp(self) -> float | None:
+        """Return the supply air temperature.
+
+        Handles special case for Ventura devices that send temperature data in 12A0 messages.
+
+        :return: The supply air temperature in Celsius, or None if not available
+        :rtype: float | None
+        """
         if Code._12A0 in self._msgs and isinstance(
             self._msgs[Code._12A0].payload, list
         ):  # FAN Ventura sends RH/temps as a list;
@@ -559,6 +1099,13 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A]
 
     @property
     def temperature(self) -> float | None:  # Celsius
+        """Return the current temperature in Celsius.
+
+        Handles special cases.
+
+        :return: The temperature in degrees Celsius, or None if not available
+        :rtype: float | None
+        """
         if Code._12A0 in self._msgs and isinstance(
             self._msgs[Code._12A0].payload, list
         ):  # FAN Ventura sends RH/temps as a list; use element [1]
@@ -655,7 +1202,7 @@ _REMOTES = {
 """
 # CVE/HRU remote (536-0124) [RFT W: 3 modes, timer]
     "away":       (Code._22F1, 00, 01|04"),  # how to invoke?
-    "low":        (Code._22F1, 00, 02|04"),
+    "low":        (Code._22F1, 00, 02|04"),  # aka eco
     "medium":     (Code._22F1, 00, 03|04"),  # aka auto (with sensors) - is that only for 63?
     "high":       (Code._22F1, 00, 04|04"),  # aka full
 

@@ -220,7 +220,7 @@ class _MessageDB(_Entity):
             self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
-    def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][indx]
+    def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][index]
         """Return a flattened version of _msgz[code][verb][index].
 
         The idx is one of:

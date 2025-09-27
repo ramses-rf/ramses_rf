@@ -43,8 +43,18 @@ from .logger import set_pkt_logging
 from .message import Message
 from .packet import PKT_LOGGER, Packet
 from .protocol import PortProtocol, ReadProtocol, protocol_factory
-from .ramses import CODES_BY_DEV_SLUG, CODES_SCHEMA
-from .schemas import SZ_SERIAL_PORT, DeviceIdT, DeviceListT
+from .ramses import (
+    _2411_PARAMS_SCHEMA,
+    CODES_BY_DEV_SLUG,
+    CODES_SCHEMA,
+    SZ_DATA_TYPE,
+    SZ_DATA_UNIT,
+    SZ_DESCRIPTION,
+    SZ_MAX_VALUE,
+    SZ_MIN_VALUE,
+    SZ_PRECISION,
+)
+from .schemas import SZ_BOUND_TO, SZ_SERIAL_PORT, DeviceIdT, DeviceListT
 from .transport import (
     FileTransport,
     PortTransport,
@@ -76,6 +86,15 @@ __all__ = [
     "SZ_ZONE_IDX",
     "SZ_ZONE_MASK",
     "SZ_ZONE_TYPE",
+    "SZ_BOUND_TO",
+    # Schema-related constants
+    "SZ_DATA_UNIT",
+    "SZ_DESCRIPTION",
+    "SZ_DATA_TYPE",
+    "SZ_MAX_VALUE",
+    "SZ_MIN_VALUE",
+    "SZ_PRECISION",
+    "_2411_PARAMS_SCHEMA",
     #
     "ALL_DEV_ADDR",
     "ALL_DEVICE_ID",

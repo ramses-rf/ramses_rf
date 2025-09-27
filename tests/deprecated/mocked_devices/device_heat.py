@@ -53,7 +53,7 @@ class Command(CommandBase):
     ):
         """Constructor for RP/0005."""
 
-        zones = f"{sum(b<<i for i, b in enumerate(zone_mask)):04X}"
+        zones = f"{sum(b << i for i, b in enumerate(zone_mask)):04X}"
         payload = f"{sub_idx}{zone_type}{zones[2:]}{zones[:2]}"  # swap order
 
         return cls._from_attrs(RP, Code._0005, payload, addr0=src_id, addr1=dst_id)

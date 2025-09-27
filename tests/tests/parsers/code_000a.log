@@ -25,7 +25,7 @@
 2019-11-27T12:10:54.168899 045 RP --- 01:145038 18:013393 --:------ 000A 006 08007FFF7FFF  # {'zone_idx': '08', 'min_temp': None, 'max_temp': None, 'local_override': True,  'openwindow_function': True,  'multiroom_mode': True,  '_unknown_bitmap': '0b00000000'}
 
 
-# just an announcent
+# just an announcement
 2024-01-19T02:17:59.000001 ...  I --- 01:111111 --:------ 01:111111 000A 006 001001F40BB8                               #  {'zone_idx': '00', 'min_temp': 5.0, 'max_temp': 30.0, 'local_override': True,  'openwindow_function': True,  'multiroom_mode': False, '_unknown_bitmap': '0b00010000'}
 
 # second pkt is *not* part of an array (zone_idx = 00)
