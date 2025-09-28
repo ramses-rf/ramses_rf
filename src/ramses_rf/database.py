@@ -56,8 +56,9 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
 
     def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
         _k: str = "|"
-        for k in ppl:
-            _k += k + "|"
+        for k, v in ppl:
+            if v is not None:  # ignore keys with None value
+                _k += k + "|"
         return _k
 
     if isinstance(parsed_payload, list):
@@ -148,7 +149,7 @@ class MessageIndex:
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT     NOT NULL,
                 hdr    TEXT     NOT NULL UNIQUE
-                plk    TEXT     NOT NULL, # str of keywords in payload
+                plk    TEXT     NOT NULL, # str of keywords in payload, separated by |
             )
             """
         )
@@ -232,7 +233,7 @@ class MessageIndex:
     def _insert_into(self, msg: Message) -> Message | None:
         """
         Insert a message into the index.
-        :returns: any message replaced (by ssame hdr)
+        :returns: any message replaced (by same hdr)
         """
 
         msgs = self._delete_from(hdr=msg._pkt._hdr)
