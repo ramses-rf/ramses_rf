@@ -434,12 +434,12 @@ class _MessageDB(_Entity):
 
     def _msg_qry_by_code_key(
         self,
-        code: Code | [Code] | None = None,
+        code: Code | tuple[Code] | None = None,
         key: str | None = None,
         **kwargs: Any,
     ) -> Code | None:
         """
-        Retrieve from the MessageIndex the most current key for a code & keyword combination.
+        Retrieve from the MessageIndex the most current Code key for a code & keyword combination.
 
         :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
         :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
@@ -476,6 +476,7 @@ class _MessageDB(_Entity):
                     res = Code(rec[1])
                     latest = rec[0]
             return res
+        return None
 
     def _msg_value_qry_by_code_key(
         self,
@@ -493,9 +494,9 @@ class _MessageDB(_Entity):
         :return: a single string or float value or None when qry returned empty
         """
         val: object = None
-        res = self._msg_qry_by_code_key(code, key)
+        cd: Code = self._msg_qry_by_code_key(code, key)
         val_msg = self._msg_value_msg(
-            self._msgs_[res],
+            self._msgs_[cd],
             key=key,  # key may be wildcard *
         )
         if val_msg:

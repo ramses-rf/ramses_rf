@@ -952,7 +952,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
             AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk like %SZ_FAN_RATE% OR plk like %SZ_FAN_RATE%)
+            AND (plk like %SZ_FAN_RATE%)
         """
         res_rate: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
