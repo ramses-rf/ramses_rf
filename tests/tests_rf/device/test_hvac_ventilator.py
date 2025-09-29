@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the HvacVentilator class."""
+"""Unittests for the HvacVentilator class."""
 
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ramses_rf.const import DevType
+from ramses_rf.database import MessageIndex
 from ramses_rf.device.hvac import HvacVentilator
 from ramses_rf.gateway import Gateway
 from ramses_tx import Address
@@ -39,7 +40,9 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     gateway._loop.call_later = MagicMock()
     gateway._loop.time = MagicMock(return_value=0.0)
     gateway._include = {}
-    gateway.msg_db = None  # Add msg_db attribute
+    gateway.msg_db = (
+        MessageIndex()
+    )  # start the index < activate for SQLite MessageIndex
 
     # Add _zzz attribute that's accessed by the message store
     gateway._zzz = MagicMock()

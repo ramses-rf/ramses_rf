@@ -669,8 +669,12 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
 
         self._child_id = FC  # NOTE: domain_id
 
-        # TODO replace _msgz by SQLite database qry
-        self._msgz[Code._3220] = {RP: {}}
+        # TODO(eb): cleanup
+        # was: self._msgz[Code._3220] = {RP: {}}
+
+        self._add_record(address=self.addr, code=Code._3220, verb="RP")  # essential?
+        # adds an empty RP opentherm_msg to the SQLite MessageIndex with code 3220
+        # causes exc when fetching ALL, hwn no authentic msg was added to _msgs_
 
         # lf._use_ot = self._gwy.config.use_native_ot
         self._msgs_ot: dict[MsgId, Message] = {}

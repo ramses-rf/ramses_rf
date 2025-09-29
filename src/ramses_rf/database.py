@@ -56,7 +56,7 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
 
     def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
         _k: str = "|"
-        for k, v in ppl:
+        for k, v in ppl.items():
             if v is not None:  # ignore keys with None value
                 _k += k + "|"
         return _k
@@ -148,8 +148,8 @@ class MessageIndex:
                 dst    TEXT(9)  NOT NULL,
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT     NOT NULL,
-                hdr    TEXT     NOT NULL UNIQUE
-                plk    TEXT     NOT NULL, # str of keywords in payload, separated by |
+                hdr    TEXT     NOT NULL UNIQUE,
+                plk    TEXT     NOT NULL
             )
             """
         )
@@ -217,6 +217,7 @@ class MessageIndex:
             self._cx.rollback()
 
         else:
+            # requires a timestamp reformat
             dtm: DtmStrT = msg.dtm.isoformat(timespec="microseconds")  # type: ignore[assignment]
             self._msgs[dtm] = msg
 
@@ -229,6 +230,32 @@ class MessageIndex:
             )
 
         return old
+
+    def add_record(self, src: str, code: str = "", verb: str = "") -> None:
+        """
+        Add a single record to the MessageIndex with timestamp now() and no Message contents.
+        """
+        # Used by OtbGateway init, via entity_base.py
+        dtm: DtmStrT = DtmStrT(dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S"))
+
+        sql = """
+            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        self._cu.execute(
+            sql,
+            (
+                dtm,
+                verb,
+                src,
+                src,
+                code,
+                "",
+                "",
+                "|",
+            ),
+        )
 
     def _insert_into(self, msg: Message) -> Message | None:
         """
@@ -266,8 +293,14 @@ class MessageIndex:
 
         :returns: any messages that were removed.
         """
+        # print(f"SQL REM msg={msg} bool{bool(msg)} kwargs={kwargs} bool(kwargs)")
+        # SQL REM
+        # msg=||  02:044328 | | I | heat_demand | FC || {'domain_id': 'FC', 'heat_demand': 0.74}
+        # boolTrue
+        # kwargs={}
+        # bool(kwargs)
 
-        if bool(msg) ^ bool(kwargs):
+        if not bool(msg) ^ bool(kwargs):
             raise ValueError("Either a Message or kwargs should be provided, not both")
         if msg:
             kwargs["dtm"] = msg.dtm.isoformat(timespec="microseconds")
@@ -315,18 +348,21 @@ class MessageIndex:
 
     def contains(self, **kwargs: str) -> bool:
         """
+        Check if the MessageIndex contains at least 1 record that matches the provided fields.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
         :return: True if at least one message fitting the given conditions is present, False when qry returned empty
         """
         # adapted from _select_from()
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
-
+        print(f"SQL={sql} kwargs={kwargs}")
         self._cu.execute(sql, tuple(kwargs.values()))
-
-        return self._cu.fetchall() is not None
+        print(self._cu.fetchall())
+        return len(self._cu.fetchall()) > 0
 
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
         """Select message(s) from the index.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages"""
 
         sql = "SELECT dtm FROM messages WHERE "
@@ -334,7 +370,10 @@ class MessageIndex:
 
         self._cu.execute(sql, tuple(kwargs.values()))
 
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+        return tuple(
+            self._msgs[row[0].isoformat(timespec="microseconds")]
+            for row in self._cu.fetchall()
+        )
 
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
         """Get a tuple of messages from the index, given sql and parameters."""
@@ -344,7 +383,20 @@ class MessageIndex:
 
         self._cu.execute(sql, parameters)
 
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+        lst: list[Message] = []
+        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"
+        for row in self._cu.fetchall():
+            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            # print(
+            #     f"QRY Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
+            # )
+            # QRY Msg key raw: 2022-09-08 13:43:31.536862 Reformatted: 2022-09-08T13:43:31.536862 _msgs stamp format: 2022-09-08T13:40:52.447364
+            if ts in self._msgs:
+                lst.append(self._msgs[ts])
+            else:  # happens in tests with artificial msg from heat
+                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+        return tuple(lst)
+        # return tuple(self._msgs[row[0].isoformat(timespec="microseconds")] for row in self._cu.fetchall())
 
     def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
         """
@@ -362,7 +414,23 @@ class MessageIndex:
         """Get all messages from the index."""
 
         self._cu.execute("SELECT * FROM messages")
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+
+        lst: list[Message] = []
+        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"
+        for row in self._cu.fetchall():
+            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            # print(
+            #     f"ALL Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
+            # )
+            # ALL Msg key raw: 2022-05-02 10:02:02.744905
+            # Reformatted: 2022-05-02T10:02:02.744905
+            # _msgs stamp format: 2022-05-02T10:02:02.744905
+            if ts in self._msgs:
+                lst.append(self._msgs[ts])
+            else:  # happens in tests with artificial msg from heat
+                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+        return tuple(lst)
+        # return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
     def clr(self) -> None:
         """Clear the message index (remove indexes of all messages)."""
