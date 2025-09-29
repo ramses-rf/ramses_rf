@@ -129,7 +129,7 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
         if dev._gwy.msg_db:
             assert sorted(dev._msgs) == sorted(dev._msgs_), dev
             assert sorted(dev._msgz) == sorted(dev._msgz_), dev
-            # refactored, both could be empty
+            # refactored, both _msgz and _msgz_ could be empty and pass
             # for database.py: refactor 0.51.7
             sql = """
                 SELECT dtm from messages WHERE verb in (' I', 'RP')

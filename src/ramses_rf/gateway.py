@@ -129,7 +129,7 @@ class Gateway(Engine):
         self.devices: list[Device] = []
         self.device_by_id: dict[DeviceIdT, Device] = {}
 
-        self.msg_db: MessageIndex | None = None  # MessageIndex()
+        self.msg_db: MessageIndex | None = None
 
     def __repr__(self) -> str:
         if not self.ser_name:
@@ -172,6 +172,8 @@ class Gateway(Engine):
             cc_console=self.config.reduce_processing >= DONT_CREATE_MESSAGES,
             **self._packet_log,
         )
+
+        self.msg_db = MessageIndex()  # start the index
 
         self.config.disable_discovery, disable_discovery = (
             True,
@@ -249,12 +251,13 @@ class Gateway(Engine):
             return include_expired or not msg._expired
 
         msgs = [m for device in self.devices for m in device._msg_db]
-        # TODO(eb): verify how this works with SQLite messageIndex
+        # TODO(eb): verify how this works with SQLite MessageIndex
 
         for system in self.systems:
             msgs.extend(list(system._msgs.values()))
             msgs.extend([m for z in system.zones for m in z._msgs.values()])
-            # msgs.extend([m for z in system.dhw for m in z._msgs.values()])  # TODO DHW
+            # msgs.extend([m for z in system.dhw for m in z._msgs.values()])  # TODO: DHW
+            # Related to/Fixes ramses_cc Issue 249 non-existing via-device _HW ?
 
         if self.msg_db:
             pkts = {
@@ -262,8 +265,8 @@ class Gateway(Engine):
                 for msg in self.msg_db.all(include_expired=True)
                 if wanted_msg(msg, include_expired=include_expired)
             }
-
-        else:
+        else:  # deprecated, to be removed in Q1 2026
+            _LOGGER.warning("Missing MessageIndex")
             pkts = {  # BUG: assumes pkts have unique dtms: may be untrue for contrived logs
                 f"{repr(msg._pkt)[:26]}": f"{repr(msg._pkt)[27:]}"
                 for msg in msgs

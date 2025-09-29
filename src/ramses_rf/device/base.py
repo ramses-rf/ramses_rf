@@ -166,8 +166,12 @@ class DeviceBase(Entity):
     def has_battery(self) -> None | bool:  # 1060
         """Return True if the device is battery powered (excludes battery-backup)."""
 
-        # TODO replace _msgz by SQLite database qry
-        return isinstance(self, BatteryState) or Code._1060 in self._msgz
+        # TODO(eb): replace _msgz by SQLite database qry, cleanup
+        key_list = self._msg_dev_qry()
+        return isinstance(self, BatteryState) or (
+            key_list is not None and Code._1060 in key_list
+        )
+        # self._msgz
 
     @property
     def is_faked(self) -> bool:
