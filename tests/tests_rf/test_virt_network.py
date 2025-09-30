@@ -56,8 +56,8 @@ async def assert_code_in_device_msgindex(
             (_ := gwy.device_by_id.get(dev_id))
             and gwy.msg_db
             and (
-                gwy.msg_db.contains(src=dev_id, code=code)
-                | gwy.msg_db.contains(dst=dev_id, code=code)
+                gwy.msg_db.contains(src=dev_id, code=str(code))
+                or gwy.msg_db.contains(dst=dev_id, code=str(code))
             )
         ) != test_not:
             break
@@ -65,8 +65,8 @@ async def assert_code_in_device_msgindex(
         (_ := gwy.device_by_id.get(dev_id))
         and gwy.msg_db
         and (
-            gwy.msg_db.contains(src=dev_id, code=code)
-            | gwy.msg_db.contains(dst=dev_id, code=code)
+            gwy.msg_db.contains(src=dev_id, code=str(code))
+            or gwy.msg_db.contains(dst=dev_id, code=str(code))
         )
     ) != test_not  # TODO: fix me
 
@@ -147,7 +147,7 @@ async def _test_virtual_rf_pkt_flow(
 ) -> None:
     """Check the virtual RF network behaves as expected (packet flow)."""
 
-    # TEST 1: TODO(eb): fails with msg_db
+    # TEST 1:
     await assert_code_in_device_msgindex(
         gwy_0, "01:022222", Code._1F09, max_sleep=0, test_not=True
     )  # device won't exist
@@ -161,7 +161,7 @@ async def _test_virtual_rf_pkt_flow(
     await assert_this_pkt(gwy_0._transport, cmd)
     await assert_this_pkt(gwy_1._transport, cmd)
 
-    # TEST 2: TODO(eb): fails with msg_db
+    # TEST 2:
     # await assert_code_in_device_msgindex(
     #     gwy_0, "40:000000", Code._22F1, max_sleep=0, test_not=True
     # )
