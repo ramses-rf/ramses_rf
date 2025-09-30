@@ -196,8 +196,8 @@ class _MessageDB(_Entity):
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
 
         # Deprecated as of 0.51.7 Use SQLite MessageIndex instead, see ramses_rf/database.py
-        # _msgz_ is only used in this module, but
-        # _msgz (calling _msgz_) also in: client, base, device.heat
+        # _msgz_ is only used in this module. Note:
+        # _msgz (created from _msgs_) also in: client, base, device.heat
         # TODO(eb): remove after 0.51.7
         self._msgz_: dict[
             Code, dict[VerbT, dict[bool | str | None, Message]]
@@ -240,7 +240,7 @@ class _MessageDB(_Entity):
         #     self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
-    def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][index]
+    def _msg_list(self) -> list[Message]:
         """Return a flattened version of _msgz[code][verb][index].
 
         The idx is one of:
@@ -305,30 +305,30 @@ class _MessageDB(_Entity):
             # only 1 result expected since hdr is a unique key in msg_db
             return msgs[0] if msgs else None
 
-        # TODO(eb): the rest of this method can go once we move to MessageIndex
-        msg: Message
-        code: Code
-        verb: VerbT
+        # TODO(eb): the rest of this method can go since we moved to MessageIndex
+        # msg: Message
+        # code: Code
+        # verb: VerbT
+        #
+        # # _ is device_id
+        # code, verb, _, *args = hdr.split("|")  # type: ignore[assignment]
+        #
+        # try:
+        #     if args and (ctx := args[0]):  # ctx may == True
+        #         msg = self._msgz[code][verb][ctx]
+        #     elif False in self._msgz[code][verb]:
+        #         msg = self._msgz[code][verb][False]
+        #     elif None in self._msgz[code][verb]:
+        #         msg = self._msgz[code][verb][None]
+        #     else:
+        #         return None
+        # except KeyError:
+        #     return None
+        #
+        # if msg._pkt._hdr != hdr:
+        #     raise LookupError
 
-        # _ is device_id
-        code, verb, _, *args = hdr.split("|")  # type: ignore[assignment]
-
-        try:
-            if args and (ctx := args[0]):  # ctx may == True
-                msg = self._msgz[code][verb][ctx]
-            elif False in self._msgz[code][verb]:
-                msg = self._msgz[code][verb][False]
-            elif None in self._msgz[code][verb]:
-                msg = self._msgz[code][verb][None]
-            else:
-                return None
-        except KeyError:
-            return None
-
-        if msg._pkt._hdr != hdr:
-            raise LookupError
-
-        return msg
+        # return msg
 
     def _msg_flag(self, code: Code, key: str, idx: int) -> bool | None:
         if flags := self._msg_value(code, key=key):
@@ -621,7 +621,6 @@ class _MessageDB(_Entity):
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
         """
         Get a nested dict of all I/RP messages logged with this device as either src or dst.
-        Deprecated, removed when all queries are done using MessageIndex
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """

@@ -355,9 +355,7 @@ class MessageIndex:
         # adapted from _select_from()
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
-        print(f"SQL={sql} kwargs={kwargs}")
         self._cu.execute(sql, tuple(kwargs.values()))
-        print(self._cu.fetchall())
         return len(self._cu.fetchall()) > 0
 
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
