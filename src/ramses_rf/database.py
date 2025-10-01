@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import NewType, TypedDict
 
-from ramses_tx import Message
+from ramses_tx import NON_DEV_ADDR, Message
 
 DtmStrT = NewType("DtmStrT", str)
 MsgDdT = OrderedDict[DtmStrT, Message]
@@ -130,7 +130,7 @@ class MessageIndex:
         Fields:
 
         - dtm  message timestamp
-        - verb _I, RQ etc.
+        - verb " I", "RQ" etc.
         - src  message origin address
         - dst  message destination address
         - code packet code aka command class e.g. _0005, _31DA
@@ -206,14 +206,16 @@ class MessageIndex:
         dup: tuple[Message, ...] = tuple()  # avoid UnboundLocalError
         old: Message | None = None  # avoid UnboundLocalError
 
-        try:  # TODO: remove, or use only when source is a packet log?
+        try:  # TODO: remove this, or apply only when source is a real packet log?
             # await self._lock.acquire()
             dup = self._delete_from(  # HACK: because of contrived pkt logs
                 dtm=msg.dtm.isoformat(timespec="microseconds")
             )
             old = self._insert_into(msg)  # will delete old msg by hdr
 
-        except sqlite3.Error:  # UNIQUE constraint failed: ? messages.dtm (so: HACK)
+        except (
+            sqlite3.Error
+        ):  # UNIQUE constraint failed: ? messages.dtm or .hdr (so: HACK)
             self._cx.rollback()
 
         else:
@@ -237,25 +239,33 @@ class MessageIndex:
         """
         # Used by OtbGateway init, via entity_base.py
         dtm: DtmStrT = DtmStrT(dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S"))
+        hdr = f"{code}|{verb}|{src}|00"  # no contents
+        dup = self._delete_from(hdr=hdr)
 
         sql = """
             INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
-
-        self._cu.execute(
-            sql,
-            (
-                dtm,
-                verb,
-                src,
-                src,
-                code,
-                "",
-                "",
-                "|",
-            ),
-        )
+        try:
+            self._cu.execute(
+                sql,
+                (
+                    dtm,
+                    verb,
+                    src,
+                    src,
+                    code,
+                    "",
+                    hdr,
+                    "|",
+                ),
+            )
+        except (
+            sqlite3.Error
+        ):  # UNIQUE constraint hdr fails in tests/tests/test_schemas.py 103
+            self._cx.rollback()
+        if dup:  # expected when more than one heat system in schema
+            _LOGGER.debug("Skipped inserting record with duplicate hdr %s", hdr)
 
     def _insert_into(self, msg: Message) -> Message | None:
         """
@@ -263,7 +273,9 @@ class MessageIndex:
         :returns: any message replaced (by same hdr)
         """
 
-        msgs = self._delete_from(hdr=msg._pkt._hdr)
+        _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
+        if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
+            msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
 
         sql = """
             INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
@@ -274,7 +286,7 @@ class MessageIndex:
             sql,
             (
                 msg.dtm,
-                msg.verb,
+                str(msg.verb),
                 msg.src.id,
                 msg.dst.id,
                 msg.code,
@@ -284,7 +296,7 @@ class MessageIndex:
             ),
         )
 
-        return msgs[0] if msgs else None
+        return _old_msgs[0] if _old_msgs else None
 
     def rem(
         self, msg: Message | None = None, **kwargs: str
@@ -382,7 +394,7 @@ class MessageIndex:
         self._cu.execute(sql, parameters)
 
         lst: list[Message] = []
-        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"
+        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"  # for debug
         for row in self._cu.fetchall():
             ts: DtmStrT = row[0].isoformat(timespec="microseconds")
             # print(
@@ -425,7 +437,7 @@ class MessageIndex:
             # _msgs stamp format: 2022-05-02T10:02:02.744905
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
-            else:  # happens in tests with artificial msg from heat
+            else:  # happens in tests with dummy msg from heat init
                 _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
         # return tuple(self._msgs[row[0]] for row in self._cu.fetchall())

@@ -123,7 +123,7 @@ class Frame:
         if not strict_checking:
             return
 
-        try:  # Strict checking: helps users avoid to constructing bad commands
+        try:  # Strict checking: helps users avoid constructing bad commands
             if addrs[0] == NON_DEV_ADDR:
                 assert self.verb == I_, "wrong verb or dst addr should be present"
             elif addrs[2] == NON_DEV_ADDR:
@@ -138,7 +138,7 @@ class Frame:
             raise exc.PacketInvalid(f"Bad frame: Invalid address set: {err}") from err
 
     def __repr__(self) -> str:
-        """Return a unambiguous string representation of this object."""
+        """Return an unambiguous string representation of this object."""
 
         if self._repr is None:
             self._repr = " ".join(  # type: ignore[unreachable]

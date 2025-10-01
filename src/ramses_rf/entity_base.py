@@ -124,15 +124,10 @@ class _Entity:
                 "(consider adjusting device_id filters)"
             )  # TODO: take whitelist into account
 
-    def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
+    def _handle_msg(self, msg: Message) -> None:
         """Store a msg in _msgs[code] (only latest I/RP) and in central MessageIndex."""
 
-        raise NotImplementedError
-
-        # super()._handle_msg(msg)  # store the message in the database
-
-        # if self._gwy.hgi and msg.src.id != self._gwy.hgi.id:
-        #     self.deprecate_device(msg._pkt, reset=True)
+        raise NotImplementedError  # to be handled by implementing classes
 
     # FIXME: this is a mess - to deprecate for async version?
     def _send_cmd(self, cmd: Command, **kwargs: Any) -> asyncio.Task | None:
@@ -206,7 +201,6 @@ class _MessageDB(_Entity):
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
         """Store a msg in the DBs.
-
         Uses SQLite MessageIndex since 0.51.7
         """
 
@@ -215,10 +209,10 @@ class _MessageDB(_Entity):
             or (msg.dst.id == self.id[:9] and msg.verb != RQ)
             or (msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9)
         ):
-            return  # ZZZ: don't store these
+            return  # don't store the rest
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
-            self._gwy.msg_db.add(msg)  # only an index on _msgs_
+            self._gwy.msg_db.add(msg)  # add to index on all _msgs_
             # ignore any replaced message that might be returned
         else:
             raise NotImplementedError
@@ -236,7 +230,7 @@ class _MessageDB(_Entity):
         #     # Same, 1 level deeper
         #     self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
         # else:
-        #     # Same, replacing previous message
+        #     # Same, replacing the previous message
         #     self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
@@ -613,6 +607,9 @@ class _MessageDB(_Entity):
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
+        # sql2 = """
+        #     SELECT dtm from messages WHERE (src = ? OR dst = ?)
+        # """
         return {  # ? use ctx (context) instead of just the address?
             m.code: m for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9]))
         }  # e.g. 01:123456_HW
