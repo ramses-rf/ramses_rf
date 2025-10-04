@@ -923,8 +923,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
-            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk LIKE '{SZ_FAN_MODE}')
+            AND (code = '22F4' OR code = '31D9' OR code = '31DA')
+            AND (plk LIKE '%{SZ_FAN_MODE}%')
         """
         res_mode: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
@@ -933,8 +933,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
-            AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk LIKE '{SZ_FAN_RATE}')
+            AND (code = '22F4' OR code = '31D9' OR code = '31DA')
+            AND (plk LIKE '%{SZ_FAN_RATE}%')
         """
         res_rate: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
