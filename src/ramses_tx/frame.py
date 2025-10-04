@@ -387,7 +387,7 @@ class Frame:
 
     @property
     def _hdr(self) -> HeaderT:  # incl. self._ctx
-        """Return the QoS header (fingerprint) of this packet (i.e. device_id/code/hdr).
+        """Return the QoS header (fingerprint) of this packet (i.e. device_id|code|verb).
 
         Used for QoS (timeouts, retries), callbacks, etc.
         """

@@ -19,7 +19,7 @@ from ramses_tx.ramses import (
 
 
 def test_code_counts() -> None:
-    """All known command codes should be in the schema & vice-versa."""
+    """All known command codes should be in the schema & vice versa."""
 
     # assert len(Code) == len(CODES_SCHEMA)
     assert not [c for c in CODES_SCHEMA if c not in Code]
