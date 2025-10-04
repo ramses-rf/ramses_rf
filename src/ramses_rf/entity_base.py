@@ -487,11 +487,11 @@ class _MessageDB(_Entity):
                 code_par = "*"
             elif isinstance(code, tuple):
                 for cd in code:
-                    code_par += cd + " OR code = "
-                code_par = code_par[:-11]  # trim last OR
+                    code_par += f"'{str(cd)}' OR code = '"
+                code_par = code_par[:-13]  # trim last OR
             else:
                 code_par = str(code)
-            key = "*" if key is None else "%" + key + "%"
+            key = "*" if key is None else f"%{key}%"
 
             # SQLite query on MessageIndex
             sql = """
@@ -561,7 +561,7 @@ class _MessageDB(_Entity):
         if sql and self._gwy.msg_db:
             # example query:
             # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
-            # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)""" = 2 params
+            # AND (code = '31DA' OR ...) AND (plk LIKE '%{SZ_FAN_INFO}%' OR ...)""" = 2 params
             for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
                 _pl = self._msgs_[Code(rec[0])].payload
                 # add payload dict to res
