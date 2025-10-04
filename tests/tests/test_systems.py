@@ -158,7 +158,7 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
                 AND (src = ? OR dst = ?) """
             assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:9], dev.id[:9]))) == len(
                 dev._msgs_
-            ), dev
+            ), f"{dev} qry != _msgs_"
 
 
 async def test_shuffle_from_log_file(dir_name: Path) -> None:

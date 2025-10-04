@@ -242,13 +242,13 @@ class _MessageDB(_Entity):
          - None (not determinable, rare)
         """
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
-        return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
-        # msg_list: list[Message] = []
-        # key_list = self._msg_dev_qry()
-        # if key_list:
-        #     for k in key_list:
-        #         msg_list.append(self._msgs[k])
-        # return msg_list
+        # return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
+        msg_listqry: list[Message] = []
+        key_list = self._msg_dev_qry()
+        if key_list:
+            for k in key_list:
+                msg_listqry.append(self._msgs[k])
+        return msg_listqry
 
     def _add_record(
         self, address: Address, code: Code | None = None, verb: str = " I"
