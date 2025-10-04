@@ -172,10 +172,7 @@ class _Entity:
 
 
 class _MessageDB(_Entity):
-    """Maintain/utilize an entity's state database.
-
-    Deprecated since 0.51.6, use SQLite in src/ramses_rf/database.py instead
-    """
+    """Maintain/utilize an entity's state database."""
 
     _gwy: Gateway
     ctl: Controller
@@ -192,11 +189,11 @@ class _MessageDB(_Entity):
 
         # Deprecated as of 0.51.7 Use SQLite MessageIndex instead, see ramses_rf/database.py
         # _msgz_ is only used in this module. Note:
-        # _msgz (created from _msgs_) also in: client, base, device.heat
+        # _msgz (now created from _msgs_) also in: client, base, device.heat
         # TODO(eb): remove after 0.51.7
-        self._msgz_: dict[
-            Code, dict[VerbT, dict[bool | str | None, Message]]
-        ] = {}  # code/verb/ctx
+        # self._msgz_: dict[
+        #     Code, dict[VerbT, dict[bool | str | None, Message]]
+        # ] = {}  # code/verb/ctx
         # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
@@ -245,13 +242,13 @@ class _MessageDB(_Entity):
          - None (not determinable, rare)
         """
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
-        # was:return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
-        msg_list: list[Message] = []
-        key_list = self._msg_dev_qry()
-        if key_list:
-            for k in key_list:
-                msg_list.append(self._msgs[k])
-        return msg_list
+        return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
+        # msg_list: list[Message] = []
+        # key_list = self._msg_dev_qry()
+        # if key_list:
+        #     for k in key_list:
+        #         msg_list.append(self._msgs[k])
+        # return msg_list
 
     def _add_record(
         self, address: Address, code: Code | None = None, verb: str = " I"
@@ -287,9 +284,9 @@ class _MessageDB(_Entity):
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
-            with contextlib.suppress(KeyError):
-                # TODO remove all refs to _msgz_ / _msgz deprecated, will be removed in Q1 2026
-                del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
+            # with contextlib.suppress(KeyError):
+            #     # TODO remove all refs to _msgz_ / _msgz deprecated, will be removed in Q1 2026
+            #     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
@@ -322,7 +319,7 @@ class _MessageDB(_Entity):
         # if msg._pkt._hdr != hdr:
         #     raise LookupError
 
-        # return msg
+        return None
 
     def _msg_flag(self, code: Code, key: str, idx: int) -> bool | None:
         if flags := self._msg_value(code, key=key):
@@ -501,7 +498,7 @@ class _MessageDB(_Entity):
                 SELECT dtm, code from messages WHERE verb in (' I', 'RP')
                 AND (src = ? OR dst = ?)
                 AND (code = ?)
-                AND (plk like ?)
+                AND (plk LIKE ?)
             """
             latest: dt = dt(0, 0, 0)
             res = None
@@ -564,10 +561,9 @@ class _MessageDB(_Entity):
         if sql and self._gwy.msg_db:
             # example query:
             # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
-            # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)"""
+            # AND (code = Code._31DA OR ...) AND (plk like %SZ_FAN_INFO% OR ...)""" = 2 params
             for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
                 _pl = self._msgs_[Code(rec[0])].payload
-
                 # add payload dict to res
                 res.append(_pl)  # only if newer, handled by MessageIndex
         return res
@@ -623,13 +619,13 @@ class _MessageDB(_Entity):
         """
         if not self._gwy.msg_db:
             _LOGGER.warning("Missing MessageIndex")
-            # return self._msgz_  # deprecated since 0.51.7
+            # return self._msgz_  # all verbs! deprecated since 0.51.7
             raise NotImplementedError
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
 
-        for msg in self._msgs.values():
+        for msg in self._msgs.values():  # only verbs I, RP
             if msg.code not in msgs_1:
                 msgs_1[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
             elif msg.verb not in msgs_1[msg.code]:

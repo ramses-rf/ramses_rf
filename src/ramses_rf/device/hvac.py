@@ -426,7 +426,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     Also handles 2411 parameter messages for configuration.
     Since 2411 is not supported by all vendors, discovery is used to determine if it is supported.
     Since more than 1 different parameters can be sent on 2411 messages,
-    we will process these in the dedicated _handle_2411_message method.
+    we process these in the dedicated _handle_2411_message method.
     """
 
     # Itho Daalderop (NL)
@@ -555,7 +555,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         It handles parameter value normalization and validation.
 
         :param msg: The incoming 2411 message
-        :type msg: Message
+        :type msg: Message to process
         """
         if not hasattr(msg, "payload") or not isinstance(msg.payload, dict):
             _LOGGER.debug("Invalid 2411 message format: %s", msg)
@@ -577,6 +577,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         self._msgs[Code._2411] = msg
         # For the composite key, we need to bypass type checking
         self._msgs[key] = msg  # type: ignore[index]
+        # this adds specials keys to _msgs, but _msgs will be rebuilt from msg_db when called
 
         _LOGGER.debug(
             "Updated 2411 parameter %s = %s (was: %s) for %s",
@@ -938,21 +939,21 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         """
 
         # Use SQLite query on MessageIndex
-        sql = """
+        sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
             AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk like %SZ_FAN_MODE%)
+            AND (plk LIKE '{SZ_FAN_MODE}')
         """
         res_mode: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
         _LOGGER.info(f"{res_mode} # FAN_MODE FETCHED from MessageIndex")  # DEBUG
 
-        sql = """
+        sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
             AND (code = _Code._22F4 OR code = Code._31D9 OR code = Code._31DA)
-            AND (plk like %SZ_FAN_RATE%)
+            AND (plk LIKE '{SZ_FAN_RATE}')
         """
         res_rate: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
