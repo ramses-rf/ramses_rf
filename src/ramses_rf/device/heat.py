@@ -144,7 +144,7 @@ class Actuator(DeviceHeat):  # 3EF0, 3EF1 (for 10:/13:)
         if self._gwy.config.disable_discovery:
             return
 
-        # TODO: why are we doing this here? Should simply use dscovery poller!
+        # TODO: why are we doing this here? Should simply use discovery poller!
         if msg.code == Code._3EF0 and msg.verb == I_ and not self.is_faked:
             # lf._send_cmd(Command.get_relay_demand(self.id), qos=QOS_LOW)
             self._send_cmd(
@@ -429,7 +429,7 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
     def _handle_msg(self, msg: Message) -> None:
         super()._handle_msg(msg)
 
-        # Several assumptions ar emade, regarding 000C pkts:
+        # Several assumptions are made, regarding 000C pkts:
         # - UFC bound only to CTL (not, e.g. SEN)
         # - all circuits bound to the same controller
 
@@ -635,7 +635,7 @@ def _to_msg_id(data_id: OtDataId) -> MsgId:
     return f"{data_id:02X}"
 
 
-# NOTE: config.use_native_ot should enforces sends, but not reads from _msgz DB
+# NOTE: config.use_native_ot should enforce sends, but not reads from _msgz DB
 class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
     """The OTB class, specifically an OpenTherm Bridge (R8810A Bridge)."""
 
@@ -668,7 +668,13 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
 
         self._child_id = FC  # NOTE: domain_id
 
-        self._msgz[Code._3220] = {RP: {}}  # _msgz[Code._3220][RP][msg_id]
+        # TODO(eb): cleanup
+        # was: self._msgz[Code._3220] = {RP: {}}
+
+        # fix src/ramses_rf/database.py _add_record try/except when activating next line
+        # self._add_record(address=self.addr, code=Code._3220, verb="RP")  # << essential? rollback
+        # adds an empty RP opentherm_msg to the SQLite MessageIndex with code 3220
+        # causes exc when fetching ALL, when no "real"" msg was added to _msgs_. We skip those.
 
         # lf._use_ot = self._gwy.config.use_native_ot
         self._msgs_ot: dict[MsgId, Message] = {}

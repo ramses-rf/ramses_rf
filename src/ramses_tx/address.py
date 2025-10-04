@@ -195,7 +195,7 @@ def pkt_addrs(addr_fragment: str) -> tuple[Address, Address, Address, Address, A
 
     returns: src_addr, dst_addr, addr_0, addr_1, addr_2
 
-    Will raise an InvalidAddrSetError is the address fields are not valid.
+    Will raise an InvalidAddrSetError if the address fields are not valid.
     """
     # for debug: print(pkt_addrs.cache_info())
 

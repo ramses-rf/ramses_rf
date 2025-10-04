@@ -303,9 +303,7 @@ async def _test_flow_10x(
 
     # # Step S3: Supplicant sends an Addenda (optional)
     # msg = Message(Packet(dt.now(), "000 " + pkt_flow_expected[_RATIFY]))
-    # supplicant._msgz[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
-
-    # # TODO: need to finish this
+    # gwy_r.msg_db.add(msg)  # (for supplicant only?)
     # pkt = await supplicant._context._cast_addenda()
     # await assert_context_state(supplicant, _BindStates.HAS_BOUND_SUPP)
     # assert pkt is not None

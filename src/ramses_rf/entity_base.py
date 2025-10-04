@@ -15,7 +15,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Final
 
 from ramses_rf.helpers import schedule_task
-from ramses_tx import Priority, QosParams
+from ramses_tx import Address, Priority, QosParams
 from ramses_tx.address import ALL_DEVICE_ID
 from ramses_tx.const import MsgId
 from ramses_tx.opentherm import OPENTHERM_MESSAGES
@@ -95,7 +95,7 @@ class _Entity:
     """The ultimate base class for Devices/Zones/Systems.
 
     This class is mainly concerned with:
-     - if the entity can Rx packets (e.g. can the HGI send it an RQ)
+     - if the entity can Rx packets (e.g. can the HGI send it an RQ?)
     """
 
     _SLUG: str = None  # type: ignore[assignment]
@@ -124,15 +124,10 @@ class _Entity:
                 "(consider adjusting device_id filters)"
             )  # TODO: take whitelist into account
 
-    def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
-        """Store a msg in _msgs[code] (only latest I/RP) and _msgz[code][verb][ctx]."""
+    def _handle_msg(self, msg: Message) -> None:
+        """Store a msg in _msgs[code] (only latest I/RP) and in central MessageIndex."""
 
-        raise NotImplementedError
-
-        # super()._handle_msg(msg)  # store the message in the database
-
-        # if self._gwy.hgi and msg.src.id != self._gwy.hgi.id:
-        #     self.deprecate_device(msg._pkt, reset=True)
+        raise NotImplementedError  # to be handled by implementing classes
 
     # FIXME: this is a mess - to deprecate for async version?
     def _send_cmd(self, cmd: Command, **kwargs: Any) -> asyncio.Task | None:
@@ -183,44 +178,60 @@ class _MessageDB(_Entity):
     ctl: Controller
     tcs: Evohome
 
-    # These attr used must be in this class, and the Entity base class
+    # These attr used must be in this class
     _z_id: DeviceIdT
-    _z_idx: DevIndexT | None  # e.g. 03, HW, is None for CTL, TCS
+    _z_idx: DevIndexT | None  # e.g. 03, HW. Is None for CTL, TCS.
 
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
-        self._msgz_: dict[
-            Code, dict[VerbT, dict[bool | str | None, Message]]
-        ] = {}  # code/verb/ctx, should be code/ctx/verb?
+
+        # Deprecated as of 0.51.7 Use SQLite MessageIndex instead, see ramses_rf/database.py
+        # _msgz_ is only used in this module. Note:
+        # _msgz (now created from _msgs_) also in: client, base, device.heat
+        # TODO(eb): remove after 0.51.7
+        # self._msgz_: dict[
+        #     Code, dict[VerbT, dict[bool | str | None, Message]]
+        # ] = {}  # code/verb/ctx
+        # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
     def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
-        """Store a msg in the DBs."""
+        """Store a msg in the DBs.
+        Uses SQLite MessageIndex since 0.51.7
+        """
 
         if not (
             msg.src.id == self.id[:9]
             or (msg.dst.id == self.id[:9] and msg.verb != RQ)
             or (msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9)
         ):
-            return  # ZZZ: don't store these
+            return  # don't store the rest
 
-        # Store msg by code in flat self._msgs_ Dict (deprecated since 0.50.3)
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+            self._gwy.msg_db.add(msg)  # add to index on all _msgs_
+            # ignore any replaced message that might be returned
+        else:
+            raise NotImplementedError
+
+        # Store msg by code in flat self._msgs_ dict (stores all latest payloads by code)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
-        if msg.code not in self._msgz_:
-            # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
-            self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
-        elif msg.verb not in self._msgz_[msg.code]:
-            # Same, 1 level deeper
-            self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
-        else:
-            # Same, replacing previous message
-            self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
+        # TODO(eb): remove all refs to _msgz_ from code base
+        # store msg in nested dict
+        # if msg.code not in self._msgz_:
+        #     # Store msg verb + ctx by code in nested self._msgz_ dict (deprecated)
+        #     self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
+        # elif msg.verb not in self._msgz_[msg.code]:
+        #     # Same, 1 level deeper
+        #     self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
+        # else:
+        #     # Same, replacing the previous message
+        #     self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
-    def _msg_db(self) -> list[Message]:  # flattened version of _msgz[code][verb][index]
+    def _msg_list(self) -> list[Message]:
         """Return a flattened version of _msgz[code][verb][index].
 
         The idx is one of:
@@ -230,7 +241,25 @@ class _MessageDB(_Entity):
          - False (no idx, is usu. 00),
          - None (not determinable, rare)
         """
-        return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
+        # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
+        # return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
+        msg_listqry: list[Message] = []
+        key_list = self._msg_dev_qry()
+        if key_list:
+            for k in key_list:
+                msg_listqry.append(self._msgs[k])
+        return msg_listqry
+
+    def _add_record(
+        self, address: Address, code: Code | None = None, verb: str = " I"
+    ) -> None:
+        """Add a (dummy) record to the central SQLite MessageIndex."""
+        # used by heat.py init
+        if self._gwy.msg_db:
+            self._gwy.msg_db.add_record(str(address), code=str(code), verb=verb)
+        else:
+            _LOGGER.warning("Missing MessageIndex")
+            raise NotImplementedError
 
     def _delete_msg(self, msg: Message) -> None:  # FIXME: this is a mess
         """Remove the msg from all state databases."""
@@ -255,39 +284,42 @@ class _MessageDB(_Entity):
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
-            with contextlib.suppress(KeyError):
-                del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
+            # with contextlib.suppress(KeyError):
+            #     # TODO remove all refs to _msgz_ / _msgz deprecated, will be removed in Q1 2026
+            #     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
-        """Return a msg, if any, that matches a header."""
+        """Return a msg, if any, that matches a given header."""
 
-        # if self._gwy.msg_db:  # central SQLite MessageIndex
-        #     msgs = self._gwy.msg_db.get(hdr=hdr)
-        #     return msgs[0] if msgs else None
+        if self._gwy.msg_db:  # central SQLite MessageIndex
+            msgs = self._gwy.msg_db.get(hdr=hdr)
+            # only 1 result expected since hdr is a unique key in msg_db
+            return msgs[0] if msgs else None
 
-        msg: Message
-        code: Code
-        verb: VerbT
+        # TODO(eb): the rest of this method can go since we moved to MessageIndex
+        # msg: Message
+        # code: Code
+        # verb: VerbT
+        #
+        # # _ is device_id
+        # code, verb, _, *args = hdr.split("|")  # type: ignore[assignment]
+        #
+        # try:
+        #     if args and (ctx := args[0]):  # ctx may == True
+        #         msg = self._msgz[code][verb][ctx]
+        #     elif False in self._msgz[code][verb]:
+        #         msg = self._msgz[code][verb][False]
+        #     elif None in self._msgz[code][verb]:
+        #         msg = self._msgz[code][verb][None]
+        #     else:
+        #         return None
+        # except KeyError:
+        #     return None
+        #
+        # if msg._pkt._hdr != hdr:
+        #     raise LookupError
 
-        # _ is device_id
-        code, verb, _, *args = hdr.split("|")  # type: ignore[assignment]
-
-        try:
-            if args and (ctx := args[0]):  # ctx may == True
-                msg = self._msgz[code][verb][ctx]
-            elif False in self._msgz[code][verb]:
-                msg = self._msgz[code][verb][False]
-            elif None in self._msgz[code][verb]:
-                msg = self._msgz[code][verb][None]
-            else:
-                return None
-        except KeyError:
-            return None
-
-        if msg._pkt._hdr != hdr:
-            raise LookupError
-
-        return msg
+        return None
 
     def _msg_flag(self, code: Code, key: str, idx: int) -> bool | None:
         if flags := self._msg_value(code, key=key):
@@ -297,6 +329,14 @@ class _MessageDB(_Entity):
     def _msg_value(
         self, code: Code | Iterable[Code], *args: Any, **kwargs: Any
     ) -> dict | list | None:
+        """
+        Get the value from the database or from a Message object provided.
+
+        :param code: filter messages by Code or a tuple of codes (optional)
+        :param args: Message (optional)
+        :param kwargs: zone to filter on (optional)
+        :return: a dict containing key: value pairs, or a list of those
+        """
         if isinstance(code, str | tuple):  # a code or a tuple of codes
             return self._msg_value_code(code, *args, **kwargs)
         # raise RuntimeError
@@ -312,22 +352,40 @@ class _MessageDB(_Entity):
         key: str | None = None,
         **kwargs: Any,
     ) -> dict | list | None:
+        """
+        Query the message database using the SQLite index for the most recent
+        key, value pairs(s) for a given code.
+
+        :param code: filter messages by Code or a tuple of Codes, optional
+        :param verb: filter on I, RQ, RP, optional, only with a single Code
+        :param key: value keyword to retrieve, not with verb RQ
+        :param kwargs: not used for now
+        :return: a dict containing key: value pairs, or a list of those
+        """
         assert not isinstance(code, tuple) or verb is None, (
             f"Unsupported: using a tuple ({code}) with a verb ({verb})"
         )
 
         if verb:
+            if verb == "RQ":
+                # must be a single code
+                assert not isinstance(code, tuple) or verb is None, (
+                    f"Unsupported: using a keyword ({key}) with verb RQ. Ignoring key"
+                )
+                key = None
             try:
-                msgs = self._msgz[code][verb]
+                # msgs = self._msgz[code][verb] # deprecated since 0.51.7
+                lookup = Code(self._msg_qry_by_code_key(code, verb))
+                msg = self._msgs[lookup]
             except KeyError:
                 msg = None
-            else:
-                msg = max(msgs.values()) if msgs else None
+            # else:
+            # msg = max(msgs.values()) if msgs else None
         elif isinstance(code, tuple):
             msgs = [m for m in self._msgs.values() if m.code in code]
             msg = (
                 max(msgs) if msgs else None
-            )  # return highest value found in code:value pairs
+            )  # return highest = latest? value found in code:value pairs
         else:
             msg = self._msgs.get(code)
 
@@ -370,8 +428,10 @@ class _MessageDB(_Entity):
 
         assert (not domain_id and not zone_idx) or (msg_dict.get(idx) == val), (
             f"{msg_dict} < Coding error: key={idx}, val={val}"
-        )
+        )  # should not be there (BUG but it is when using SQLite MessageIndex)
 
+        if key == "*":  # from a SQLite wildcard query, return first/only k,v
+            return msg_dict
         if key:
             return msg_dict.get(key)
         return {
@@ -380,9 +440,146 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
+    # SQLite methods, since 0.51.7
+
+    def _msg_dev_qry(
+        self,
+        **kwargs: Any,
+    ) -> list[Code] | None:
+        """
+        Retrieve from the MessageIndex the Code keys involving this device.
+
+        :param kwargs: not used as of 0.51.7
+        :return: list of Codes or empty list when query returned empty
+        """
+        if self._gwy.msg_db:
+            # SQLite query on MessageIndex
+            sql = """
+                SELECT code from messages WHERE verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+            """
+            res: list[Code] = []
+
+            for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+                _LOGGER.debug("Fetched from index: %s", rec[0])
+                # Fetched from index: code 1FD4
+                res.append(Code(str(rec[0])))
+            return res
+        return None
+
+    def _msg_qry_by_code_key(
+        self,
+        code: Code | tuple[Code] | None = None,
+        key: str | None = None,
+        **kwargs: Any,
+    ) -> Code | None:
+        """
+        Retrieve from the MessageIndex the most current Code key for a code & keyword combination.
+
+        :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
+        :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
+        :param kwargs: not used as of 0.51.7
+        :return: Code of most recent query result message or None when query returned empty
+        """
+        if self._gwy.msg_db:
+            code_par: str = ""
+            if code is None:
+                code_par = "*"
+            elif isinstance(code, tuple):
+                for cd in code:
+                    code_par += f"'{str(cd)}' OR code = '"
+                code_par = code_par[:-13]  # trim last OR
+            else:
+                code_par = str(code)
+            key = "*" if key is None else f"%{key}%"
+
+            # SQLite query on MessageIndex
+            sql = """
+                SELECT dtm, code from messages WHERE verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+                AND (code = ?)
+                AND (plk LIKE ?)
+            """
+            latest: dt = dt(0, 0, 0)
+            res = None
+
+            for rec in self._gwy.msg_db.qry_field(
+                sql, (self.id[:9], self.id[:9], code_par, key)
+            ):
+                _LOGGER.debug("Fetched from index: %s", rec)
+                if rec[0] > latest:  # dtm, only use most recent
+                    res = Code(rec[1])
+                    latest = rec[0]
+            return res
+        return None
+
+    def _msg_value_qry_by_code_key(
+        self,
+        code: Code | None = None,
+        key: str | None = None,
+        **kwargs: Any,
+    ) -> str | float | None:
+        """
+        Retrieve from the _msgs dict the most current value of a specific code & keyword combination
+        or the first key's value when no key is specified.
+
+        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY
+        :param code: (optional) a single message Code to use, e.g. 31DA
+        :param kwargs: not used as of 0.51.7
+        :return: a single string or float value or None when qry returned empty
+        """
+        val_msg: dict | list | None = None
+        val: object = None
+        cd: Code | None = self._msg_qry_by_code_key(code, key)
+        if cd is None or cd not in self._msgs:
+            _LOGGER.warning("Code %s not in device messages", cd)
+        else:
+            val_msg = self._msg_value_msg(
+                self._msgs_[cd],
+                key=key,  # key can be wildcard *
+            )
+        if val_msg:
+            val = val_msg[0]
+            _LOGGER.debug("Extracted val %s for code %s, key %s", val, code, key)
+
+        if isinstance(val, float):
+            return float(val)
+        else:
+            return str(val)
+
+    def _msg_qry(self, sql: str) -> list[dict]:
+        """
+        SQLite custom query for an entity's stored payloads using the full MessageIndex.
+        See ramses_rf/database.py
+
+        :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
+        :return: list of payload dicts from the selected messages, or an empty list
+        """
+        # not used yet as of 0.51.7
+
+        res: list[dict] = []
+        if sql and self._gwy.msg_db:
+            # example query:
+            # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
+            # AND (code = '31DA' OR ...) AND (plk LIKE '%{SZ_FAN_INFO}%' OR ...)""" = 2 params
+            for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+                _pl = self._msgs_[Code(rec[0])].payload
+                # add payload dict to res
+                res.append(_pl)  # only if newer, handled by MessageIndex
+        return res
+
+    def _msg_count(self, sql: str) -> int:
+        """
+        Get the number of messages in a query result.
+
+        :param sql: custom SQLite query on MessageIndex.
+        :return: amount of messages in entity's database, 0 for no results
+        """
+        return len(self._msg_qry(sql))
+
     @property
     def traits(self) -> dict:
-        """Return the codes seen by the entity."""
+        """Get the codes seen by the entity."""
 
         codes = {
             k: (CODES_SCHEMA[k][SZ_NAME] if k in CODES_SCHEMA else None)
@@ -395,16 +592,20 @@ class _MessageDB(_Entity):
     @property
     def _msgs(self) -> dict[Code, Message]:
         """
-        Get a flat Dict af all I/RP messages logged with this device as src or dst.
+        Get a flat dict af all I/RP messages logged with this device as src or dst.
 
-        :return: nested Dict of messages by Code
+        :return: nested dict of messages by Code
         """
-        if not self._gwy.msg_db:  # no central SQLite MessageIndex
+        if not self._gwy.msg_db:
+            # no central SQLite MessageIndex, deprecated since 0.51.7
             return self._msgs_
 
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
+        # sql2 = """
+        #     SELECT dtm from messages WHERE (src = ? OR dst = ?)
+        # """
         return {  # ? use ctx (context) instead of just the address?
             m.code: m for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9]))
         }  # e.g. 01:123456_HW
@@ -412,17 +613,19 @@ class _MessageDB(_Entity):
     @property
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
         """
-        Get a nested Dict of all I/RP messages logged with this device as src or dst.
+        Get a nested dict of all I/RP messages logged with this device as either src or dst.
 
-        :return: Dict of messages, nested by Code, Verb, Context
+        :return: dict of messages involving this device, nested by Code, Verb, Context
         """
-        if not self._gwy.msg_db:  # no central SQLite MessageIndex
-            return self._msgz_
+        if not self._gwy.msg_db:
+            _LOGGER.warning("Missing MessageIndex")
+            # return self._msgz_  # all verbs! deprecated since 0.51.7
+            raise NotImplementedError
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
 
-        for msg in self._msgs.values():
+        for msg in self._msgs.values():  # only verbs I, RP
             if msg.code not in msgs_1:
                 msgs_1[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
             elif msg.verb not in msgs_1[msg.code]:
@@ -474,8 +677,8 @@ class _Discovery(_MessageDB):
         def _to_data_id(msg_id: MsgId | str) -> OtDataId:
             return int(msg_id, 16)  # type: ignore[return-value]
 
-        def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
-            return f"{data_id:02X}"  # type: ignore[return-value]
+        # def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
+        #     return f"{data_id:02X}"  # type: ignore[return-value]
 
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
@@ -573,7 +776,9 @@ class _Discovery(_MessageDB):
 
     async def discover(self) -> None:
         def find_latest_msg(hdr: HeaderT, task: dict) -> Message | None:
-            """Return the latest message for a header from any source (not just RPs)."""
+            """
+            :return: the latest message for a header from any source (not just RPs).
+            """
             msgs: list[Message] = [
                 m
                 for m in [self._get_msg_by_hdr(hdr[:5] + v + hdr[7:]) for v in (I_, RP)]
@@ -895,7 +1100,7 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
             if SZ_ZONE_IDX not in msg.payload:
                 return
 
-            if isinstance(self, Device):  # FIXME: a mess...
+            if isinstance(self, Device):  # FIXME: a mess... see issue ramses_cc #249
                 # the following is a mess - may just be better off deprecating it
                 if self.type in DEV_TYPE_MAP.HEAT_ZONE_ACTUATORS:
                     self.set_parent(msg.dst, child_id=msg.payload[SZ_ZONE_IDX])

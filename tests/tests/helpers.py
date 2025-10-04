@@ -13,6 +13,7 @@ import pytest
 import voluptuous as vol
 
 from ramses_rf import Gateway
+from ramses_rf.database import MessageIndex
 from ramses_rf.helpers import shrink
 from ramses_rf.schemas import SCH_GLOBAL_CONFIG, SCH_GLOBAL_SCHEMAS
 from ramses_tx.schemas import SCH_GLOBAL_TRAITS_DICT
@@ -44,6 +45,7 @@ async def gwy() -> AsyncGenerator[Gateway, None]:  # NOTE: async to get running 
     """Return a vanilla system (with a known, minimal state)."""
     gwy = Gateway("/dev/null", config={})
     gwy._disable_sending = True
+    gwy.msg_db = MessageIndex()  # required to add heat dummy 3220 msg
     try:
         yield gwy
     finally:

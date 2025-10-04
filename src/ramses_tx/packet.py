@@ -104,7 +104,7 @@ class Packet(Frame):
         return f"{dtm} ... {self}{hdr}"
 
     def __str__(self) -> str:
-        """Return a brief readable string representation of this object."""
+        """Return a brief readable string representation of this object aka 'header'."""
         # e.g.: 000A|RQ|01:145038|08
         return super().__repr__()  # TODO: self._hdr
 

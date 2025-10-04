@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import NewType, TypedDict
 
-from ramses_tx import Message
+from ramses_tx import NON_DEV_ADDR, Message
 
 DtmStrT = NewType("DtmStrT", str)
 MsgDdT = OrderedDict[DtmStrT, Message]
@@ -24,6 +24,7 @@ class Params(TypedDict):
     code: str | None
     ctx: str | None
     hdr: str | None
+    plk: str | None
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,21 +43,52 @@ def _setup_db_adapters() -> None:
         """Convert ISO 8601 datetime to datetime.datetime object."""
         return dt.fromisoformat(val.decode())
 
-    sqlite3.register_converter("dtm", convert_datetime)
+    sqlite3.register_converter("DTM", convert_datetime)
+
+
+def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type-arg]
+    """
+    Copy payload keys for fast query check.
+
+    :param parsed_payload: pre-parsed message payload dict
+    :return: string of payload keys, separated by the | char
+    """
+
+    def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
+        _k: str = "|"
+        for k, v in ppl.items():
+            if v is not None:  # ignore keys with None value
+                _k += k + "|"
+        return _k
+
+    if isinstance(parsed_payload, list):
+        keys: str = ""
+        for d in parsed_payload:
+            keys += append_keys(d)
+        return keys
+    elif isinstance(parsed_payload, dict):
+        return append_keys(parsed_payload)
+    return "|"  # type: ignore[unreachable]
 
 
 class MessageIndex:
-    """A simple in-memory SQLite3 database for indexing messages."""
+    """A simple in-memory SQLite3 database for indexing RF messages.
+    Index holds the latest message to & from all devices by header
+    (example of a hdr: 000C|RP|01:223036|0208)."""
 
     def __init__(self) -> None:
         """Instantiate a message database/index."""
 
         self._msgs: MsgDdT = OrderedDict()
 
-        self._cx = sqlite3.connect(":memory:")  # Connect to a SQLite DB in memory
+        # Connect to a SQLite DB in memory
+        self._cx = sqlite3.connect(
+            ":memory:", detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        )
+        # detect_types should retain dt type on store/retrieve
         self._cu = self._cx.cursor()  # Create a cursor
 
-        _setup_db_adapters()  # dtm adapter/converter
+        _setup_db_adapters()  # DTM adapter/converter
         self._setup_db_schema()
 
         self._lock = asyncio.Lock()
@@ -98,24 +130,26 @@ class MessageIndex:
         Fields:
 
         - dtm  message timestamp
-        - verb _I, RQ etc.
+        - verb " I", "RQ" etc.
         - src  message origin address
         - dst  message destination address
         - code packet code aka command class e.g. _0005, _31DA
         - ctx  message context, created from payload as index + extra markers (Heat)
         - hdr  packet header e.g. 000C|RP|01:223036|0208 (see: src/ramses_tx/frame.py)
+        - plk the keys stored in the parsed payload, separated by the | char
         """
 
-        self._cu.execute(
+        self._cu.execute(  # TABLE line 1 was: dtm TEXT(26) NOT NULL PRIMARY KEY,
             """
             CREATE TABLE messages (
-                dtm    TEXT(26) NOT NULL PRIMARY KEY,
+                dtm    DTM      NOT NULL PRIMARY KEY,
                 verb   TEXT(2)  NOT NULL,
                 src    TEXT(9)  NOT NULL,
                 dst    TEXT(9)  NOT NULL,
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT     NOT NULL,
-                hdr    TEXT     NOT NULL UNIQUE
+                hdr    TEXT     NOT NULL UNIQUE,
+                plk    TEXT     NOT NULL
             )
             """
         )
@@ -133,6 +167,11 @@ class MessageIndex:
         """Periodically remove stale messages from the index."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
+            """
+            Delete all messages from the using the MessageIndex older than a given delta.
+            :param dt_now: current timestamp
+            :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
+            """
             dtm = (dt_now - _cutoff).isoformat(timespec="microseconds")
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm => ?", (dtm,))
@@ -157,27 +196,30 @@ class MessageIndex:
             await housekeeping(self._last_housekeeping)
 
     def add(self, msg: Message) -> Message | None:
-        """Add a single message to the index.
-
-        Returns any message that was removed because it had the same header.
-
-        Throws a warning if there is a duplicate dtm.
-        """  # TODO: eventually, may be better to use SqlAlchemy
+        """
+        Add a single message to the MessageIndex.
+        Logs a warning if there is a duplicate dtm.
+        :returns: any message that was removed because it had the same header
+        """
+        # TODO: eventually, may be better to use SqlAlchemy
 
         dup: tuple[Message, ...] = tuple()  # avoid UnboundLocalError
         old: Message | None = None  # avoid UnboundLocalError
 
-        try:  # TODO: remove, or use only when source is a packet log?
+        try:  # TODO: remove this, or apply only when source is a real packet log?
             # await self._lock.acquire()
             dup = self._delete_from(  # HACK: because of contrived pkt logs
                 dtm=msg.dtm.isoformat(timespec="microseconds")
             )
             old = self._insert_into(msg)  # will delete old msg by hdr
 
-        except sqlite3.Error:  # UNIQUE constraint failed: ? messages.dtm (so: HACK)
+        except (
+            sqlite3.Error
+        ):  # UNIQUE constraint failed: ? messages.dtm or .hdr (so: HACK)
             self._cx.rollback()
 
         else:
+            # requires a timestamp reformat
             dtm: DtmStrT = msg.dtm.isoformat(timespec="microseconds")  # type: ignore[assignment]
             self._msgs[dtm] = msg
 
@@ -191,40 +233,86 @@ class MessageIndex:
 
         return old
 
-    def _insert_into(self, msg: Message) -> Message | None:
-        """Insert a message into the index (and return any message replaced by hdr)."""
-
-        msgs = self._delete_from(hdr=msg._pkt._hdr)
+    def add_record(self, src: str, code: str = "", verb: str = "") -> None:
+        """
+        Add a single record to the MessageIndex with timestamp now() and no Message contents.
+        """
+        # Used by OtbGateway init, via entity_base.py
+        dtm: DtmStrT = DtmStrT(dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S"))
+        hdr = f"{code}|{verb}|{src}|00"  # no contents
+        dup = self._delete_from(hdr=hdr)
 
         sql = """
-            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        try:
+            self._cu.execute(
+                sql,
+                (
+                    dtm,
+                    verb,
+                    src,
+                    src,
+                    code,
+                    "",
+                    hdr,
+                    "|",
+                ),
+            )
+        except (
+            sqlite3.Error
+        ):  # UNIQUE constraint hdr fails in tests/tests/test_schemas.py 103
+            self._cx.rollback()
+        if dup:  # expected when more than one heat system in schema
+            _LOGGER.debug("Skipped inserting record with duplicate hdr %s", hdr)
+
+    def _insert_into(self, msg: Message) -> Message | None:
+        """
+        Insert a message into the index.
+        :returns: any message replaced (by same hdr)
+        """
+
+        _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
+        if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
+            msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
+
+        sql = """
+            INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         self._cu.execute(
             sql,
             (
                 msg.dtm,
-                msg.verb,
+                str(msg.verb),
                 msg.src.id,
                 msg.dst.id,
                 msg.code,
                 msg._pkt._ctx,
                 msg._pkt._hdr,
+                payload_keys(msg.payload),
             ),
         )
 
-        return msgs[0] if msgs else None
+        return _old_msgs[0] if _old_msgs else None
 
     def rem(
         self, msg: Message | None = None, **kwargs: str
     ) -> tuple[Message, ...] | None:
         """Remove a set of message(s) from the index.
 
-        Returns any messages that were removed.
+        :returns: any messages that were removed.
         """
+        # print(f"SQL REM msg={msg} bool{bool(msg)} kwargs={kwargs} bool(kwargs)")
+        # SQL REM
+        # msg=||  02:044328 | | I | heat_demand | FC || {'domain_id': 'FC', 'heat_demand': 0.74}
+        # boolTrue
+        # kwargs={}
+        # bool(kwargs)
 
-        if bool(msg) ^ bool(kwargs):
+        if not bool(msg) ^ bool(kwargs):
             raise ValueError("Either a Message or kwargs should be provided, not both")
         if msg:
             kwargs["dtm"] = msg.dtm.isoformat(timespec="microseconds")
@@ -248,7 +336,8 @@ class MessageIndex:
         return msgs
 
     def _delete_from(self, **kwargs: str) -> tuple[Message, ...]:
-        """Remove message(s) from the index (and return any messages removed)."""
+        """Remove message(s) from the index.
+        :returns: any messages that were removed"""
 
         msgs = self._select_from(**kwargs)
 
@@ -260,7 +349,7 @@ class MessageIndex:
         return msgs
 
     def get(self, msg: Message | None = None, **kwargs: str) -> tuple[Message, ...]:
-        """Return a set of message(s) from the index."""
+        """Get a set of message(s) from the index."""
 
         if not (bool(msg) ^ bool(kwargs)):
             raise ValueError("Either a Message or kwargs should be provided, not both")
@@ -269,38 +358,92 @@ class MessageIndex:
 
         return self._select_from(**kwargs)
 
+    def contains(self, **kwargs: str) -> bool:
+        """
+        Check if the MessageIndex contains at least 1 record that matches the provided fields.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
+        :return: True if at least one message fitting the given conditions is present, False when qry returned empty
+        """
+        # adapted from _select_from()
+        sql = "SELECT dtm FROM messages WHERE "
+        sql += " AND ".join(f"{k} = ?" for k in kwargs)
+        self._cu.execute(sql, tuple(kwargs.values()))
+        return len(self._cu.fetchall()) > 0
+
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
-        """Select message(s) from the index (and return any such messages)."""
+        """Select message(s) from the index.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
+        :returns: a tuple of qualifying messages"""
 
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
 
         self._cu.execute(sql, tuple(kwargs.values()))
 
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+        return tuple(
+            self._msgs[row[0].isoformat(timespec="microseconds")]
+            for row in self._cu.fetchall()
+        )
 
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
-        """Return a set of message(s) from the index, given sql and parameters."""
+        """Get a tuple of messages from the index, given sql and parameters."""
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
 
         self._cu.execute(sql, parameters)
 
-        return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
+        lst: list[Message] = []
+        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"  # for debug
+        for row in self._cu.fetchall():
+            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            # print(
+            #     f"QRY Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
+            # )
+            # QRY Msg key raw: 2022-09-08 13:43:31.536862 Reformatted: 2022-09-08T13:43:31.536862 _msgs stamp format: 2022-09-08T13:40:52.447364
+            if ts in self._msgs:
+                lst.append(self._msgs[ts])
+            else:  # happens in tests with artificial msg from heat
+                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+        return tuple(lst)
+        # return tuple(self._msgs[row[0].isoformat(timespec="microseconds")] for row in self._cu.fetchall())
+
+    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
+        """
+        Get a list of message field values from the index, given sql and parameters.
+        """
+
+        if "SELECT" not in sql:
+            raise ValueError(f"{self}: Only SELECT queries are allowed")
+
+        self._cu.execute(sql, parameters)
+
+        return self._cu.fetchall()
 
     def all(self, include_expired: bool = False) -> tuple[Message, ...]:
-        """Return all messages from the index."""
+        """Get all messages from the index."""
 
-        # self._cu.execute("SELECT * FROM messages")
+        self._cu.execute("SELECT * FROM messages")
+
+        lst: list[Message] = []
+        # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"
+        for row in self._cu.fetchall():
+            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            # print(
+            #     f"ALL Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
+            # )
+            # ALL Msg key raw: 2022-05-02 10:02:02.744905
+            # Reformatted: 2022-05-02T10:02:02.744905
+            # _msgs stamp format: 2022-05-02T10:02:02.744905
+            if ts in self._msgs:
+                lst.append(self._msgs[ts])
+            else:  # happens in tests with dummy msg from heat init
+                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+        return tuple(lst)
         # return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
-        return tuple(
-            m for m in self._msgs.values() if include_expired or not m._expired
-        )
-
     def clr(self) -> None:
-        """Clear the message index (remove all messages)."""
+        """Clear the message index (remove indexes of all messages)."""
 
         self._cu.execute("DELETE FROM messages")
         self._cx.commit()
