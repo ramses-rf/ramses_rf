@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import Any, NewType, TypedDict
 
-from ramses_tx import Message
+from ramses_tx import Message  # NON_DEV_ADDR,
 
 DtmStrT = NewType("DtmStrT", str)
 MsgDdT = OrderedDict[DtmStrT, Message]
@@ -295,6 +295,9 @@ class MessageIndex:
             msg_pkt_ctx = msg._pkt._ctx  # can be None
 
         _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
+        # turn this off for now:
+        # if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
+        #     msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
 
         sql = """
             INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
