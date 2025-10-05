@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import NewType, TypedDict
 
-from ramses_tx import NON_DEV_ADDR, Message
+from ramses_tx import Message  # NON_DEV_ADDR,
 
 DtmStrT = NewType("DtmStrT", str)
 MsgDdT = OrderedDict[DtmStrT, Message]
@@ -193,6 +193,7 @@ class MessageIndex:
         while True:
             self._last_housekeeping = dt.now()
             await asyncio.sleep(3600)
+            _LOGGER.debug("Start next index housekeeping")
             await housekeeping(self._last_housekeeping)
 
     def add(self, msg: Message) -> Message | None:
@@ -228,7 +229,10 @@ class MessageIndex:
 
         if dup:
             _LOGGER.warning(
-                "Overwrote dtm for %s: %s (contrived log?)", msg._pkt._hdr, dup[0]._pkt
+                "Overwrote dtm (%s) for %s: %s (contrived log?)",
+                msg.dtm,
+                msg._pkt._hdr,
+                dup[0]._pkt,
             )
 
         return old
@@ -274,8 +278,9 @@ class MessageIndex:
         """
 
         _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
-        if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
-            msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
+        # turn this off for now:
+        # if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
+        #     msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
 
         sql = """
             INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
