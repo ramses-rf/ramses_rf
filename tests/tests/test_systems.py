@@ -151,8 +151,6 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
             #  +  '3150',  <<<<<<<< in 01:073976._msgs but NOT in dev._msgs_
             # ]
 
-            # assert sorted(dev._msgz) == sorted(dev._msgz_), dev  # dev._msgz_ no longer created
-            # for database.py: refactor 0.51.7
             sql = """
                 SELECT dtm from messages WHERE verb in (' I', 'RP')
                 AND (src = ? OR dst = ?) """

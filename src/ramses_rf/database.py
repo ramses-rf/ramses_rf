@@ -34,13 +34,13 @@ def _setup_db_adapters() -> None:
     """Set up the database adapters and converters."""
 
     def adapt_datetime_iso(val: dt) -> str:
-        """Adapt datetime.datetime to timezone-naive ISO 8601 datetime."""
+        """Adapt datetime.datetime to timezone-naive ISO 8601 datetime to match _msgs_ dtm keys."""
         return val.isoformat(timespec="microseconds")
 
     sqlite3.register_adapter(dt, adapt_datetime_iso)
 
     def convert_datetime(val: bytes) -> dt:
-        """Convert ISO 8601 datetime to datetime.datetime object."""
+        """Convert ISO 8601 datetime to datetime.datetime object to import dtm in msg_db."""
         return dt.fromisoformat(val.decode())
 
     sqlite3.register_converter("DTM", convert_datetime)
@@ -79,7 +79,9 @@ class MessageIndex:
     def __init__(self) -> None:
         """Instantiate a message database/index."""
 
-        self._msgs: MsgDdT = OrderedDict()
+        self._msgs: MsgDdT = (
+            OrderedDict()
+        )  # stores all messages for retrieval. When added?
 
         # Connect to a SQLite DB in memory
         self._cx = sqlite3.connect(
@@ -98,7 +100,7 @@ class MessageIndex:
         self.start()
 
     def __repr__(self) -> str:
-        return f"MessageIndex({len(self._msgs)} messages)"
+        return f"MessageIndex({len(self._msgs)} messages)"  # or msg_db.count()
 
     def start(self) -> None:
         """Start the housekeeper loop."""
@@ -127,7 +129,7 @@ class MessageIndex:
     def _setup_db_schema(self) -> None:
         """Set up the message database schema.
 
-        Fields:
+        messages TABLE Fields:
 
         - dtm  message timestamp
         - verb " I", "RQ" etc.
@@ -139,7 +141,7 @@ class MessageIndex:
         - plk the keys stored in the parsed payload, separated by the | char
         """
 
-        self._cu.execute(  # TABLE line 1 was: dtm TEXT(26) NOT NULL PRIMARY KEY,
+        self._cu.execute(
             """
             CREATE TABLE messages (
                 dtm    DTM      NOT NULL PRIMARY KEY,
@@ -147,7 +149,7 @@ class MessageIndex:
                 src    TEXT(9)  NOT NULL,
                 dst    TEXT(9)  NOT NULL,
                 code   TEXT(4)  NOT NULL,
-                ctx    TEXT     NOT NULL,
+                ctx    TEXT,
                 hdr    TEXT     NOT NULL UNIQUE,
                 plk    TEXT     NOT NULL
             )
@@ -172,7 +174,7 @@ class MessageIndex:
             :param dt_now: current timestamp
             :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
             """
-            dtm = (dt_now - _cutoff).isoformat(timespec="microseconds")
+            dtm = dt_now - _cutoff  # .isoformat(timespec="microseconds") < needed?
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm => ?", (dtm,))
             rows = self._cu.fetchall()
@@ -193,7 +195,7 @@ class MessageIndex:
         while True:
             self._last_housekeeping = dt.now()
             await asyncio.sleep(3600)
-            _LOGGER.debug("Start next index housekeeping")
+            _LOGGER.info("Starting next MessageIndex housekeeping")
             await housekeeping(self._last_housekeeping)
 
     def add(self, msg: Message) -> Message | None:
@@ -212,7 +214,7 @@ class MessageIndex:
             dup = self._delete_from(  # HACK: because of contrived pkt logs
                 dtm=msg.dtm.isoformat(timespec="microseconds")
             )
-            old = self._insert_into(msg)  # will delete old msg by hdr
+            old = self._insert_into(msg)  # will delete old msg by hdr (not dtm!)
 
         except (
             sqlite3.Error
@@ -234,6 +236,8 @@ class MessageIndex:
                 msg._pkt._hdr,
                 dup[0]._pkt,
             )
+        if old is not None:
+            _LOGGER.info("Old msg replaced: %s", old)
 
         return old
 
@@ -243,7 +247,8 @@ class MessageIndex:
         """
         # Used by OtbGateway init, via entity_base.py
         dtm: DtmStrT = DtmStrT(dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S"))
-        hdr = f"{code}|{verb}|{src}|00"  # no contents
+        hdr = f"{code}|{verb}|{src}|00"  # dummy record has no contents
+
         dup = self._delete_from(hdr=hdr)
 
         sql = """
@@ -259,26 +264,34 @@ class MessageIndex:
                     src,
                     src,
                     code,
-                    "",
+                    None,
                     hdr,
                     "|",
                 ),
             )
-        except (
-            sqlite3.Error
-        ):  # UNIQUE constraint hdr fails in tests/tests/test_schemas.py 103
+        except sqlite3.Error:
             self._cx.rollback()
+
         if dup:  # expected when more than one heat system in schema
-            _LOGGER.debug("Skipped inserting record with duplicate hdr %s", hdr)
+            _LOGGER.debug("Replaced record with same hdr: %s", hdr)
 
     def _insert_into(self, msg: Message) -> Message | None:
         """
         Insert a message into the index.
         :returns: any message replaced (by same hdr)
         """
+        assert msg._pkt._hdr is not None, "Skipping: Packet has no hdr: {msg._pkt}"
+
+        if msg._pkt._ctx is True:
+            msg_pkt_ctx = "True"
+        elif msg._pkt._ctx is False:
+            msg_pkt_ctx = "False"
+        else:
+            msg_pkt_ctx = msg._pkt._ctx  # can be None
 
         _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
-        # turn this off for now:
+
+        # don't turn on address substitution for now:
         # if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
         #     msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
 
@@ -295,7 +308,7 @@ class MessageIndex:
                 msg.src.id,
                 msg.dst.id,
                 msg.code,
-                msg._pkt._ctx,
+                msg_pkt_ctx,
                 msg._pkt._hdr,
                 payload_keys(msg.payload),
             ),
@@ -370,8 +383,10 @@ class MessageIndex:
         :return: True if at least one message fitting the given conditions is present, False when qry returned empty
         """
         # adapted from _select_from()
+
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
+
         self._cu.execute(sql, tuple(kwargs.values()))
         return len(self._cu.fetchall()) > 0
 
@@ -379,6 +394,12 @@ class MessageIndex:
         """Select message(s) from the index.
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages"""
+
+        # tweak ctx as stored in msg_db, inverse from _insert_into():
+        if kwargs["ctx"] is True:
+            kwargs["ctx"] = "True"  # str
+        elif kwargs["ctx"] is False:
+            kwargs["ctx"] = "False"  # str
 
         sql = "SELECT dtm FROM messages WHERE "
         sql += " AND ".join(f"{k} = ?" for k in kwargs)
@@ -405,13 +426,13 @@ class MessageIndex:
             # print(
             #     f"QRY Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
             # )
-            # QRY Msg key raw: 2022-09-08 13:43:31.536862 Reformatted: 2022-09-08T13:43:31.536862 _msgs stamp format: 2022-09-08T13:40:52.447364
+            # QRY Msg key raw: 2022-09-08 13:43:31.536862 Reformatted: 2022-09-08T13:43:31.536862
+            # _msgs stamp format: 2022-09-08T13:40:52.447364
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
             else:  # happens in tests with artificial msg from heat
                 _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
-        # return tuple(self._msgs[row[0].isoformat(timespec="microseconds")] for row in self._cu.fetchall())
 
     def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
         """
@@ -445,7 +466,6 @@ class MessageIndex:
             else:  # happens in tests with dummy msg from heat init
                 _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
-        # return tuple(self._msgs[row[0]] for row in self._cu.fetchall())
 
     def clr(self) -> None:
         """Clear the message index (remove indexes of all messages)."""

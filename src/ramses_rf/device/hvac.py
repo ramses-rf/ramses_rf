@@ -942,7 +942,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
-            AND (code = '22F4' OR code = '31D9' OR code = '31DA')
+            AND code in ('22F4', '31D9', '31DA')
             AND (plk LIKE '%{SZ_FAN_MODE}%')
         """
         res_mode: list = self._msg_qry(sql)
@@ -952,12 +952,15 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         sql = f"""
             SELECT code from messages WHERE verb in (' I', 'RP')
             AND (src = ? OR dst = ?)
-            AND (code = '22F4' OR code = '31D9' OR code = '31DA')
+            AND code in ('22F4', '31D9', '31DA')
             AND (plk LIKE '%{SZ_FAN_RATE}%')
         """
         res_rate: list = self._msg_qry(sql)
         # SQLite query on MessageIndex
-        _LOGGER.info(f"{res_rate} # FAN_RATE FETCHED from MessageIndex")  # DEBUG
+        _LOGGER.info(
+            f"{res_rate} # FAN_RATE FETCHED from MessageIndex"
+        )  # DEBUG always empty?
+        # WIP res_ not used yet
 
         if Code._31D9 in self._msgs:
             # was a dict by Code
@@ -983,7 +986,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             if v := self._msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
                 assert isinstance(v, (float | type(None)))
                 return v
-        # return self._msg_qry_by_code_key(Code._31DA, key=SZ_INDOOR_HUMIDITY)
         return self._msg_value((Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY)
 
     @property
