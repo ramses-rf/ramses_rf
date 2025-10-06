@@ -941,7 +941,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         _LOGGER.info(
             f"{res_rate} # FAN_RATE FETCHED from MessageIndex"
         )  # DEBUG always empty?
-        # WIP res_ not used yet
+        # WIP res_rate/res_mode not used yet
 
         if Code._31D9 in self._msgs:
             # was a dict by Code

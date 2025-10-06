@@ -669,10 +669,10 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         self._child_id = FC  # NOTE: domain_id
 
         # TODO(eb): cleanup
-        # was: self._msgz[Code._3220] = {RP: {}}
+        # was: self._msgz[Code._3220] = {RP: {}}  # No ctx! (not None)
         # should fix src/ramses_rf/database.py _add_record try/except when activating next line
         # self._add_record(address=self.addr, code=Code._3220, verb="RP")  # << essential?
-        # adds an empty RP opentherm_msg to the SQLite MessageIndex with code 3220
+        # adds a "sim" RP opentherm_msg to the SQLite MessageIndex with code 3220
         # causes exc when fetching ALL, when no "real" msg was added to _msgs_. We skip those.
 
         # lf._use_ot = self._gwy.config.use_native_ot
@@ -763,7 +763,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         if msg.payload.get(SZ_VALUE) is None:
             return
 
-        # msg_id is int in msg payload/opentherm.py, but MsgId (str) is in this module
+        # msg_id is int in msg payload/opentherm.py, but MsgId (str) in this module
         msg_id = _to_msg_id(msg.payload[SZ_MSG_ID])
         self._msgs_ot[msg_id] = msg
 

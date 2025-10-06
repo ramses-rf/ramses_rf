@@ -251,7 +251,6 @@ class Gateway(Engine):
             return include_expired or not msg._expired
 
         msgs = [m for device in self.devices for m in device._msg_list]
-        # TODO(eb): verify how this works with SQLite MessageIndex
 
         for system in self.systems:
             msgs.extend(list(system._msgs.values()))
