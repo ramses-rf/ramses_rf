@@ -196,9 +196,9 @@ class _MessageDB(_Entity):
         # ] = {}  # code/verb/ctx
         # ctx = context, e.g. idx_ (00/01) or compound ctx (e.g. 0005/000C/0418), see frame.py#_ctx
 
-    def _handle_msg(self, msg: Message) -> None:  # TODO: beware, this is a mess
+    def _handle_msg(self, msg: Message) -> None:
         """Store a msg in the DBs.
-        Uses SQLite MessageIndex since 0.51.7
+        Uses SQLite MessageIndex since 0.51.8
         """
 
         if not (
@@ -209,32 +209,20 @@ class _MessageDB(_Entity):
             return  # don't store the rest
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
-            self._gwy.msg_db.add(msg)  # add to index on all _msgs_
+            self._gwy.msg_db.add(msg)  # add to index on all _msgs_, also RQ from dev
             # ignore any replaced message that might be returned
         else:
             raise NotImplementedError
 
-        # Store msg by code in flat self._msgs_ dict (stores all latest payloads by code)
+        # Store msg by code in flat self._msgs_ dict (stores all latest I/RP payloads by code)
         if msg.verb in (I_, RP):
             self._msgs_[msg.code] = msg
 
-        # TODO(eb): remove all refs to _msgz_ from code base
-        # store msg in nested dict
-        # if msg.code not in self._msgz_:
-        #     # Store msg verb + ctx by code in nested self._msgz_ dict (deprecated)
-        #     self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
-        # elif msg.verb not in self._msgz_[msg.code]:
-        #     # Same, 1 level deeper
-        #     self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
-        # else:
-        #     # Same, replacing the previous message
-        #     self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
-
     @property
     def _msg_list(self) -> list[Message]:
-        """Return a flattened version of _msgz[code][verb][index].
+        """Return a flattened version of messages (like _msgz[code][verb][idx]).
 
-        The idx is one of:
+        idx is one of:
          - a simple index (e.g. zone_idx, domain_id, aka child_id)
          - a compound ctx (e.g. 0005/000C/0418)
          - True (an array of elements, each with its own idx),
@@ -242,13 +230,12 @@ class _MessageDB(_Entity):
          - None (not determinable, rare)
         """
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
-        # return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
-        msg_listqry: list[Message] = []
-        key_list = self._msg_dev_qry()
-        if key_list:
-            for k in key_list:
-                msg_listqry.append(self._msgs[k])
-        return msg_listqry
+        msg_list_qry: list[Message] = []
+        code_list = self._msg_dev_qry()
+        if code_list:
+            for c in code_list:
+                msg_list_qry.append(self._msgs[c])
+        return msg_list_qry
 
     def _add_record(
         self, address: Address, code: Code | None = None, verb: str = " I"
@@ -284,16 +271,13 @@ class _MessageDB(_Entity):
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
-            # with contextlib.suppress(KeyError):
-            #     # TODO remove all refs to _msgz_ / _msgz deprecated, will be removed in Q1 2026
-            #     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             msgs = self._gwy.msg_db.get(hdr=hdr)
-            # only 1 result expected since hdr is a unique key in msg_db
+            # only 1 result expected since hdr is a unique key in _gwy.msg_db
             return msgs[0] if msgs else None
 
         # TODO(eb): the rest of this method can go since we moved to MessageIndex
@@ -308,7 +292,7 @@ class _MessageDB(_Entity):
         #     if args and (ctx := args[0]):  # ctx may == True
         #         msg = self._msgz[code][verb][ctx]
         #     elif False in self._msgz[code][verb]:
-        #         msg = self._msgz[code][verb][False]
+        #         msg = self._msgz[code][verb][False] <<< this is difficult for SQLite
         #     elif None in self._msgz[code][verb]:
         #         msg = self._msgz[code][verb][None]
         #     else:
@@ -442,10 +426,7 @@ class _MessageDB(_Entity):
 
     # SQLite methods, since 0.51.7
 
-    def _msg_dev_qry(
-        self,
-        **kwargs: Any,
-    ) -> list[Code] | None:
+    def _msg_dev_qry(self) -> list[Code] | None:
         """
         Retrieve from the MessageIndex the Code keys involving this device.
 
@@ -464,6 +445,7 @@ class _MessageDB(_Entity):
                 _LOGGER.debug("Fetched from index: %s", rec[0])
                 # Fetched from index: code 1FD4
                 res.append(Code(str(rec[0])))
+            _LOGGER.debug("_msg_dev_qry for %s fetched %s", self.id, res)
             return res
         return None
 
@@ -666,8 +648,9 @@ class _Discovery(_MessageDB):
         """Return the current list of pollable command codes."""
         return {
             code: (CODES_SCHEMA[code][SZ_NAME] if code in CODES_SCHEMA else None)
-            for code in sorted(self._msgz)
-            if self._msgz[code].get(RP) and self._is_not_deprecated_cmd(code)
+            for code in sorted(self._msgz)  # TODO(eb): migrate _msgz to msg_db
+            if self._msgz[code].get(RP)  # TODO(eb): migrate _msgz to msg_db
+            and self._is_not_deprecated_cmd(code)
         }
 
     @property
@@ -682,6 +665,7 @@ class _Discovery(_MessageDB):
 
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
+            # TODO(eb): migrate _msgz to msg_db
             for msg_id in sorted(self._msgz[Code._3220].get(RP, []))  # type: ignore[type-var]
             if (
                 self._is_not_deprecated_cmd(Code._3220, ctx=msg_id)
