@@ -91,8 +91,8 @@ async def test_systemx_from_log_file(dir_name: Path) -> None:
     for tcs in gwy.systems:
         _ = tcs.schema
         _ = tcs.traits
-        # _ = tcs.params  # TODO(eb): fix assert in _msg_value_msg()
-        # _ = tcs.status  # TODO(eb): fix assert in _msg_value_msg()
+        _ = tcs.params  # TODO(eb): fix assert in _msg_value_msg()
+        _ = tcs.status  # TODO(eb): fix assert in _msg_value_msg()
 
     await gwy.stop()
 

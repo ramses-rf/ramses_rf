@@ -65,7 +65,7 @@ class Frame:
     def __init__(self, frame: str) -> None:
         """Create a frame from a string.
 
-        Will raise InvalidPacketError if it is invalid.
+        :raises InvalidPacketError: if provided string is invalid.
         """
 
         self._frame: str = frame

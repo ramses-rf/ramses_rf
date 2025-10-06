@@ -40,11 +40,11 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     gateway._loop.call_later = MagicMock()
     gateway._loop.time = MagicMock(return_value=0.0)
     gateway._include = {}
-    # Add msg_db attribute that's accessed by the message store
+    # Add msg_db attribute accessed by the message store
     # gateway.msg_db = MagicMock()
     # gateway.msg_db.get.return_value = {}
     # activate the SQLite MessageIndex
-    gateway.msg_db = MessageIndex()
+    gateway.msg_db = MessageIndex(maintain=False)
 
     yield gateway
 

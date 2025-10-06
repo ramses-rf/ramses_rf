@@ -59,7 +59,7 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
         _ks: str = ""
         for k, v in ppl.items():
             if k not in _added:
-                if v is not None:  # ignore keys with None value
+                if v is not None:  # ignore keys with None value?
                     _ks += k + "|"
                     _added.append(k)
         return _ks
@@ -78,12 +78,13 @@ class MessageIndex:
     Index holds the latest message to & from all devices by header
     (example of a hdr: 000C|RP|01:223036|0208)."""
 
-    def __init__(self) -> None:
+    def __init__(self, maintain: bool = True) -> None:
         """Instantiate a message database/index."""
 
+        self.maintain = maintain
         self._msgs: MsgDdT = (
             OrderedDict()
-        )  # stores all messages for retrieval. When added?
+        )  # stores all messages for retrieval. Filled in housekeeping loop.
 
         # Connect to a SQLite DB in memory
         self._cx = sqlite3.connect(
@@ -95,9 +96,10 @@ class MessageIndex:
         _setup_db_adapters()  # DTM adapter/converter
         self._setup_db_schema()
 
-        self._lock = asyncio.Lock()
-        self._last_housekeeping: dt = None  # type: ignore[assignment]
-        self._housekeeping_task: asyncio.Task[None] = None  # type: ignore[assignment]
+        if self.maintain:
+            self._lock = asyncio.Lock()
+            self._last_housekeeping: dt = None  # type: ignore[assignment]
+            self._housekeeping_task: asyncio.Task[None] = None  # type: ignore[assignment]
 
         self.start()
 
@@ -107,12 +109,13 @@ class MessageIndex:
     def start(self) -> None:
         """Start the housekeeper loop."""
 
-        if self._housekeeping_task and not self._housekeeping_task.done():
-            return
+        if self.maintain:
+            if self._housekeeping_task and not self._housekeeping_task.done():
+                return
 
-        self._housekeeping_task = asyncio.create_task(
-            self._housekeeping_loop(), name=f"{self.__class__.__name__}.housekeeper"
-        )
+            self._housekeeping_task = asyncio.create_task(
+                self._housekeeping_loop(), name=f"{self.__class__.__name__}.housekeeper"
+            )
 
     def stop(self) -> None:
         """Stop the housekeeper loop."""
@@ -168,7 +171,8 @@ class MessageIndex:
         self._cx.commit()
 
     async def _housekeeping_loop(self) -> None:
-        """Periodically remove stale messages from the index."""
+        """Periodically remove stale messages from the index,
+        unless self.maintain is False."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
             """

@@ -66,7 +66,9 @@ class MessageBase:
         self.dtm: dt = pkt.dtm
 
         self.verb: VerbT = pkt.verb
-        self.seqn: str = pkt.seqn
+        self.seqn: str = (
+            pkt.seqn
+        )  # the msg is part of a set for 1 Code, received in order
         self.code: Code = pkt.code
         self.len: int = pkt._len
 
@@ -243,7 +245,7 @@ class MessageBase:
     def _validate(self, raw_payload: str) -> dict | list[dict]:  # type: ignore[type-arg]
         """Validate a message packet payload, and parse it if valid.
 
-        :return: a dict containing key: value pairs, or a list of those created fro the payload
+        :return: a dict containing key: value pairs, or a list of those created from the payload
         :raises an InvalidPacketError exception if it is not valid.
         """
 
