@@ -53,22 +53,24 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
     :param parsed_payload: pre-parsed message payload dict
     :return: string of payload keys, separated by the | char
     """
+    _added: list[str] = []
 
     def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
-        _k: str = "|"
+        _ks: str = ""
         for k, v in ppl.items():
-            if v is not None:  # ignore keys with None value
-                _k += k + "|"
-        return _k
+            if k not in _added:
+                if v is not None:  # ignore keys with None value
+                    _ks += k + "|"
+                    _added.append(k)
+        return _ks
 
+    _keys: str = "|"
     if isinstance(parsed_payload, list):
-        keys: str = ""
         for d in parsed_payload:
-            keys += append_keys(d)
-        return keys
+            _keys += append_keys(d)
     elif isinstance(parsed_payload, dict):
-        return append_keys(parsed_payload)
-    return "|"  # type: ignore[unreachable]
+        _keys += append_keys(parsed_payload)
+    return _keys
 
 
 class MessageIndex:
@@ -388,10 +390,11 @@ class MessageIndex:
         # tweak kwargs as stored in msg_db, inverse from _insert_into():
         kw = {key: value for key, value in kwargs.items() if key != "ctx"}
         if "ctx" in kwargs:
-            if kwargs["ctx"]:
-                kw["ctx"] = "True"
-            elif not kwargs["ctx"]:
-                kw["ctx"] = "False"
+            if isinstance(kwargs["ctx"], bool):
+                if kwargs["ctx"]:
+                    kw["ctx"] = "True"
+                else:
+                    kw["ctx"] = "False"
             else:
                 kw["ctx"] = kwargs["ctx"]
 
