@@ -313,6 +313,7 @@ class MessageIndex:
                 payload_keys(msg.payload),
             ),
         )
+        _LOGGER.info(f"Added {msg} to gwy.msg_db")
 
         return _old_msgs[0] if _old_msgs else None
 
@@ -384,10 +385,20 @@ class MessageIndex:
         """
         # adapted from _select_from()
 
-        sql = "SELECT dtm FROM messages WHERE "
-        sql += " AND ".join(f"{k} = ?" for k in kwargs)
+        # tweak kwargs as stored in msg_db, inverse from _insert_into():
+        kw = {key: value for key, value in kwargs.items() if key != "ctx"}
+        if "ctx" in kwargs:
+            if kwargs["ctx"]:
+                kw["ctx"] = "True"
+            elif not kwargs["ctx"]:
+                kw["ctx"] = "False"
+            else:
+                kw["ctx"] = kwargs["ctx"]
 
-        self._cu.execute(sql, tuple(kwargs.values()))
+        sql = "SELECT dtm FROM messages WHERE "
+        sql += " AND ".join(f"{k} = ?" for k in kw)
+
+        self._cu.execute(sql, tuple(kw.values()))
         return len(self._cu.fetchall()) > 0
 
     def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
@@ -395,16 +406,20 @@ class MessageIndex:
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages"""
 
-        # tweak ctx as stored in msg_db, inverse from _insert_into():
-        if kwargs["ctx"] is True:
-            kwargs["ctx"] = "True"  # str
-        elif kwargs["ctx"] is False:
-            kwargs["ctx"] = "False"  # str
+        # tweak kwargs as stored in msg_db, inverse from _insert_into():
+        kw = {key: value for key, value in kwargs.items() if key != "ctx"}
+        if "ctx" in kwargs:
+            if kwargs["ctx"]:
+                kw["ctx"] = "True"
+            elif not kwargs["ctx"]:
+                kw["ctx"] = "False"
+            else:
+                kw["ctx"] = kwargs["ctx"]
 
         sql = "SELECT dtm FROM messages WHERE "
-        sql += " AND ".join(f"{k} = ?" for k in kwargs)
+        sql += " AND ".join(f"{k} = ?" for k in kw)
 
-        self._cu.execute(sql, tuple(kwargs.values()))
+        self._cu.execute(sql, tuple(kw.values()))
 
         return tuple(
             self._msgs[row[0].isoformat(timespec="microseconds")]

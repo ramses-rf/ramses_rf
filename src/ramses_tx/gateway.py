@@ -91,7 +91,7 @@ class Engine:
         if input_file:
             self._disable_sending = True
         elif not port_name:
-            raise TypeError("Either a port_name or a input_file must be specified")
+            raise TypeError("Either a port_name or an input_file must be specified")
 
         self.ser_name = port_name
         self._input_file = input_file
