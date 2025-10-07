@@ -571,13 +571,13 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         # Create a composite key for this parameter using the normalized ID
         key = f"{Code._2411}_{param_id}"
 
-        # Store the message in the device's message store
+        # Store the message in the device's message store ## change using MessageIndex + dict
         old_value = self._msgs.get(Code._2411)
         # Use direct assignment for Code._2411 key
         self._msgs[Code._2411] = msg
         # For the composite key, we need to bypass type checking
         self._msgs[key] = msg  # type: ignore[index]
-        # this adds specials keys to _msgs, but _msgs will be rebuilt from msg_db when called
+        # TODO(wi): adds specials keys to _msgs, but _msgs will be rebuilt from msg_db when called
 
         _LOGGER.debug(
             "Updated 2411 parameter %s = %s (was: %s) for %s",
@@ -606,7 +606,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         handling for 2411 parameter messages. It updates the device state and
         triggers any necessary callbacks.
 
-        After handling the messages, it calls the initialized callback if set to notify that
+        After handling the messages, it calls the initialized callback - if set - to notify that
         the device was fully initialized.
 
         :param msg: The incoming message to process

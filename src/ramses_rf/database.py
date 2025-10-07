@@ -53,18 +53,17 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
     :param parsed_payload: pre-parsed message payload dict
     :return: string of payload keys, separated by the | char
     """
-    _added: list[str] = []
+    _keys: str = "|"
 
     def append_keys(ppl: dict) -> str:  # type: ignore[type-arg]
         _ks: str = ""
         for k, v in ppl.items():
-            if k not in _added:
-                if v is not None:  # ignore keys with None value?
-                    _ks += k + "|"
-                    _added.append(k)
+            if (
+                k not in _ks and k not in _keys and v is not None
+            ):  # ignore keys with None value
+                _ks += k + "|"
         return _ks
 
-    _keys: str = "|"
     if isinstance(parsed_payload, list):
         for d in parsed_payload:
             _keys += append_keys(d)
