@@ -8,7 +8,7 @@ import logging
 import sqlite3
 from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
-from typing import NewType, TypedDict
+from typing import Any, NewType, TypedDict
 
 from ramses_tx import Message  # NON_DEV_ADDR,
 
@@ -383,7 +383,24 @@ class MessageIndex:
 
         return self._select_from(**kwargs)
 
-    def contains(self, **kwargs: str) -> bool:
+    def qry_dtms(self, **kwargs: str | bool) -> list[Any]:
+        # tweak kwargs as stored in msg_db, inverse from _insert_into():
+        kw = {key: value for key, value in kwargs.items() if key != "ctx"}
+        if "ctx" in kwargs:
+            if isinstance(kwargs["ctx"], str):
+                kw["ctx"] = kwargs["ctx"]
+            elif kwargs["ctx"]:
+                kw["ctx"] = "True"
+            else:
+                kw["ctx"] = "False"
+
+        sql = "SELECT dtm FROM messages WHERE "
+        sql += " AND ".join(f"{k} = ?" for k in kw)
+
+        self._cu.execute(sql, tuple(kw.values()))
+        return self._cu.fetchall()
+
+    def contains(self, **kwargs: str | bool) -> bool:
         """
         Check if the MessageIndex contains at least 1 record that matches the provided fields.
         :param kwargs: (exact) SQLite table field_name: required_value pairs
@@ -391,46 +408,16 @@ class MessageIndex:
         """
         # adapted from _select_from()
 
-        # tweak kwargs as stored in msg_db, inverse from _insert_into():
-        kw = {key: value for key, value in kwargs.items() if key != "ctx"}
-        if "ctx" in kwargs:
-            if isinstance(kwargs["ctx"], bool):
-                if kwargs["ctx"]:
-                    kw["ctx"] = "True"
-                else:
-                    kw["ctx"] = "False"
-            else:
-                kw["ctx"] = kwargs["ctx"]
+        return len(self.qry_dtms(**kwargs)) > 0
 
-        sql = "SELECT dtm FROM messages WHERE "
-        sql += " AND ".join(f"{k} = ?" for k in kw)
-
-        self._cu.execute(sql, tuple(kw.values()))
-        return len(self._cu.fetchall()) > 0
-
-    def _select_from(self, **kwargs: str) -> tuple[Message, ...]:
-        """Select message(s) from the index.
+    def _select_from(self, **kwargs: str | bool) -> tuple[Message, ...]:
+        """Select message(s) using the MessageIndex.
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages"""
 
-        # tweak kwargs as stored in msg_db, inverse from _insert_into():
-        kw = {key: value for key, value in kwargs.items() if key != "ctx"}
-        if "ctx" in kwargs:
-            if kwargs["ctx"]:
-                kw["ctx"] = "True"
-            elif not kwargs["ctx"]:
-                kw["ctx"] = "False"
-            else:
-                kw["ctx"] = kwargs["ctx"]
-
-        sql = "SELECT dtm FROM messages WHERE "
-        sql += " AND ".join(f"{k} = ?" for k in kw)
-
-        self._cu.execute(sql, tuple(kw.values()))
-
         return tuple(
             self._msgs[row[0].isoformat(timespec="microseconds")]
-            for row in self._cu.fetchall()
+            for row in self.qry_dtms(**kwargs)
         )
 
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
@@ -456,7 +443,9 @@ class MessageIndex:
                 _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
 
-    def qry_field(self, sql: str, parameters: tuple[str, ...]) -> list[tuple[dt, str]]:
+    def qry_field(
+        self, sql: str, parameters: tuple[str, ...]
+    ) -> list[tuple[dt | str, str]]:
         """
         Get a list of message field values from the index, given sql and parameters.
         """
@@ -484,6 +473,7 @@ class MessageIndex:
             # Reformatted: 2022-05-02T10:02:02.744905
             # _msgs stamp format: 2022-05-02T10:02:02.744905
             if ts in self._msgs:
+                # if include_expired or not self._msgs[ts].HAS_EXPIRED:  # not working
                 lst.append(self._msgs[ts])
             else:  # happens in tests with dummy msg from heat init
                 _LOGGER.warning("MessageIndex ts %s not in device messages", ts)

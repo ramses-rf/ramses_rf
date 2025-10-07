@@ -465,6 +465,7 @@ class _MessageDB(_Entity):
                 sql, (self.id[:9], self.id[:9], code_par, key)
             ):
                 _LOGGER.debug("Fetched from index: %s", rec)
+                assert isinstance(rec[0], dt)
                 if rec[0] > latest:  # dtm, only use most recent
                     res = Code(rec[1])
                     latest = rec[0]
