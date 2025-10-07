@@ -31,7 +31,7 @@ msg4: Message = Message._from_pkt(pkt4)
 async def test_add_msg() -> None:
     """Add a message to the MessageIndex."""
     msg_db = MessageIndex()
-    ret: Message | None = None
+    ret: Message | None
 
     # add a message
     assert msg1.payload == {
@@ -93,7 +93,7 @@ async def test_qry_msg() -> None:
     sql = """
             SELECT code, plk from messages WHERE (src = ? OR dst = ?)
         """
-    res: list[tuple[dt, str]] = msg_db.qry_field(sql, (_SRC2, _SRC2))
+    res: list[tuple[dt | str, str]] = msg_db.qry_field(sql, (_SRC2, _SRC2))
     assert res == [
         (
             "2309",
@@ -108,7 +108,7 @@ async def test_qry_msg() -> None:
             AND code in ('1298', '31DA')
             AND (plk LIKE '%co2_level%')
         """
-    res: list[tuple[dt, str]] = msg_db.qry_field(sql, (_SRC1, _SRC1))
+    res = msg_db.qry_field(sql, (_SRC1, _SRC1))
     assert res == [  # key 'co2_level' included since value is not None
         ("1298", "|co2_level|"),
         (
@@ -124,7 +124,7 @@ async def test_qry_msg() -> None:
             AND (src = ? OR dst = ?)
             AND (plk LIKE '%co2_level%')
         """
-    res: list[tuple[dt, str]] = msg_db.qry_field(sql, (_SRC1, _SRC1))
+    res = msg_db.qry_field(sql, (_SRC1, _SRC1))
     assert res == [("1298", "False"), ("31DA", "00")]
 
     assert msg_db.contains(plk="|co2_level|"), "payload keys missing"
