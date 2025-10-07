@@ -446,6 +446,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         """
         super().__init__(*args, **kwargs)
         self._supports_2411 = False  # Flag for 2411 parameter support
+        self._params_2411: dict[str, Any] = {}  # Store 2411 parameters here
         self._initialized_callback = None  # Called when device is fully initialized
         self._param_update_callback = None  # Called when 2411 parameters are updated
         self._hgi: Any | None = None  # Will be set when HGI is available
@@ -547,6 +548,56 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             self._hgi = self._gwy.hgi
         return self._hgi
 
+    def get_2411_param(self, param_id: str) -> Any:
+        """Get a 2411 parameter value.
+
+        :param param_id: The parameter ID to retrieve.
+        :type param_id: str
+        :return: The parameter value if found, None otherwise
+        :rtype: Any | None
+        """
+        return self._params_2411.get(param_id)
+
+    def set_2411_param(self, param_id: str, value: Any) -> bool:
+        """Set a 2411 parameter value.
+
+        :param param_id: The parameter ID to retrieve.
+        :type param_id: str
+        :param value: The parameter value to set.
+        :type value: Any
+        :return: True if the parameter was set, False otherwise
+        :rtype: bool
+        """
+        if not self._supports_2411:
+            _LOGGER.warning("Device %s doesn't support 2411 parameters", self.id)
+            return False
+
+        self._params_2411[param_id] = value
+        return True
+
+    def get_fan_param(self, param_id: str) -> Any | None:
+        """Retrieve a fan parameter value from the device's message store.
+
+        This wrapper method gets a specific parameter value for a FAN device stored in
+        _params_2411 dict. It first makes sure we use the proper param_id format
+
+        :param param_id: The parameter ID to retrieve.
+        :type param_id: str
+        :return: The parameter value if found, None otherwise
+        :rtype: Any | None
+        """
+        # Ensure param_id is uppercase and strip leading zeros for consistency
+        param_id = (
+            str(param_id).upper().lstrip("0") or "0"
+        )  # Handle case where param_id is "0"
+
+        param_value = self.get_2411_param(param_id)
+        if param_value is not None:
+            return param_value
+        else:
+            _LOGGER.debug("Parameter %s not found for %s", param_id, self.id)
+            return None
+
     def _handle_2411_message(self, msg: Message) -> None:
         """Handle incoming 2411 parameter messages.
 
@@ -568,29 +619,27 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             _LOGGER.debug("Missing parameter ID or value in 2411 message: %s", msg)
             return
 
-        # Create a composite key for this parameter using the normalized ID
-        key = f"{Code._2411}_{param_id}"
-
-        # Store the message in the device's message store ## change using MessageIndex + dict
-        old_value = self._msgs.get(Code._2411)
-        # Use direct assignment for Code._2411 key
-        self._msgs[Code._2411] = msg
-        # For the composite key, we need to bypass type checking
-        self._msgs[key] = msg  # type: ignore[index]
-        # TODO(wi): adds specials keys to _msgs, but _msgs will be rebuilt from msg_db when called
-
-        _LOGGER.debug(
-            "Updated 2411 parameter %s = %s (was: %s) for %s",
-            param_id,
-            param_value,
-            old_value.payload if old_value else None,
-            self.id,
-        )
-
         # Mark that we support 2411 parameters
         if not self._supports_2411:
             self._supports_2411 = True
             _LOGGER.debug("Device %s supports 2411 parameters", self.id)
+
+        # Normalize the value if needed
+        if param_id == "75" and isinstance(param_value, (int, float)):
+            param_value = round(float(param_value), 1)
+
+        # Store in params
+        old_value = self.get_2411_param(param_id)
+        self.set_2411_param(param_id, param_value)
+
+        # Log the update
+        _LOGGER.debug(
+            "Updated 2411 parameter %s: %s (was: %s) for %s",
+            param_id,
+            param_value,
+            old_value,
+            self.id,
+        )
 
         # Round parameter 75 values to 1 decimal place
         if param_id == "75" and isinstance(param_value, int | float):
@@ -748,72 +797,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
                 return device_id
 
         _LOGGER.debug("No bound REM or DIS devices found for FAN %s", self.id)
-        return None
-
-    def get_fan_param(self, param_id: str) -> Any | None:
-        """Retrieve a fan parameter value from the device's message store.
-
-        This method attempts to fetch a specific parameter value for a FAN device from the
-        stored messages. It first looks for the parameter using a composite key (e.g., '2411_3F')
-        and falls back to checking the general 2411 message if needed.
-
-        :param param_id: The parameter ID to retrieve.
-        :type param_id: str
-        :return: The parameter value if found, None otherwise
-        :rtype: Any | None
-        """
-        # Ensure param_id is uppercase and strip leading zeros for consistency
-        param_id = (
-            str(param_id).upper().lstrip("0") or "0"
-        )  # Handle case where param_id is "0"
-        # we need some extra workarounds to please mypy
-        # Create a composite key for this parameter using the normalized ID
-        key = f"{Code._2411}_{param_id}"
-
-        # Get the message using the composite key first, fall back to just the code
-        msg = None
-
-        # First try to get the specific parameter message
-        try:
-            # Try to access the message directly using the key
-            msg = self._msgs[key]  # type: ignore[index]
-        except (KeyError, TypeError):
-            # If that fails, try to find the message by iterating through the dictionary
-            msg = next((v for k, v in self._msgs.items() if str(k) == key), None)
-
-        # If not found, try to get the general 2411 message
-        if msg is None:
-            msg = self._msgs.get(Code._2411)
-
-        if not msg or not hasattr(msg, "payload"):
-            if not self.supports_2411:
-                _LOGGER.debug(
-                    "Cannot get parameter %s from %s: 2411 parameters not supported",
-                    param_id,
-                    self.id,
-                )
-            else:
-                _LOGGER.debug(
-                    "No payload found for parameter %s on %s", param_id, self.id
-                )
-            return None
-
-        # If we have a message but not the specific parameter, try to get it from the payload
-        if param_id and hasattr(msg.payload, "get"):
-            value = msg.payload.get("value")
-            if value is not None:
-                return value
-
-        # If we get here, the parameter wasn't found in the message
-        if not self.supports_2411:
-            _LOGGER.debug(
-                "Parameter %s not found for %s: 2411 parameters not supported",
-                param_id,
-                self.id,
-            )
-        else:
-            _LOGGER.debug("Parameter %s not found in payload for %s", param_id, self.id)
-
         return None
 
     @property
