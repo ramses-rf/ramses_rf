@@ -14,7 +14,7 @@
   ruff >= 0.13.0                                 # HA uses 0.13.0 ! also in: pre-commit-config.yaml
 
 # used for development (typing)
-  mypy-dev >= 1.16.0a8                           # HA uses  1.18.0a3 !
+  mypy >= 1.18.0                                 # HA uses  1.18.0a3 !
   types-colorama >= 0.4.15
   types-PyYAML >= 6.0.12                         # HA uses 6.0.12.20250516
   voluptuous >= 0.15.2                           # HA uses 0.15.2
