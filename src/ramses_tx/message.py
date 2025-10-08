@@ -96,7 +96,7 @@ class MessageBase:
 
         if self.src.id == self._addrs[0].id:  # type: ignore[unreachable]
             name_0 = self._name(self.src)
-            name_1 = "" if self.dst is self.src else self._name(self.dst)
+            name_1 = "" if self.dst == self.src else self._name(self.dst)
         else:
             name_0 = ""
             name_1 = self._name(self.src)
@@ -235,7 +235,7 @@ class MessageBase:
             assert isinstance(self._pkt._idx, str)  # mypy hint
             return {IDX_NAMES[Code._22C9]: self._pkt._idx}
 
-        assert isinstance(self._pkt._idx, str)  # mypy check
+        assert isinstance(self._pkt._idx, str)  # mypy hint
         idx_name = SZ_DOMAIN_ID if self._pkt._idx[:1] == "F" else SZ_ZONE_IDX
         index_name = IDX_NAMES.get(self.code, idx_name)
 

@@ -14,23 +14,34 @@ class TestMessageIndex:
     _SRC1 = "32:166025"
     _SRC2 = "01:087939"  # (CTR)
     _NOW = dt.now().replace(microsecond=0)
-    pkt1 = Packet(_NOW, "...  I --- 32:166025 --:------ 32:166025 1298 003 007FFF")
-    msg1: Message = Message._from_pkt(pkt1)
-    pkt2 = Packet(
-        _NOW + td(seconds=10),
-        "...  I --- 32:166025 --:------ 32:166025 1298 003 001230",
+
+    msg1: Message = Message._from_pkt(
+        Packet(_NOW, "...  I --- 32:166025 --:------ 32:166025 1298 003 007FFF")
     )
-    msg2: Message = Message._from_pkt(pkt2)
-    pkt3 = Packet(
-        _NOW + td(seconds=20),
-        "060  I --- 01:087939 --:------ 01:087939 2309 021 0007D00106400201F40301F40401F40501F40601F4",
+    msg2: Message = Message._from_pkt(
+        Packet(
+            _NOW + td(seconds=10),
+            "...  I --- 32:166025 --:------ 32:166025 1298 003 001230",  # co2_level
+        )
     )
-    msg3: Message = Message._from_pkt(pkt3)
-    pkt4 = Packet(
-        _NOW + td(seconds=30),
-        "060  I --- 32:166025 --:------ 32:166025 31DA 030 00EF00019E00EF06E17FFF08020766BE09001F0000000000008500850000",
+    msg3: Message = Message._from_pkt(
+        Packet(
+            _NOW + td(seconds=20),
+            "060  I --- 01:087939 --:------ 01:087939 2309 021 0007D00106400201F40301F40401F40501F40601F4",
+        )
     )
-    msg4: Message = Message._from_pkt(pkt4)
+    msg4: Message = Message._from_pkt(
+        Packet(
+            _NOW + td(seconds=30),
+            "060  I --- 32:166025 --:------ 32:166025 31DA 030 00EF00019E00EF06E17FFF08020766BE09001F0000000000008500850000",
+        )
+    )
+    msg5: Message = Message._from_pkt(
+        Packet(
+            _NOW + td(seconds=40),
+            "...  I --- 04:189078 --:------ 01:145038 3150 002 0100",  # heat_demand
+        )
+    )
 
     async def test_add_msg(self) -> None:
         """Add a message to the MessageIndex."""
@@ -62,10 +73,16 @@ class TestMessageIndex:
         assert len(msg_db.all()) == 1
 
         # add another message with different code
-        ret = msg_db.add(self.msg3)  # replaced message
+        ret = msg_db.add(self.msg3)  # new code
 
         assert ret is None
         assert len(msg_db.all()) == 2
+
+        ret = msg_db.add(self.msg5)  # new code
+        assert ret is None
+        ret = msg_db.add(self.msg5)  # add copy code
+        assert ret is None
+        assert len(msg_db.all()) == 3
 
         # test clear index
         msg_db.clr()
@@ -78,9 +95,11 @@ class TestMessageIndex:
         msg_db.add(self.msg2)
         msg_db.add(self.msg3)
         msg_db.add(self.msg4)
+        msg_db.add(self.msg5)
 
         # qry by code
-        assert msg_db.contains(code="2309"), "code missing"
+        assert msg_db.contains(code="2309"), "code 2309 missing"
+        assert msg_db.contains(code="3150"), "code 3150 missing"
         assert msg_db.contains(src="01:087939", code="2309"), "src missing"
         assert not msg_db.contains(src="01:12345", code="2309"), (
             "random src should return False"
@@ -137,4 +156,4 @@ class TestMessageIndex:
 
         assert msg_db.contains(plk="|co2_level|"), "payload keys missing"
 
-        assert len(msg_db.all()) == 3
+        assert len(msg_db.all()) == 4

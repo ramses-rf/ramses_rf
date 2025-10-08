@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import Any, NewType, TypedDict
 
-from ramses_tx import Message  # NON_DEV_ADDR,
+from ramses_tx import Message
 
 DtmStrT = NewType("DtmStrT", str)
 MsgDdT = OrderedDict[DtmStrT, Message]
@@ -217,7 +217,7 @@ class MessageIndex:
         try:  # TODO: remove this, or apply only when source is a real packet log?
             # await self._lock.acquire()
             dup = self._delete_from(  # HACK: because of contrived pkt logs
-                dtm=msg.dtm.isoformat(timespec="microseconds")
+                dtm=msg.dtm  # stored as such with DTM formatter
             )
             old = self._insert_into(msg)  # will delete old msg by hdr (not dtm!)
 
@@ -227,7 +227,7 @@ class MessageIndex:
             self._cx.rollback()
 
         else:
-            # requires a timestamp reformat
+            # _msgs dict requires a timestamp reformat
             dtm: DtmStrT = msg.dtm.isoformat(timespec="microseconds")  # type: ignore[assignment]
             self._msgs[dtm] = msg
 
@@ -296,10 +296,6 @@ class MessageIndex:
 
         _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
 
-        # don't turn on address substitution for now:
-        # if msg._addrs[1] == NON_DEV_ADDR and msg._addrs[2] != NON_DEV_ADDR:
-        #     msg.dst.id = msg._addrs[2].id  # use 3rd address, mostly CTR
-
         sql = """
             INSERT INTO messages (dtm, verb, src, dst, code, ctx, hdr, plk)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -312,7 +308,7 @@ class MessageIndex:
                 str(msg.verb),
                 msg.src.id,
                 msg.dst.id,
-                msg.code,
+                str(msg.code),
                 msg_pkt_ctx,
                 msg._pkt._hdr,
                 payload_keys(msg.payload),
@@ -323,7 +319,7 @@ class MessageIndex:
         return _old_msgs[0] if _old_msgs else None
 
     def rem(
-        self, msg: Message | None = None, **kwargs: str
+        self, msg: Message | None = None, **kwargs: str | dt
     ) -> tuple[Message, ...] | None:
         """Remove a set of message(s) from the index.
 
@@ -339,7 +335,7 @@ class MessageIndex:
         if not bool(msg) ^ bool(kwargs):
             raise ValueError("Either a Message or kwargs should be provided, not both")
         if msg:
-            kwargs["dtm"] = msg.dtm.isoformat(timespec="microseconds")
+            kwargs["dtm"] = msg.dtm  # .isoformat(timespec="microseconds")
 
         msgs = None
         try:  # make this operation atomic, i.e. update self._msgs only on success
@@ -359,7 +355,7 @@ class MessageIndex:
 
         return msgs
 
-    def _delete_from(self, **kwargs: str) -> tuple[Message, ...]:
+    def _delete_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
         """Remove message(s) from the index.
         :returns: any messages that were removed"""
 
@@ -372,18 +368,21 @@ class MessageIndex:
 
         return msgs
 
-    def get(self, msg: Message | None = None, **kwargs: str) -> tuple[Message, ...]:
+    def get(
+        self, msg: Message | None = None, **kwargs: bool | dt | str
+    ) -> tuple[Message, ...]:
         """Get a set of message(s) from the index."""
 
         if not (bool(msg) ^ bool(kwargs)):
             raise ValueError("Either a Message or kwargs should be provided, not both")
+
         if msg:
-            kwargs["dtm"] = msg.dtm.isoformat(timespec="microseconds")
+            kwargs["dtm"] = msg.dtm  # .isoformat(timespec="microseconds")
 
         return self._select_from(**kwargs)
 
-    def qry_dtms(self, **kwargs: str | bool) -> list[Any]:
-        # tweak kwargs as stored in msg_db, inverse from _insert_into():
+    def qry_dtms(self, **kwargs: bool | dt | str) -> list[Any]:
+        # tweak kwargs as stored in SQLite, inverse from _insert_into():
         kw = {key: value for key, value in kwargs.items() if key != "ctx"}
         if "ctx" in kwargs:
             if isinstance(kwargs["ctx"], str):
@@ -399,7 +398,7 @@ class MessageIndex:
         self._cu.execute(sql, tuple(kw.values()))
         return self._cu.fetchall()
 
-    def contains(self, **kwargs: str | bool) -> bool:
+    def contains(self, **kwargs: bool | dt | str) -> bool:
         """
         Check if the MessageIndex contains at least 1 record that matches the provided fields.
         :param kwargs: (exact) SQLite table field_name: required_value pairs
@@ -409,7 +408,7 @@ class MessageIndex:
 
         return len(self.qry_dtms(**kwargs)) > 0
 
-    def _select_from(self, **kwargs: str | bool) -> tuple[Message, ...]:
+    def _select_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
         """Select message(s) using the MessageIndex.
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages"""
