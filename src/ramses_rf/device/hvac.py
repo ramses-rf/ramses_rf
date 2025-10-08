@@ -627,6 +627,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         # Normalize the value if needed
         if param_id == "75" and isinstance(param_value, (int, float)):
             param_value = round(float(param_value), 1)
+        elif param_id in ("52", "95"):  # Percentage parameters
+            param_value = round(float(param_value), 3)  # Keep precision for percentages
 
         # Store in params
         old_value = self.get_2411_param(param_id)
@@ -640,10 +642,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             old_value,
             self.id,
         )
-
-        # Round parameter 75 values to 1 decimal place
-        if param_id == "75" and isinstance(param_value, int | float):
-            param_value = round(float(param_value), 1)
 
         # call the 2411 parameter update callback
         self._handle_param_update(param_id, param_value)
