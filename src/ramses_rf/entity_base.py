@@ -202,25 +202,32 @@ class _MessageDB(_Entity):
         """
 
         if not (
-            msg.src.id == self.id[:9]
-            or (msg.dst.id == self.id[:9] and msg.verb != RQ)
-            or (msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9)
+            msg.src.id == self.id[:9]  # do store if dev is msg.src
+            or (
+                msg.dst.id == self.id[:9] and msg.verb != RQ
+            )  # store if dev is msg.dst, except RQs
+            or (
+                msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9
+            )  # skip rf_bind rq
+            # or (  # doesn't fix the tests
+            #     msg.code == Code._3150 and getattr(self, "_is_controller", True)
+            # )  # heat_demand
         ):
             return  # don't store the rest
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
-            self._gwy.msg_db.add(msg)  # add also RQ from dev
+            self._gwy.msg_db.add(msg)
             # ignore any replaced message that might be returned
         else:
             raise NotImplementedError
 
-        # Store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
-        if msg.verb in (I_, RP):
+        # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
+        if msg.verb in (I_, RP):  # drop RQ's
             self._msgs_[msg.code] = msg
 
     @property
     def _msg_list(self) -> list[Message]:
-        """Return a flattened list of all messages."""
+        """Return a flattened list of all messages logged on device."""
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
         msg_list_qry: list[Message] = []
         code_list = self._msg_dev_qry()
@@ -245,13 +252,14 @@ class _MessageDB(_Entity):
             raise NotImplementedError
 
     def _delete_msg(self, msg: Message) -> None:  # FIXME: this is a mess
-        """Remove the msg from all state databases."""
+        """Remove the msg from all state databases. Used for expired msgs."""
 
         from .device import Device
 
         obj: _MessageDB
 
-        if self._gwy.msg_db:  # central SQLite MessageIndex
+        # delete from the central SQLite MessageIndex
+        if self._gwy.msg_db:
             self._gwy.msg_db.rem(msg)
 
         entities: list[_MessageDB] = []
@@ -290,7 +298,7 @@ class _MessageDB(_Entity):
         self, code: Code | Iterable[Code], *args: Any, **kwargs: Any
     ) -> dict | list | None:
         """
-        Get the value from the database or from a Message object provided.
+        Get the value for a Code from the database or from a Message object provided.
 
         :param code: filter messages by Code or a tuple of codes (optional)
         :param args: Message (optional)
@@ -314,11 +322,11 @@ class _MessageDB(_Entity):
     ) -> dict | list | None:
         """
         Query the message database using the SQLite index for the most recent
-        key, value pairs(s) for a given code.
+        key: value pairs(s) for a given code.
 
         :param code: filter messages by Code or a tuple of Codes, optional
         :param verb: filter on I, RQ, RP, optional, only with a single Code
-        :param key: value keyword to retrieve, not with verb RQ
+        :param key: value keyword to retrieve, not together with verb RQ
         :param kwargs: not used for now
         :return: a dict containing key: value pairs, or a list of those
         """
@@ -334,7 +342,7 @@ class _MessageDB(_Entity):
                 )
                 key = None
             try:
-                code = Code(self._msg_qry_by_code_key(code, verb))
+                code = Code(self._msg_qry_by_code_key(code, key))
                 msg = self._msgs.get(code)
             except KeyError:
                 msg = None
@@ -351,10 +359,20 @@ class _MessageDB(_Entity):
     def _msg_value_msg(
         self,
         msg: Message | None,
-        key: str | None = None,
+        key: str = "*",
         zone_idx: str | None = None,
         domain_id: str | None = None,
     ) -> dict | list | None:
+        """
+        Get from a Message all or a specific key with its value,
+        optionally filtering for a zone or a domain
+
+        :param msg: a Message to inspect
+        :param key: the key to filiter on
+        :param zone_idx: the zone to filter on
+        :param domain_id: the domain to filter on
+        :return:
+        """
         if msg is None:
             return None
         elif msg._expired:
@@ -404,9 +422,9 @@ class _MessageDB(_Entity):
 
     def _msg_dev_qry(self) -> list[Code] | None:
         """
-        Retrieve from the MessageIndex the Code keys involving this device.
+        Retrieve from the MessageIndex a list of Code keys involving this device.
 
-        :param kwargs: not used as of 0.51.7
+        :param kwargs: not used as of 0.51.9
         :return: list of Codes or empty list when query returned empty
         """
         if self._gwy.msg_db:
@@ -419,7 +437,7 @@ class _MessageDB(_Entity):
 
             for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
                 _LOGGER.debug("Fetched from index: %s", rec[0])
-                # Fetched from index: code 1FD4
+                # Example: "Fetched from index: code 1FD4"
                 res.append(Code(str(rec[0])))
             _LOGGER.debug("_msg_dev_qry for %s fetched %s", self.id, res)
             return res
@@ -432,23 +450,23 @@ class _MessageDB(_Entity):
         **kwargs: Any,
     ) -> Code | None:
         """
-        Retrieve from the MessageIndex the most current Code key for a code & keyword combination.
+        Retrieve from the MessageIndex the most current Code for a code(s) & keyword combination.
 
-        :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
         :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
+        :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
         :param kwargs: not used as of 0.51.9
         :return: Code of most recent query result message or None when query returned empty
         """
         if self._gwy.msg_db:
-            code_par: str = ""
+            code_qry: str = ""
             if code is None:
-                code_par = "*"
+                code_qry = "*"
             elif isinstance(code, tuple):
                 for cd in code:
-                    code_par += f"'{str(cd)}' OR code = '"
-                code_par = code_par[:-13]  # trim last OR
+                    code_qry += f"'{str(cd)}' OR code = '"
+                code_qry = code_qry[:-13]  # trim last OR
             else:
-                code_par = str(code)
+                code_qry = str(code)
             key = "*" if key is None else f"%{key}%"
 
             # SQLite query on MessageIndex
@@ -462,10 +480,10 @@ class _MessageDB(_Entity):
             res = None
 
             for rec in self._gwy.msg_db.qry_field(
-                sql, (self.id[:9], self.id[:9], code_par, key)
+                sql, (self.id[:9], self.id[:9], code_qry, key)
             ):
                 _LOGGER.debug("Fetched from index: %s", rec)
-                assert isinstance(rec[0], dt)
+                assert isinstance(rec[0], dt)  # mypy hint
                 if rec[0] > latest:  # dtm, only use most recent
                     res = Code(rec[1])
                     latest = rec[0]
@@ -482,19 +500,19 @@ class _MessageDB(_Entity):
         Retrieve from the _msgs dict the most current value of a specific code & keyword combination
         or the first key's value when no key is specified.
 
-        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY or * (wildcard)
         :param code: (optional) a single message Code to use, e.g. 31DA
+        :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY or * (wildcard)
         :param kwargs: not used as of 0.51.7
         :return: a single string or float value or None when qry returned empty
         """
         val_msg: dict | list | None = None
         val: object = None
         cd: Code | None = self._msg_qry_by_code_key(code, key)
-        if cd is None or cd not in self._msgs:
+        if cd is None or cd not in self._msgs:  # _msgs or msgs_ ?
             _LOGGER.warning("Code %s not in device %s's messages", cd, self.id)
         else:
             val_msg = self._msg_value_msg(
-                self._msgs_[cd],
+                self._msgs_[cd],  # _msgs or _msgs_ ?
                 key=key,  # key can be wildcard *
             )
         if val_msg:
@@ -556,8 +574,8 @@ class _MessageDB(_Entity):
         :return: flat dict of messages by Code
         """
         if not self._gwy.msg_db:
-            # no central SQLite MessageIndex, deprecated since 0.51.9
-            return self._msgs_
+            _LOGGER.warning("Missing MessageIndex")
+            raise NotImplementedError
 
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
@@ -574,6 +592,7 @@ class _MessageDB(_Entity):
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """
+        # TODO(eb): Still needed? If not, remove asap
         if not self._gwy.msg_db:
             _LOGGER.warning("Missing MessageIndex")
             raise NotImplementedError
@@ -581,7 +600,7 @@ class _MessageDB(_Entity):
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
 
-        for msg in self._msgs.values():  # only verbs I, RP
+        for msg in self._msgs.values():  # contains only verbs I, RP
             if msg.code not in msgs_1:
                 msgs_1[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
             elif msg.verb not in msgs_1[msg.code]:

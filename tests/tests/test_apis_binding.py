@@ -7,6 +7,7 @@ from typing import TypeVar
 
 import pytest
 
+from ramses_rf.database import MessageIndex
 from ramses_rf.device.base import Fakeable  # initiate_binding_, wait_for_binding_
 from ramses_rf.device.heat import DhwSensor, Thermostat  # initiate_binding_process
 from ramses_rf.device.hvac import (  # initiate_binding_process
@@ -46,7 +47,7 @@ class GatewayStub:
     devices: list[Fakeable] = []
 
     _include: dict[str] = {}
-    msg_db = None
+    msg_db = MessageIndex(maintain=False)
 
     def _add_device(self, dev: Fakeable) -> None:
         self.device_by_id[dev.id] = dev
