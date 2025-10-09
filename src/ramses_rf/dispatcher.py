@@ -70,12 +70,12 @@ def _create_devices_from_addrs(gwy: Gateway, this: Message) -> None:
     # Devices need to know their controller, ?and their location ('parent' domain)
     # NB: only addrs processed here, packet metadata is processed elsewhere
 
-    # Determinging bindings to a controller:
+    # Determining bindings to a controller:
     #  - configury; As per any schema                                                   # codespell:ignore configury
     #  - discovery: If in 000C pkt, or pkt *to* device where src is a controller
     #  - eavesdrop: If pkt *from* device where dst is a controller
 
-    # Determinging location in a schema (domain/DHW/zone):
+    # Determining location in a schema (domain/DHW/zone):
     #  - configury; As per any schema                                                   # codespell:ignore configury
     #  - discovery: If in 000C pkt - unable for 10: & 00: (TRVs)
     #  - discovery: from packet fingerprint, excl. payloads (only for 10:)
@@ -99,7 +99,7 @@ def _create_devices_from_addrs(gwy: Gateway, this: Message) -> None:
 def _check_msg_addrs(msg: Message) -> None:  # TODO
     """Validate the packet's address set.
 
-    Raise InvalidAddrSetError if the meta data is invalid, otherwise simply return.
+    Raise InvalidAddrSetError if the metadata is invalid, otherwise simply return.
     """
 
     # TODO: needs work: doesn't take into account device's (non-HVAC) class
@@ -218,7 +218,7 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
             and msg.dst != msg.src
         ):
             # HGI80 can do what it likes
-            # receiving an I isn't currently in the schema & so can't yet be tested
+            # receiving an I_ isn't currently in the schema & so can't yet be tested
             _check_dst_slug(msg)  # ? raise exc.PacketInvalid
 
         if gwy.config.reduce_processing >= DONT_UPDATE_ENTITIES:
@@ -269,7 +269,9 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
     else:
         logger_xxxx(msg)
         if gwy.msg_db:
-            gwy.msg_db.add(msg)
+            gwy.msg_db.add(
+                msg
+            )  # why add it anyway? will fail in testst comparing to _msgs
 
 
 # TODO: this needs cleaning up (e.g. handle intervening packet)

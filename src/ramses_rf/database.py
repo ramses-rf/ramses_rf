@@ -325,7 +325,7 @@ class MessageIndex:
 
         :returns: any messages that were removed.
         """
-        # print(f"SQL REM msg={msg} bool{bool(msg)} kwargs={kwargs} bool(kwargs)")
+        # _LOGGER.debug(f"SQL REM msg={msg} bool{bool(msg)} kwargs={kwargs} bool(kwargs)")
         # SQL REM
         # msg=||  02:044328 | | I | heat_demand | FC || {'domain_id': 'FC', 'heat_demand': 0.74}
         # boolTrue
@@ -430,7 +430,7 @@ class MessageIndex:
         # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"  # for debug
         for row in self._cu.fetchall():
             ts: DtmStrT = row[0].isoformat(timespec="microseconds")
-            # print(
+            # _LOGGER.debug(
             #     f"QRY Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
             # )
             # QRY Msg key raw: 2022-09-08 13:43:31.536862 Reformatted: 2022-09-08T13:43:31.536862
@@ -464,7 +464,7 @@ class MessageIndex:
         # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"
         for row in self._cu.fetchall():
             ts: DtmStrT = row[0].isoformat(timespec="microseconds")
-            # print(
+            # _LOGGER.debug(
             #     f"ALL Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
             # )
             # ALL Msg key raw: 2022-05-02 10:02:02.744905
