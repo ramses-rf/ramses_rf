@@ -193,8 +193,8 @@ class _MessageDB(_Entity):
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
 
         # As of 0.51.9 we use SQLite MessageIndex, see ramses_rf/database.py
-        # _msgz_ was only used in this module. Note:
-        # _msgz (now rebuilt from _msgs_) also used in: client, base, device.heat
+        # _msgz_ (nested) was only used in this module. Note:
+        # _msgz (now rebuilt from _msgs) also used in: client, base, device.heat
 
     def _handle_msg(self, msg: Message) -> None:
         """Store a msg in the DBs.
@@ -559,9 +559,9 @@ class _MessageDB(_Entity):
         """Get the codes seen by the entity."""
 
         codes = {
-            k: (CODES_SCHEMA[k][SZ_NAME] if k in CODES_SCHEMA else None)
-            for k in sorted(self._msgs)
-            if self._msgs[k].src == (self if hasattr(self, "addr") else self.ctl)
+            code: (CODES_SCHEMA[code][SZ_NAME] if code in CODES_SCHEMA else None)
+            for code in sorted(self._msgs)
+            if self._msgs[code].src == (self if hasattr(self, "addr") else self.ctl)
         }
 
         return {"_sent": list(codes.keys())}
@@ -588,7 +588,7 @@ class _MessageDB(_Entity):
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
         """
         Get a nested dict of all I/RP messages logged with this device as either src or dst.
-        Based on new query on MessageIndex.
+        Based on SQL query on MessageIndex with device as src or dst.
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """
