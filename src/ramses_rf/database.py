@@ -81,9 +81,7 @@ class MessageIndex:
         """Instantiate a message database/index."""
 
         self.maintain = maintain
-        self._msgs: MsgDdT = (
-            OrderedDict()
-        )  # stores all messages for retrieval. Filled in housekeeping loop.
+        self._msgs: MsgDdT = OrderedDict()  # stores all messages for retrieval. Filled & cleaned up in housekeeping_loop.
 
         # Connect to a SQLite DB in memory
         self._cx = sqlite3.connect(
@@ -175,14 +173,14 @@ class MessageIndex:
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
             """
-            Delete all messages from the using the MessageIndex older than a given delta.
+            Deletes all messages older than a given delta from the dict using the MessageIndex.
             :param dt_now: current timestamp
             :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
             """
             dtm = dt_now - _cutoff  # .isoformat(timespec="microseconds") < needed?
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm => ?", (dtm,))
-            rows = self._cu.fetchall()
+            rows = self._cu.fetchall()  # fetch dtm of current messages to retain
 
             try:  # make this operation atomic, i.e. update self._msgs only on success
                 await self._lock.acquire()
@@ -432,7 +430,9 @@ class MessageIndex:
         lst: list[Message] = []
         # stamp = list(self._msgs)[0] if len(self._msgs) > 0 else "N/A"  # for debug
         for row in self._cu.fetchall():
-            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            ts: DtmStrT = row[0].isoformat(
+                timespec="microseconds"
+            )  # must reformat from DTM
             # _LOGGER.debug(
             #     f"QRY Msg key raw: {row[0]} Reformatted: {ts} _msgs stamp format: {stamp}"
             # )

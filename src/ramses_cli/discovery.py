@@ -394,7 +394,7 @@ async def script_scan_otb_ramses(
         Code._3223,
         Code._3EF0,  # rel. modulation level  / RelativeModulationLevel (also, below)
         Code._3EF1,  # rel. modulation level  / RelativeModulationLevel
-    )  # excl. 3220
+    )  # excl. 3150, 3220
 
     for c in _CODES:
         gwy.send_cmd(Command.from_attrs(RQ, dev_id, c, "00"), priority=Priority.LOW)

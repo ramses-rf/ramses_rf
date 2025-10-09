@@ -13,6 +13,7 @@ class TestMessageIndex:
 
     _SRC1 = "32:166025"
     _SRC2 = "01:087939"  # (CTR)
+    _NONA = "--:------"
     _NOW = dt.now().replace(microsecond=0)
 
     msg1: Message = Message._from_pkt(
@@ -40,6 +41,13 @@ class TestMessageIndex:
         Packet(
             _NOW + td(seconds=40),
             "...  I --- 04:189078 --:------ 01:145038 3150 002 0100",  # heat_demand
+        )
+    )
+
+    msg6: Message = Message._from_pkt(
+        Packet(
+            _NOW + td(seconds=50),
+            "061 RP --- 10:078099 01:087939 --:------ 3220 005 00C0110000",  # OTB
         )
     )
 
@@ -96,11 +104,14 @@ class TestMessageIndex:
         msg_db.add(self.msg3)
         msg_db.add(self.msg4)
         msg_db.add(self.msg5)
+        msg_db.add(self.msg6)
 
         # qry by code
         assert msg_db.contains(code="2309"), "code 2309 missing"
         assert msg_db.contains(code="3150"), "code 3150 missing"
-        assert msg_db.contains(src="01:087939", code="2309"), "src missing"
+        assert msg_db.contains(src="01:087939", dst="01:087939", code="2309"), (
+            "src, dst missing"
+        )
         assert not msg_db.contains(src="01:12345", code="2309"), (
             "random src should return False"
         )
@@ -126,6 +137,7 @@ class TestMessageIndex:
                 "2309",
                 "|zone_idx|setpoint|",
             ),
+            ("3220", "|msg_id|msg_type|msg_name|value|description|"),
         ]
 
         # Use multi-field SQLite query on MessageIndex
@@ -145,6 +157,14 @@ class TestMessageIndex:
         ]
         assert msg_db.contains(plk="|co2_level|"), "payload keys missing"
 
+        # src only query on MessageIndex
+        sql = """
+                SELECT code, dst from messages WHERE verb in (' I', 'RP')
+                AND (src = ?)
+            """
+        res = msg_db.qry_field(sql, ("04:189078",))
+        assert res == [("3150", "01:145038")]  # so dst is addrs[2], not --:------
+
         # Use payload key SQLite query on MessageIndex
         sql = """
                 SELECT code, ctx from messages WHERE verb in (' I', 'RP')
@@ -156,4 +176,4 @@ class TestMessageIndex:
 
         assert msg_db.contains(plk="|co2_level|"), "payload keys missing"
 
-        assert len(msg_db.all()) == 4
+        assert len(msg_db.all()) == 5
