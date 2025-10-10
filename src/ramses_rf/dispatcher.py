@@ -271,7 +271,7 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
         if gwy.msg_db:
             gwy.msg_db.add(
                 msg
-            )  # why add it anyway? will fail in testst comparing to _msgs
+            )  # why add it anyway? will fail in tests comparing to device.self._msgs_
 
 
 # TODO: this needs cleaning up (e.g. handle intervening packet)

@@ -203,15 +203,10 @@ class _MessageDB(_Entity):
 
         if not (
             msg.src.id == self.id[:9]  # do store if dev is msg.src
-            or (
-                msg.dst.id == self.id[:9] and msg.verb != RQ
-            )  # store if dev is msg.dst, except RQs
+            or (msg.dst.id == self.id[:9] and msg.verb != RQ)  # skip RQs to self
             or (
                 msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9
             )  # skip rf_bind rq
-            # or (  # doesn't fix the tests
-            #     msg.code == Code._3150 and getattr(self, "_is_controller", True)
-            # )  # heat_demand
         ):
             return  # don't store the rest
 
@@ -532,7 +527,7 @@ class _MessageDB(_Entity):
         :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
         :return: list of payload dicts from the selected messages, or an empty list
         """
-        # not used yet as of 0.51.7
+        # not used yet as of 0.51.9
 
         res: list[dict] = []
         if sql and self._gwy.msg_db:
