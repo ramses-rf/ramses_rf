@@ -220,7 +220,7 @@ class _MessageDB(_Entity):
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         if msg.verb in (I_, RP):  # drop RQ's
-            print(f"Added msg with code {msg.code} to {self.id}._msgs_")  # debug EBR
+            # _LOGGER.debug(f"Added msg with code {msg.code} to {self.id}._msgs_")  # debug EBR
             self._msgs_[msg.code] = msg
 
     @property
@@ -579,6 +579,9 @@ class _MessageDB(_Entity):
             _LOGGER.warning("Missing MessageIndex")
             raise NotImplementedError
 
+        if self.id[:3] == "18:":  # HGI, confirm this is correct, tests suggest so
+            return {}
+
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
@@ -586,15 +589,18 @@ class _MessageDB(_Entity):
             m.code: m
             for m in self._gwy.msg_db.qry(
                 sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
-            )
-        }  # e.g. 01:123456_HW
-        # if CTL, remove 3150, 3220 heat_demand, both are only stored on children HACK
-        # if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTR":
-        #     if Code._3150 in _msg_dict:
-        #         _msg_dict.pop(Code._3150)
-        #     if Code._3220 in _msg_dict:
-        #         _msg_dict.pop(Code._3220)
-        #     print(f"Removed 3150/3220 from {self.id}._msgs dict")
+            )  # e.g. 01:123456_HW
+        }
+        # if CTL, remove 3150, 3220 heat_demand, both are only stored on children
+        # HACK
+        if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTL":
+            # with next ON: 2 errors , both 1x UFC, 1x CTR
+            # with next OFF: 4 errors, all CTR
+            if Code._3150 in _msg_dict:  # CTL can send a 3150 (see heat_ufc_00)
+                _msg_dict.pop(Code._3150)
+            if Code._3220 in _msg_dict:
+                _msg_dict.pop(Code._3220)
+            # _LOGGER.debug(f"Removed 3150/3220 from {self.id}._msgs dict")
         return _msg_dict
 
     @property

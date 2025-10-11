@@ -76,8 +76,9 @@ class DeviceBase(Entity):
         self._scheme: Vendor = None
 
     def __str__(self) -> str:
-        if self._STATE_ATTR:
-            return f"{self.id} ({self._SLUG}): {getattr(self, self._STATE_ATTR)}"
+        if self._STATE_ATTR and hasattr(self, self._STATE_ATTR):
+            state: float | None = getattr(self, self._STATE_ATTR)
+            return f"{self.id} ({self._SLUG}): {state}"
         return f"{self.id} ({self._SLUG})"
 
     def __lt__(self, other: object) -> bool:

@@ -66,6 +66,8 @@ class MessageIndex:
     Index holds the latest message to & from all devices by header
     (example of a hdr: 000C|RP|01:223036|0208)."""
 
+    _housekeeping_task = None
+
     def __init__(self, maintain: bool = True) -> None:
         """Instantiate a message database/index."""
 
@@ -427,7 +429,7 @@ class MessageIndex:
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
             else:  # happens in tests with artificial msg from heat
-                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+                _LOGGER.warning("MessageIndex timestamp %s not in device messages", ts)
         return tuple(lst)
 
     def qry_field(

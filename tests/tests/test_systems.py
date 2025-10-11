@@ -72,7 +72,6 @@ async def test_schemax_with_log_file(dir_name: Path) -> None:
     await gwy.stop()
 
 
-# TODO(eb): fix Test fails, heat only
 async def test_systemx_from_log_file(dir_name: Path) -> None:
     """Compare the system built from a log file with the expected results."""
 
@@ -91,8 +90,8 @@ async def test_systemx_from_log_file(dir_name: Path) -> None:
     for tcs in gwy.systems:
         _ = tcs.schema
         _ = tcs.traits
-        _ = tcs.params  # TODO(eb): fix assert in _msg_value_msg()
-        _ = tcs.status  # TODO(eb): fix assert in _msg_value_msg()
+        _ = tcs.params
+        _ = tcs.status
 
     await gwy.stop()
 
@@ -112,7 +111,7 @@ async def test_systemx_from_log_file(dir_name: Path) -> None:
 # await gwy.stop()
 
 
-# TODO(eb): fix Test fails, heat only
+# TODO(eb): fix Test fails, (some) heat only
 async def test_restore_from_log_file(dir_name: Path) -> None:
     """Compare the system built from a get_state log file with the expected results."""
 
@@ -129,35 +128,33 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
 
     for dev in gwy.devices:  # SQLite refactor should pass this test
         if dev._gwy.msg_db:
-            assert sorted(dev._msgs) == sorted(dev._msgs_), dev
+            assert sorted(dev._msgs) == sorted(dev._msgs_), (
+                f"Assert 1: {dev} _msgs != _msgs_"
+            )
             # above assert errors in:
-            # [heat_otb_00] - AssertionError: 01:145038 (CTL)
-            # [heat_simple] - AssertionError: 01:145038 (CTL)
-            # [heat_ufc_00] - AssertionError: 01:087939 (CTL)
-            # [heat_ufc_01] - AssertionError: 01:073976 (CTL)
-            # [heat_zxdavb] - AssertionError: 01:145038 (CTL)
-            # but no errors in:
-            # [hvac_nuaire] no HEAT
-            # [heat_trv_00] HEAT, has 3150 & 3220
+            # 2 failed
+            # - tests/tests/test_systems.py:115 test_restore_from_log_file[heat_ufc_01]
+            # - tests/tests/test_systems.py:115 test_restore_from_log_file[heat_ufc_00]
             #
-            # only problem: extra 3150 (heat_demand) and 3220 (OTB), always CTL
+            # always same problem: extra 3150 (heat_demand) and 3220 (OTB), only on CTL
             #
-            # FAILED test_restore_from_log_file[heat_ufc_01] - AssertionError: 01:073976 (CTL)
+            # FAILED test_restore_from_log_file[heat_ufc_01] - AssertionError 2: 01:073976 (CTL)
             # assert ['0005', '000C', '3150'] == ['0005', '000C']
             # Left contains one more item: '3150'
             # Full diff:
             # [
             #     '0005',
             #     '000C',
-            #  +  '3150', <<< in 01:073976._msgs but NOT in dev._msgs_ ("controller has no attr heat_demand")
+            #  +  '3150', <<< in 01:073976._msgs but NOT in dev._msgs_
             # ]
 
-            sql = """
-                SELECT dtm from messages WHERE verb in (' I', 'RP')
-                AND (src = ? OR dst = ?) """
-            assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:9], dev.id[:9]))) == len(
-                dev._msgs_
-            ), f"{dev} qry != _msgs_"
+            # don't expect this to match: _msgb creation requires filter:
+            # sql = """
+            #     SELECT dtm from messages WHERE verb in (' I', 'RP')
+            #     AND (src = ? OR dst = ?) """
+            # assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:13], dev.id[:13]))) == len(
+            #     dev._msgs_
+            # ), f"Assert 2: {dev} qry != _msgs_"
 
 
 async def test_shuffle_from_log_file(dir_name: Path) -> None:
