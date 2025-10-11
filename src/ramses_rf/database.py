@@ -8,24 +8,13 @@ import logging
 import sqlite3
 from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
-from typing import Any, NewType, TypedDict
+from typing import TYPE_CHECKING, Any, NewType
 
 from ramses_tx import Message
 
-DtmStrT = NewType("DtmStrT", str)
-MsgDdT = OrderedDict[DtmStrT, Message]
-
-
-class Params(TypedDict):
-    dtm: dt | str | None
-    verb: str | None
-    src: str | None
-    dst: str | None
-    code: str | None
-    ctx: str | None
-    hdr: str | None
-    plk: str | None
-
+if TYPE_CHECKING:
+    DtmStrT = NewType("DtmStrT", str)
+    MsgDdT = OrderedDict[DtmStrT, Message]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -148,8 +137,8 @@ class MessageIndex:
             CREATE TABLE messages (
                 dtm    DTM      NOT NULL PRIMARY KEY,
                 verb   TEXT(2)  NOT NULL,
-                src    TEXT(9)  NOT NULL,
-                dst    TEXT(9)  NOT NULL,
+                src    TEXT(12) NOT NULL,
+                dst    TEXT(12) NOT NULL,
                 code   TEXT(4)  NOT NULL,
                 ctx    TEXT,
                 hdr    TEXT     NOT NULL UNIQUE,

@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
 
 _QOS_TX_LIMIT = 12  # TODO: needs work
-
+_ID_SLICE = 13  # was 9 for base address only
 _SZ_LAST_PKT: Final = "last_msg"
 _SZ_NEXT_DUE: Final = "next_due"
 _SZ_TIMEOUT: Final = "timeout"
@@ -202,8 +202,10 @@ class _MessageDB(_Entity):
         """
 
         if not (
-            msg.src.id == self.id[:9]  # do store if dev is msg.src
-            or (msg.dst.id == self.id[:9] and msg.verb != RQ)  # skip RQs to self
+            msg.src.id == self.id[:_ID_SLICE]  # do store if dev is msg.src
+            or (
+                msg.dst.id == self.id[:_ID_SLICE] and msg.verb != RQ
+            )  # skip RQs to self
             or (
                 msg.dst.id == ALL_DEVICE_ID and msg.code == Code._1FC9
             )  # skip rf_bind rq
@@ -218,6 +220,7 @@ class _MessageDB(_Entity):
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         if msg.verb in (I_, RP):  # drop RQ's
+            print(f"Added msg with code {msg.code} to {self.id}._msgs_")  # debug EBR
             self._msgs_[msg.code] = msg
 
     @property
@@ -430,7 +433,9 @@ class _MessageDB(_Entity):
             """
             res: list[Code] = []
 
-            for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+            for rec in self._gwy.msg_db.qry_field(
+                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
+            ):
                 _LOGGER.debug("Fetched from index: %s", rec[0])
                 # Example: "Fetched from index: code 1FD4"
                 res.append(Code(str(rec[0])))
@@ -475,7 +480,7 @@ class _MessageDB(_Entity):
             res = None
 
             for rec in self._gwy.msg_db.qry_field(
-                sql, (self.id[:9], self.id[:9], code_qry, key)
+                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE], code_qry, key)
             ):
                 _LOGGER.debug("Fetched from index: %s", rec)
                 assert isinstance(rec[0], dt)  # mypy hint
@@ -534,7 +539,9 @@ class _MessageDB(_Entity):
             # example query:
             # """SELECT code from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
             # AND (code = '31DA' OR ...) AND (plk LIKE '%{SZ_FAN_INFO}%' OR ...)""" = 2 params
-            for rec in self._gwy.msg_db.qry_field(sql, (self.id[:9], self.id[:9])):
+            for rec in self._gwy.msg_db.qry_field(
+                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
+            ):
                 _pl = self._msgs_[Code(rec[0])].payload
                 # add payload dict to res
                 res.append(_pl)  # only if newer, handled by MessageIndex
@@ -575,9 +582,20 @@ class _MessageDB(_Entity):
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
-        return {  # ? use ctx (context) instead of just the address?
-            m.code: m for m in self._gwy.msg_db.qry(sql, (self.id[:9], self.id[:9]))
+        _msg_dict = {  # ? use ctx (context) instead of just the address?
+            m.code: m
+            for m in self._gwy.msg_db.qry(
+                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
+            )
         }  # e.g. 01:123456_HW
+        # if CTL, remove 3150, 3220 heat_demand, both are only stored on children HACK
+        # if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTR":
+        #     if Code._3150 in _msg_dict:
+        #         _msg_dict.pop(Code._3150)
+        #     if Code._3220 in _msg_dict:
+        #         _msg_dict.pop(Code._3220)
+        #     print(f"Removed 3150/3220 from {self.id}._msgs dict")
+        return _msg_dict
 
     @property
     def _msgz(self) -> dict[Code, dict[VerbT, dict[bool | str | None, Message]]]:
