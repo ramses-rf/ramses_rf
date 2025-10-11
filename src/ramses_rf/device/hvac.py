@@ -653,7 +653,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         handling for 2411 parameter messages. It updates the device state and
         triggers any necessary callbacks.
 
-        After handling the messages, it calls the initialized callback if set to notify that
+        After handling the messages, it calls the initialized callback - if set - to notify that
         the device was fully initialized.
 
         :param msg: The incoming message to process
@@ -945,7 +945,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         if Code._31D9 in self._msgs:
             # was a dict by Code
-            # Itho, Vasco D60 and ClimaRad minibox send mode/speed in _31D9
+            # Itho, Vasco D60 and ClimaRad MiniBox fan send mode/speed in _31D9
             v: str
             for k, v in self._msgs[Code._31D9].payload.items():
                 if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
