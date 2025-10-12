@@ -66,7 +66,7 @@ class MessageIndex:
     Index holds the latest message to & from all devices by header
     (example of a hdr: 000C|RP|01:223036|0208)."""
 
-    _housekeeping_task = None
+    _housekeeping_task: asyncio.Task[None]
 
     def __init__(self, maintain: bool = True) -> None:
         """Instantiate a message database/index."""
@@ -87,7 +87,7 @@ class MessageIndex:
         if self.maintain:
             self._lock = asyncio.Lock()
             self._last_housekeeping: dt = None  # type: ignore[assignment]
-            self._housekeeping_task: asyncio.Task[None] = None  # type: ignore[assignment]
+            self._housekeeping_task = None  # type: ignore[assignment]
 
         self.start()
 
@@ -98,7 +98,7 @@ class MessageIndex:
         """Start the housekeeper loop."""
 
         if self.maintain:
-            if self._housekeeping_task and not self._housekeeping_task.done():
+            if self._housekeeping_task and (not self._housekeeping_task.done()):
                 return
 
             self._housekeeping_task = asyncio.create_task(
@@ -108,7 +108,7 @@ class MessageIndex:
     def stop(self) -> None:
         """Stop the housekeeper loop."""
 
-        if self._housekeeping_task and not self._housekeeping_task.done():
+        if self._housekeeping_task and (not self._housekeeping_task.done()):
             self._housekeeping_task.cancel()  # stop the housekeeper
 
         self._cx.commit()  # just in case

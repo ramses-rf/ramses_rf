@@ -173,8 +173,11 @@ class Gateway(Engine):
             **self._packet_log,
         )
 
-        self.msg_db = MessageIndex()  # start the index
+        # initialize SQLite index, set in _tx/Engine
+        if self._sqlite_index:
+            self.create_sqlite_message_index()  # if activated in ramses_cc
 
+        # temporarily turn on discovery, remember original state
         self.config.disable_discovery, disable_discovery = (
             True,
             self.config.disable_discovery,
@@ -186,6 +189,7 @@ class Gateway(Engine):
         if cached_packets:
             await self._restore_cached_packets(cached_packets)
 
+        # reset discovery to original state
         self.config.disable_discovery = disable_discovery
 
         if (
@@ -194,6 +198,9 @@ class Gateway(Engine):
             and start_discovery
         ):
             initiate_discovery(self.devices, self.systems)
+
+    def create_sqlite_message_index(self) -> None:
+        self.msg_db = MessageIndex()  # start the index
 
     async def stop(self) -> None:
         """Stop the Gateway and tidy up."""

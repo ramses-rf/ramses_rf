@@ -338,7 +338,6 @@ SCH_GLOBAL_TRAITS_DICT, SCH_TRAITS = sch_global_traits_dict_factory()
 #
 # Device lists (Engine configuration)
 
-
 DeviceIdT = NewType("DeviceIdT", str)  # TypeVar('DeviceIdT', bound=str)  #
 DevIndexT = NewType("DevIndexT", str)
 DeviceListT: TypeAlias = dict[DeviceIdT, DeviceTraitsT]
@@ -397,10 +396,14 @@ def select_device_filter_mode(
 
 #
 # 5/5: Gateway (engine) configuration
+
 SZ_DISABLE_SENDING: Final = "disable_sending"
 SZ_DISABLE_QOS: Final = "disable_qos"
 SZ_ENFORCE_KNOWN_LIST: Final[str] = f"enforce_{SZ_KNOWN_LIST}"
 SZ_EVOFW_FLAG: Final = "evofw_flag"
+SZ_SQLITE_INDEX: Final = (
+    "sqlite_index"  # temporary 0.52.x SQLite dev config option in ramses_cc
+)
 SZ_USE_REGEX: Final = "use_regex"
 
 SCH_ENGINE_DICT = {
@@ -408,10 +411,13 @@ SCH_ENGINE_DICT = {
     vol.Optional(SZ_DISABLE_QOS, default=None): vol.Any(
         None,  # None is selective QoS (e.g. QoS only for bindings, schedule, etc.)
         bool,
-    ),  # in long term, this default to be True (and no None)
+    ),  # in the long term, this default to be True (not None)
     vol.Optional(SZ_ENFORCE_KNOWN_LIST, default=False): bool,
     vol.Optional(SZ_EVOFW_FLAG): vol.Any(None, str),
     # vol.Optional(SZ_PORT_CONFIG): SCH_SERIAL_PORT_CONFIG,
+    vol.Optional(
+        SZ_SQLITE_INDEX, default=False
+    ): bool,  # temporary 0.52.x dev config option
     vol.Optional(SZ_USE_REGEX): dict,  # vol.All(ConvertNullToDict(), dict),
     vol.Optional(SZ_COMMS_PARAMS): SCH_COMMS_PARAMS,
 }

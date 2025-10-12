@@ -37,6 +37,7 @@ from .schemas import (
     SZ_PACKET_LOG,
     SZ_PORT_CONFIG,
     SZ_PORT_NAME,
+    SZ_SQLITE_INDEX,
     PktLogConfigT,
     PortConfigT,
     select_device_filter_mode,
@@ -112,6 +113,7 @@ class Engine:
             self._include,
             self._exclude,
         )
+        self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX)
         self._kwargs: dict[str, Any] = kwargs  # HACK
 
         self._engine_lock = Lock()  # FIXME: threading lock, or asyncio lock?

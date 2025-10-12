@@ -191,6 +191,9 @@ class _MessageDB(_Entity):
         super().__init__(gwy)
 
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
+        self._msgz_: dict[
+            Code, dict[VerbT, dict[bool | str | None, Message]]
+        ] = {}  # code/verb/ctx, deprecated Q1 2026
 
         # As of 0.51.9 we use SQLite MessageIndex, see ramses_rf/database.py
         # _msgz_ (nested) was only used in this module. Note:
@@ -222,6 +225,16 @@ class _MessageDB(_Entity):
         if msg.verb in (I_, RP):  # drop RQ's
             # _LOGGER.debug(f"Added msg with code {msg.code} to {self.id}._msgs_")  # debug EBR
             self._msgs_[msg.code] = msg
+
+        if msg.code not in self._msgz_:  # deprecated
+            # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
+            self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
+        elif msg.verb not in self._msgz_[msg.code]:
+            # Same, 1 level deeper
+            self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
+        else:
+            # Same, replacing previous message
+            self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
     def _msg_list(self) -> list[Message]:
@@ -273,6 +286,8 @@ class _MessageDB(_Entity):
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
+            with contextlib.suppress(KeyError):
+                del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
@@ -596,8 +611,8 @@ class _MessageDB(_Entity):
         if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTL":
             # with next ON: 2 errors , both 1x UFC, 1x CTR
             # with next OFF: 4 errors, all CTR
-            if Code._3150 in _msg_dict:  # CTL can send a 3150 (see heat_ufc_00)
-                _msg_dict.pop(Code._3150)
+            # if Code._3150 in _msg_dict:  # CTL can send a 3150 (see heat_ufc_00)
+            #     _msg_dict.pop(Code._3150)  # prefer to have 2 extra instead of missing 1
             if Code._3220 in _msg_dict:
                 _msg_dict.pop(Code._3220)
             # _LOGGER.debug(f"Removed 3150/3220 from {self.id}._msgs dict")
@@ -614,7 +629,8 @@ class _MessageDB(_Entity):
         # TODO(eb): Still needed? If not, remove asap
         if not self._gwy.msg_db:
             _LOGGER.warning("Missing MessageIndex")
-            raise NotImplementedError
+            return self._msgz_
+            # raise NotImplementedError
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
