@@ -218,8 +218,6 @@ class _MessageDB(_Entity):
         if self._gwy.msg_db:  # central SQLite MessageIndex
             self._gwy.msg_db.add(msg)
             # ignore any replaced message that might be returned
-        else:
-            raise NotImplementedError
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         if msg.verb in (I_, RP):  # drop RQ's
@@ -240,16 +238,19 @@ class _MessageDB(_Entity):
     def _msg_list(self) -> list[Message]:
         """Return a flattened list of all messages logged on device."""
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
-        msg_list_qry: list[Message] = []
-        code_list = self._msg_dev_qry()
-        if code_list:
-            for c in code_list:
-                if c in self._msgs:
-                    # safeguard against lookup failures ("sim" packets?)
-                    msg_list_qry.append(self._msgs[c])
-                else:
-                    _LOGGER.debug("Could not fetch self._msgs[%s]", c)
-        return msg_list_qry
+        if self._gwy.msg_db:
+            msg_list_qry: list[Message] = []
+            code_list = self._msg_dev_qry()
+            if code_list:
+                for c in code_list:
+                    if c in self._msgs:
+                        # safeguard against lookup failures ("sim" packets?)
+                        msg_list_qry.append(self._msgs[c])
+                    else:
+                        _LOGGER.debug("Could not fetch self._msgs[%s]", c)
+            return msg_list_qry
+        # legacy nested dict
+        return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
 
     def _add_record(
         self, address: Address, code: Code | None = None, verb: str = " I"
@@ -286,8 +287,9 @@ class _MessageDB(_Entity):
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
-            with contextlib.suppress(KeyError):
-                del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
+            if not self._gwy.msg_db:  # _msgz_ is deprecated, only used during migration
+                with contextlib.suppress(KeyError):
+                    del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
@@ -299,8 +301,31 @@ class _MessageDB(_Entity):
                 if msgs[0]._pkt._hdr != hdr:
                     raise LookupError
                 return msgs[0]
+            # raise LookupError
 
-        return None
+        else:
+            msg: Message
+            code: Code
+            verb: VerbT
+
+            # _ is device_id
+            code, verb, _, *args = hdr.split("|")  # type: ignore[assignment]
+
+            try:
+                if args and (ctx := args[0]):  # ctx may == True
+                    msg = self._msgz[code][verb][ctx]
+                elif False in self._msgz[code][verb]:
+                    msg = self._msgz[code][verb][False]
+                elif None in self._msgz[code][verb]:
+                    msg = self._msgz[code][verb][None]
+                else:
+                    return None
+            except KeyError:
+                return None
+
+            if msg._pkt._hdr != hdr:
+                raise LookupError
+            return msg
 
     def _msg_flag(self, code: Code, key: str, idx: int) -> bool | None:
         if flags := self._msg_value(code, key=key):
@@ -348,17 +373,22 @@ class _MessageDB(_Entity):
         )
 
         if verb:
-            if verb == "RQ":
+            if verb == VerbT("RQ"):
                 # must be a single code
                 assert not isinstance(code, tuple) or verb is None, (
                     f"Unsupported: using a keyword ({key}) with verb RQ. Ignoring key"
                 )
                 key = None
             try:
-                code = Code(self._msg_qry_by_code_key(code, key))
-                msg = self._msgs.get(code)
+                if self._gwy.msg_db:  # central SQLite MessageIndex
+                    code = Code(self._msg_qry_by_code_key(code, key, verb=verb))
+                    msg = self._msgs.get(code)
+                else:  # deprecated lookup in nested _msgz
+                    msgs = self._msgz[code][verb]
+                    msg = max(msgs.values()) if msgs else None
             except KeyError:
                 msg = None
+
         elif isinstance(code, tuple):
             msgs = [m for m in self._msgs.values() if m.code in code]
             msg = (
@@ -456,7 +486,9 @@ class _MessageDB(_Entity):
                 res.append(Code(str(rec[0])))
             _LOGGER.debug("_msg_dev_qry for %s fetched %s", self.id, res)
             return res
-        return None
+        else:
+            _LOGGER.warning("Missing MessageIndex")
+            raise NotImplementedError
 
     def _msg_qry_by_code_key(
         self,
@@ -469,7 +501,7 @@ class _MessageDB(_Entity):
 
         :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
         :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
-        :param kwargs: not used as of 0.51.9
+        :param kwargs: optional verb='vb' single verb
         :return: Code of most recent query result message or None when query returned empty
         """
         if self._gwy.msg_db:
@@ -483,10 +515,13 @@ class _MessageDB(_Entity):
             else:
                 code_qry = str(code)
             key = "*" if key is None else f"%{key}%"
-
+            if kwargs["verb"] and kwargs["verb"] in (" I", "RP"):
+                vb = f"('{str(kwargs['verb'])}',)"
+            else:
+                vb = "(' I', 'RP',)"
             # SQLite query on MessageIndex
             sql = """
-                SELECT dtm, code from messages WHERE verb in (' I', 'RP')
+                SELECT dtm, code from messages WHERE verb in ?
                 AND (src = ? OR dst = ?)
                 AND (code = ?)
                 AND (plk LIKE ?)
@@ -495,7 +530,7 @@ class _MessageDB(_Entity):
             res = None
 
             for rec in self._gwy.msg_db.qry_field(
-                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE], code_qry, key)
+                sql, (vb, self.id[:_ID_SLICE], self.id[:_ID_SLICE], code_qry, key)
             ):
                 _LOGGER.debug("Fetched from index: %s", rec)
                 assert isinstance(rec[0], dt)  # mypy hint
@@ -503,7 +538,9 @@ class _MessageDB(_Entity):
                     res = Code(rec[1])
                     latest = rec[0]
             return res
-        return None
+        else:
+            _LOGGER.warning("Missing MessageIndex")
+            raise NotImplementedError
 
     def _msg_value_qry_by_code_key(
         self,
