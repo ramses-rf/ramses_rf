@@ -591,8 +591,9 @@ class _MessageDB(_Entity):
         :return: flat dict of messages by Code
         """
         if not self._gwy.msg_db:
-            _LOGGER.warning("Missing MessageIndex")
-            raise NotImplementedError
+            return self._msgs_
+            # _LOGGER.warning("Missing MessageIndex")
+            # raise NotImplementedError
 
         if self.id[:3] == "18:":  # HGI, confirm this is correct, tests suggest so
             return {}
@@ -626,7 +627,7 @@ class _MessageDB(_Entity):
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """
-        # TODO(eb): Still needed? If not, remove asap
+        # TODO(eb): Deprecated since 0.52.0 remove Q1 2026
         if not self._gwy.msg_db:
             _LOGGER.warning("Missing MessageIndex")
             return self._msgz_
