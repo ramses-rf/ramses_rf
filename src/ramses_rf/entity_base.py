@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
 
 _QOS_TX_LIMIT = 12  # TODO: needs work
-_ID_SLICE = 13  # was 9 for base address only
+_ID_SLICE = 12  # was 9 for base address only, 12 for _02 sub/params_test?
 _SZ_LAST_PKT: Final = "last_msg"
 _SZ_NEXT_DUE: Final = "next_due"
 _SZ_TIMEOUT: Final = "timeout"
@@ -217,11 +217,29 @@ class _MessageDB(_Entity):
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             self._gwy.msg_db.add(msg)
-            # ignore any replaced message that might be returned
+            if msg.code == Code._0005 and msg.src.id.startswith("02:"):
+                print(
+                    f"Added msg from {msg.src} with code {msg.code} to _gwy.msg_db. hdr={msg._pkt._hdr}"
+                )  # debug EBR
+                # print(self._gwy.msg_db.get(src=str(msg.src[:9]), code=Code._0005))  # < success!
+                # print(self._gwy.msg_db.get(src=str(msg.src.id), code=Code._0005))  # print tuple
+                # Result in test log: lookup fails
+                # msg.src = 01:073976 (CTL)
+                # Added msg from 01:073976 (CTL) with code 0005 to _gwy.msg_db
+                # query is for: 01:073976  < no suffix
+                # ()
+                # Added msg with code 0005 to 01:073976._msgs_
+
+        # ignore any replaced message that might be returned
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         if msg.verb in (I_, RP):  # drop RQ's
-            # _LOGGER.debug(f"Added msg with code {msg.code} to {self.id}._msgs_")  # debug EBR
+            if msg.code == Code._0005 and msg.src.id.startswith(
+                "02:"
+            ):  # UFC only, 1 failing
+                print(
+                    f"Added msg with code {msg.code} to {self.id}._msgs_"
+                )  # debug EBR
             self._msgs_[msg.code] = msg
 
         if msg.code not in self._msgz_:  # deprecated
@@ -259,9 +277,9 @@ class _MessageDB(_Entity):
         # used by heat.py init
         if self._gwy.msg_db:
             self._gwy.msg_db.add_record(str(address), code=str(code), verb=verb)
-        else:
-            _LOGGER.warning("Missing MessageIndex")
-            raise NotImplementedError
+        # else:
+        #     _LOGGER.warning("Missing MessageIndex")
+        # raise NotImplementedError
 
     def _delete_msg(self, msg: Message) -> None:  # FIXME: this is a mess
         """Remove the msg from all state databases. Used for expired msgs."""
@@ -649,8 +667,8 @@ class _MessageDB(_Entity):
         if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTL":
             # with next ON: 2 errors , both 1x UFC, 1x CTR
             # with next OFF: 4 errors, all CTR
-            # if Code._3150 in _msg_dict:  # CTL can send a 3150 (see heat_ufc_00)
-            #     _msg_dict.pop(Code._3150)  # prefer to have 2 extra instead of missing 1
+            # if Code._3150 in _msg_dict:  # Note: CTL can send a 3150 (see heat_ufc_00)
+            #     _msg_dict.pop(Code._3150)  # keep, prefer to have 2 extra instead of missing 1
             if Code._3220 in _msg_dict:
                 _msg_dict.pop(Code._3220)
             # _LOGGER.debug(f"Removed 3150/3220 from {self.id}._msgs dict")
@@ -666,8 +684,8 @@ class _MessageDB(_Entity):
         """
         # TODO(eb): Deprecated since 0.52.0 remove Q1 2026
         if not self._gwy.msg_db:
-            _LOGGER.warning("Missing MessageIndex")
             return self._msgz_
+            # _LOGGER.warning("Missing MessageIndex")
             # raise NotImplementedError
 
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
@@ -732,7 +750,7 @@ class _Discovery(_MessageDB):
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
             # TODO(eb): migrate _msgz to msg_db
-            # lookup the "sim" OT 3220 record that was added in OtbGateway.init
+            # looks for the "sim" OT 3220 record that was added in OtbGateway.init
             for msg_id in sorted(self._msgz[Code._3220].get(RP, []))  # type: ignore[type-var]
             if (
                 self._is_not_deprecated_cmd(Code._3220, ctx=msg_id)

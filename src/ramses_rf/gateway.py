@@ -175,7 +175,7 @@ class Gateway(Engine):
 
         # initialize SQLite index, set in _tx/Engine
         if self._sqlite_index:
-            self.create_sqlite_message_index()  # if activated in ramses_cc
+            self.create_sqlite_message_index()  # if activated in ramses_cc > Engine
 
         # temporarily turn on discovery, remember original state
         self.config.disable_discovery, disable_discovery = (
@@ -272,7 +272,7 @@ class Gateway(Engine):
                 if wanted_msg(msg, include_expired=include_expired)
             }
         else:  # deprecated, to be removed in Q1 2026
-            _LOGGER.warning("Missing MessageIndex")
+            # _LOGGER.warning("Missing MessageIndex")
             pkts = {  # BUG: assumes pkts have unique dtms: may be untrue for contrived logs
                 f"{repr(msg._pkt)[:26]}": f"{repr(msg._pkt)[27:]}"
                 for msg in msgs

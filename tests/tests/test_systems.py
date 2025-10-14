@@ -130,9 +130,12 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
         if dev._gwy.msg_db:
             # related to ramses_rf/entity_base.py _msgs() creation
             # # prefer to have 2 extra msg instead of missing 1
-            assert 0 <= (len(dev._msgs) - len(dev._msgs_)) <= 2
+            assert -1 <= (len(dev._msgs) - len(dev._msgs_)) <= 1, (
+                "more than 1 code extra"
+            )
             # make sure every code from _msgs_ is in _msgb
-            assert set(dev._msgs_).issubset(dev._msgs)
+            assert set(dev._msgs_).issubset(dev._msgs), "not a subset"
+            # original test can't be met for UFC CTL 3150, see database.py qry()
             # assert sorted(dev._msgs) == sorted(dev._msgs_), (
             #     f"Assert 1: {dev} _msgs != _msgs_"
             # )
@@ -143,6 +146,8 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
             # assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:13], dev.id[:13]))) == len(
             #     dev._msgs_
             # ), f"Assert 2: {dev} qry != _msgs_"
+            #
+            # Note 0005 is a compound ctx (e.g. 0005/000C/0418)
 
 
 async def test_shuffle_from_log_file(dir_name: Path) -> None:
