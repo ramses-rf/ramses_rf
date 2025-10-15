@@ -480,7 +480,7 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
         SZ_NAME: "fan_params",
         I_: r"^(00|01|15|16|17|21)00[0-9A-F]{6}([0-9A-F]{8}){4}[0-9A-F]{4}$",
         RQ: r"^(00|01|15|16|17|21)00[0-9A-F]{2}((00){19})?$",
-        RP: r"^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{4})?$",
+        RP: r"^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{2}([0-9A-F]{2})?)?$",
         W_: r"^(00|01|15|16|17|21)00[0-9A-F]{6}[0-9A-F]{8}(([0-9A-F]{8}){3}[0-9A-F]{4})?$",
     },
     Code._2420: {  # unknown_2420, from OTB
@@ -1267,6 +1267,14 @@ _22F1_SCHEMES: dict[str, dict[str, str]] = {
 
 # unclear if true for only Orcon/*all* models
 _2411_PARAMS_SCHEMA: dict[str, dict[str, Any]] = {
+    "01": {  # all?
+        SZ_DESCRIPTION: "Support",
+        SZ_MIN_VALUE: 0xFF,  # None?
+        SZ_MAX_VALUE: 0xFF,
+        SZ_PRECISION: 1,
+        SZ_DATA_TYPE: "00",
+        SZ_DATA_UNIT: "",
+    },
     "31": {  # slot 09 (FANs produced after 2021)
         SZ_DESCRIPTION: "Time to change filter (days)",
         SZ_MIN_VALUE: 0,

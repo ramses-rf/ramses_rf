@@ -1,10 +1,8 @@
+# Orcon RF15 (with display)
 
 # From: https://gathering.tweakers.net/forum/list_messages/2135834/3
 # Set time to replace filter in menu option 10 from 180 to 150
 # Set after-run time moisture sensor (min) menu option 13 from 15 to 20
-
-
-# Orcon RF15 (with display)
 
 ### (31) Config settings - Time to change filter (days)
 2022-06-05T10:25:01.228218 067 RP --- 32:155617 37:171871 --:------ 0001 008 0020000900310A00                                # {'param_num': '31', 'slot_num': '09', 'next_slot_num': '0A', 'boolean_14': False, 'payload': '0020000900310A00'}
@@ -261,3 +259,9 @@
 2022-06-05T10:03:59.569545 067  I --- 32:155617 37:171871 --:------ 2411 023 0000953F0F000000C800000000000000C800000001A632
 2022-06-05T10:04:01.517182 075 RQ --- 37:171871 32:155617 --:------ 2411 003 000095
 2022-06-05T10:04:01.555434 071 RP --- 32:155617 37:171871 --:------ 2411 023 0000953F0F000000C800000000000000C800000001A632
+
+# ClimaRad MiniBox extraction FAN
+2025-10-14T11:04:50.340691 000 RQ --- 18:130140 29:099029 --:------ 2411 003 00003F
+# response:
+2025-10-14T00:00:00.000001 ... RP --- 29:099029 18:130140 --:------ 2411 022 00000100000000003200000000000000FF0000000120
+# meaning "not supported"? param_id 01 = ALL?, FF = None?

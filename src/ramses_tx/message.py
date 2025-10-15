@@ -96,7 +96,9 @@ class MessageBase:
 
         if self.src.id == self._addrs[0].id:  # type: ignore[unreachable]
             name_0 = self._name(self.src)
-            name_1 = "" if self.dst == self.src else self._name(self.dst)
+            name_1 = (
+                "" if self.dst is self.src else self._name(self.dst)
+            )  # use 'is', issue_cc 318
         else:
             name_0 = ""
             name_1 = self._name(self.src)
