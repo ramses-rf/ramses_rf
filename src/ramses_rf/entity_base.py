@@ -309,7 +309,6 @@ class _MessageDB(_Entity):
             if not self._gwy.msg_db:  # _msgz_ is deprecated, only used during migration
                 with contextlib.suppress(KeyError):
                     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
-        # missing return
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
@@ -321,8 +320,6 @@ class _MessageDB(_Entity):
                 if msgs[0]._pkt._hdr != hdr:
                     raise LookupError
                 return msgs[0]
-            # raise LookupError
-
         else:
             msg: Message
             code: Code
@@ -346,6 +343,7 @@ class _MessageDB(_Entity):
             if msg._pkt._hdr != hdr:
                 raise LookupError
             return msg
+        return None
 
     def _msg_flag(self, code: Code, key: str, idx: int) -> bool | None:
         if flags := self._msg_value(code, key=key):
