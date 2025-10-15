@@ -23,7 +23,7 @@ def _setup_db_adapters() -> None:
     """Set up the database adapters and converters."""
 
     def adapt_datetime_iso(val: dt) -> str:
-        """Adapt datetime.datetime to timezone-naive ISO 8601 datetime to match _msgs_ dtm keys."""
+        """Adapt datetime.datetime to timezone-naive ISO 8601 datetime to match _msgs dtm keys."""
         return val.isoformat(timespec="microseconds")
 
     sqlite3.register_adapter(dt, adapt_datetime_iso)

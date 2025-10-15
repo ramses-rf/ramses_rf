@@ -221,7 +221,7 @@ class _MessageDB(_Entity):
             if msg.code == Code._3150 and msg.src.id.startswith("01:"):
                 print(
                     f"Added msg from {msg.src} with code {msg.code} to _gwy.msg_db. hdr={msg._pkt._hdr}"
-                )  # debug EBR
+                )
                 # print(self._gwy.msg_db.get(src=str(msg.src[:9]), code=Code._0005))  # < success!
                 # print(self._gwy.msg_db.get(src=str(msg.src.id), code=Code._0005))  # print tuple
                 # Result in test log: lookup fails
@@ -232,7 +232,7 @@ class _MessageDB(_Entity):
                 # Added msg with code 0005 to 01:073976._msgs_
 
             # ignore any replaced message that might be returned
-        else:
+        else:  # TODO(eb): remove Q1 2026
             if msg.code not in self._msgz_:  # deprecated
                 # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
                 self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
@@ -244,13 +244,14 @@ class _MessageDB(_Entity):
                 self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
+        # TODO(eb): remove next block _msgs_ Q1 2026
         if msg.verb in (I_, RP):  # drop RQ's
             if msg.code == Code._3150 and msg.src.id.startswith(
                 "02:"
             ):  # print for UFC only, 1 failing test
                 print(
                     f"Added msg with code {msg.code} to {self.id}._msgs_.  hdr={msg._pkt._hdr}"
-                )  # debug EBR
+                )
             self._msgs_[msg.code] = msg
 
     @property
@@ -303,6 +304,7 @@ class _MessageDB(_Entity):
                 entities.extend(msg.src.tcs.zones)
 
         # remove the msg from all the state DBs
+        # TODO(eb): remove Q1 2026
         for obj in entities:
             if msg in obj._msgs_.values():
                 del obj._msgs_[msg.code]
@@ -580,11 +582,11 @@ class _MessageDB(_Entity):
         val_msg: dict | list | None = None
         val: object = None
         cd: Code | None = self._msg_qry_by_code_key(code, key)
-        if cd is None or cd not in self._msgs:  # _msgs or msgs_ ?
+        if cd is None or cd not in self._msgs:
             _LOGGER.warning("Code %s not in device %s's messages", cd, self.id)
         else:
             val_msg = self._msg_value_msg(
-                self._msgs_[cd],  # _msgs or _msgs_ ?
+                self._msgs[cd],
                 key=key,  # key can be wildcard *
             )
         if val_msg:
@@ -614,8 +616,8 @@ class _MessageDB(_Entity):
             for rec in self._gwy.msg_db.qry_field(
                 sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
             ):
-                _pl = self._msgs_[Code(rec[0])].payload
-                # add payload dict to res
+                _pl = self._msgs[Code(rec[0])].payload
+                # add payload dict to res(ults)
                 res.append(_pl)  # only if newer, handled by MessageIndex
         return res
 
@@ -691,9 +693,9 @@ class _MessageDB(_Entity):
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """
-        # TODO(eb): Deprecated since 0.52.0 remove Q1 2026
+        # TODO(eb): Deprecated since 0.52.0
         if not self._gwy.msg_db:
-            return self._msgz_
+            return self._msgz_  # TODO(eb): remove Q1 2026
             # _LOGGER.warning("Missing MessageIndex")
             # raise NotImplementedError
         # build _msgz from MessageIndex/_msgs:
