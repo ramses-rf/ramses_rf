@@ -10,8 +10,7 @@ import pytest
 from ramses_rf import Device, dispatcher
 from ramses_rf.database import MessageIndex
 from ramses_rf.gateway import Gateway
-from ramses_rf.schemas import DeviceIdT
-from ramses_tx import Address, Message, Packet
+from ramses_tx import Address, DeviceIdT, Message, Packet
 
 
 @pytest.fixture

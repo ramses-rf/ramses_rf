@@ -30,7 +30,7 @@
 
 ### Schema from UFCs: 0005 by UFC, 000C by circuit ###
 
-2022-02-04T11:52:30.000000 ... RP --- 02:044328 18:200214 --:------ 0005 004 00090007      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 0, 0, 0, 0, 0], 'zone_class': 'underfloor_heating'}
+2022-02-04T11:52:30.000001 ... RP --- 02:044328 18:200214 --:------ 0005 004 00090007      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 0, 0, 0, 0, 0], 'zone_class': 'underfloor_heating'}
 2022-02-04T11:52:30.794757 ... RP --- 02:044328 18:200214 --:------ 000C 006 0009080520F8  # {'zone_type': '09', 'ufh_idx': '00', 'zone_idx': '08', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.802626 ... RP --- 02:044328 18:200214 --:------ 000C 006 0109070520F8  # {'zone_type': '09', 'ufh_idx': '01', 'zone_idx': '07', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.809896 ... RP --- 02:044328 18:200214 --:------ 000C 006 0209030520F8  # {'zone_type': '09', 'ufh_idx': '02', 'zone_idx': '03', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
@@ -41,7 +41,7 @@
 2022-02-04T11:52:30.850581 ... RP --- 02:044328 18:200214 --:------ 000C 006 07097FFFFFFF  # {'zone_type': '09', 'ufh_idx': '07', 'zone_idx': None, 'device_role': 'ufh_actuator', 'devices': []}
 
 
-2022-02-04T11:52:30.000000 ... RP --- 02:044435 18:200214 --:------ 0005 004 00090007      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 0, 0, 0, 0, 0], 'zone_class': 'underfloor_heating'}
+2022-02-04T11:52:30.000002 ... RP --- 02:044435 18:200214 --:------ 0005 004 00090007      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 0, 0, 0, 0, 0], 'zone_class': 'underfloor_heating'}
 2022-02-04T11:52:30.646369 ... RP --- 02:044435 18:200214 --:------ 000C 006 0009000520F8  # {'zone_type': '09', 'ufh_idx': '00', 'zone_idx': '00', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.670981 ... RP --- 02:044435 18:200214 --:------ 000C 006 0109000520F8  # {'zone_type': '09', 'ufh_idx': '01', 'zone_idx': '00', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.687248 ... RP --- 02:044435 18:200214 --:------ 000C 006 0209000520F8  # {'zone_type': '09', 'ufh_idx': '02', 'zone_idx': '00', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
@@ -52,7 +52,7 @@
 2022-02-04T11:52:30.719989 ... RP --- 02:044435 18:200214 --:------ 000C 006 07097FFFFFFF  # {'zone_type': '09', 'ufh_idx': '07', 'zone_idx': None, 'device_role': 'ufh_actuator', 'devices': []}
 
 
-2022-02-04T11:52:30.000000 ... RP --- 02:044446 18:200214 --:------ 0005 004 0009001F      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 1, 1, 0, 0, 0], 'zone_class': 'underfloor_heating'}
+2022-02-04T11:52:30.000003 ... RP --- 02:044446 18:200214 --:------ 0005 004 0009001F      # {'zone_type': '09', 'zone_mask': [1, 1, 1, 1, 1, 0, 0, 0], 'zone_class': 'underfloor_heating'}
 2022-02-04T11:52:30.735653 ... RP --- 02:044446 18:200214 --:------ 000C 006 0009040520F8  # {'zone_type': '09', 'ufh_idx': '00', 'zone_idx': '04', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.739966 ... RP --- 02:044446 18:200214 --:------ 000C 006 0109050520F8  # {'zone_type': '09', 'ufh_idx': '01', 'zone_idx': '05', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}
 2022-02-04T11:52:30.748850 ... RP --- 02:044446 18:200214 --:------ 000C 006 0209010520F8  # {'zone_type': '09', 'ufh_idx': '02', 'zone_idx': '01', 'device_role': 'ufh_actuator', 'devices': ['01:073976']}

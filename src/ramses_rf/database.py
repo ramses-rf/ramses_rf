@@ -242,7 +242,7 @@ class MessageIndex:
         Add a single record to the MessageIndex with timestamp now() and no Message contents.
         """
         # Used by OtbGateway init, via entity_base.py
-        dtm: DtmStrT = DtmStrT(dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S"))
+        dtm: DtmStrT = dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S")  # type: ignore[assignment]
         hdr = f"{code}|{verb}|{src}|00"  # dummy record has no contents
 
         dup = self._delete_from(hdr=hdr)

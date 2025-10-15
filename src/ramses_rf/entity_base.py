@@ -191,9 +191,10 @@ class _MessageDB(_Entity):
         super().__init__(gwy)
 
         self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
-        self._msgz_: dict[
-            Code, dict[VerbT, dict[bool | str | None, Message]]
-        ] = {}  # code/verb/ctx, deprecated Q1 2026
+        if not self._gwy.msg_db:
+            self._msgz_: dict[
+                Code, dict[VerbT, dict[bool | str | None, Message]]
+            ] = {}  # code/verb/ctx, deprecated Q1 2026
 
         # As of 0.51.9 we use SQLite MessageIndex, see ramses_rf/database.py
         # _msgz_ (nested) was only used in this module. Note:
@@ -217,7 +218,7 @@ class _MessageDB(_Entity):
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             self._gwy.msg_db.add(msg)
-            if msg.code == Code._0005 and msg.src.id.startswith("02:"):
+            if msg.code == Code._3150 and msg.src.id.startswith("01:"):
                 print(
                     f"Added msg from {msg.src} with code {msg.code} to _gwy.msg_db. hdr={msg._pkt._hdr}"
                 )  # debug EBR
@@ -230,27 +231,27 @@ class _MessageDB(_Entity):
                 # ()
                 # Added msg with code 0005 to 01:073976._msgs_
 
-        # ignore any replaced message that might be returned
+            # ignore any replaced message that might be returned
+        else:
+            if msg.code not in self._msgz_:  # deprecated
+                # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
+                self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
+            elif msg.verb not in self._msgz_[msg.code]:
+                # Same, 1 level deeper
+                self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
+            else:
+                # Same, replacing previous message
+                self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         if msg.verb in (I_, RP):  # drop RQ's
-            if msg.code == Code._0005 and msg.src.id.startswith(
+            if msg.code == Code._3150 and msg.src.id.startswith(
                 "02:"
-            ):  # UFC only, 1 failing
+            ):  # print for UFC only, 1 failing test
                 print(
-                    f"Added msg with code {msg.code} to {self.id}._msgs_"
+                    f"Added msg with code {msg.code} to {self.id}._msgs_.  hdr={msg._pkt._hdr}"
                 )  # debug EBR
             self._msgs_[msg.code] = msg
-
-        if msg.code not in self._msgz_:  # deprecated
-            # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
-            self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
-        elif msg.verb not in self._msgz_[msg.code]:
-            # Same, 1 level deeper
-            self._msgz_[msg.code][msg.verb] = {msg._pkt._ctx: msg}
-        else:
-            # Same, replacing previous message
-            self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
     @property
     def _msg_list(self) -> list[Message]:
@@ -308,6 +309,7 @@ class _MessageDB(_Entity):
             if not self._gwy.msg_db:  # _msgz_ is deprecated, only used during migration
                 with contextlib.suppress(KeyError):
                     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
+        # missing return
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
@@ -432,7 +434,7 @@ class _MessageDB(_Entity):
         :param key: the key to filiter on
         :param zone_idx: the zone to filter on
         :param domain_id: the domain to filter on
-        :return:
+        :return: a dict containing key: value pairs, or a list of those
         """
         if msg is None:
             return None
@@ -502,7 +504,9 @@ class _MessageDB(_Entity):
                 _LOGGER.debug("Fetched from index: %s", rec[0])
                 # Example: "Fetched from index: code 1FD4"
                 res.append(Code(str(rec[0])))
-            _LOGGER.debug("_msg_dev_qry for %s fetched %s", self.id, res)
+            print(
+                f"_msg_dev_qry for {self.id} fetched {res}"
+            )  # TODO(eb): use _LOGGER/%s
             return res
         else:
             _LOGGER.warning("Missing MessageIndex")
@@ -656,6 +660,13 @@ class _MessageDB(_Entity):
         sql = """
             SELECT dtm from messages WHERE verb in (' I', 'RP') AND (src = ? OR dst = ?)
         """
+
+        # handy routine to debug dict creation, see test_systems.py
+        # print(f"Create _msgs for {self.id} for:")
+        # results = self._gwy.msg_db._cu.execute("SELECT dtm, src, code from messages WHERE verb in (' I', 'RP') and code is '3150'")
+        # for r in results:
+        #     print(r)  # TODO(eb): remove print when fixed
+
         _msg_dict = {  # ? use ctx (context) instead of just the address?
             m.code: m
             for m in self._gwy.msg_db.qry(
@@ -664,14 +675,14 @@ class _MessageDB(_Entity):
         }
         # if CTL, remove 3150, 3220 heat_demand, both are only stored on children
         # HACK
-        if self.id[:3] == "01:" and len(self.id) == 9:  # self._SLUG == "CTL":
+        if self.id[:3] == "01:" and self._SLUG == "CTL":
             # with next ON: 2 errors , both 1x UFC, 1x CTR
             # with next OFF: 4 errors, all CTR
             # if Code._3150 in _msg_dict:  # Note: CTL can send a 3150 (see heat_ufc_00)
             #     _msg_dict.pop(Code._3150)  # keep, prefer to have 2 extra instead of missing 1
             if Code._3220 in _msg_dict:
                 _msg_dict.pop(Code._3220)
-            # _LOGGER.debug(f"Removed 3150/3220 from {self.id}._msgs dict")
+            # _LOGGER.debug(f"Removed 3150/3220 from %s._msgs dict", self.id)
         return _msg_dict
 
     @property
@@ -687,7 +698,7 @@ class _MessageDB(_Entity):
             return self._msgz_
             # _LOGGER.warning("Missing MessageIndex")
             # raise NotImplementedError
-
+        # build _msgz from MessageIndex/_msgs:
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
 

@@ -174,7 +174,7 @@ class Gateway(Engine):
         )
 
         # initialize SQLite index, set in _tx/Engine
-        if self._sqlite_index:
+        if self._sqlite_index:  # TODO(eb): default to On?
             self.create_sqlite_message_index()  # if activated in ramses_cc > Engine
 
         # temporarily turn on discovery, remember original state
