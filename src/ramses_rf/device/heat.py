@@ -491,7 +491,6 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
 
         # elif msg.code not in (Code._10E0, Code._22D0):
         #     print("xxx")
-
         # "0008|FA/FC", "22C9|array", "22D0|none", "3150|ZZ/array(/FC?)"
 
     # TODO: should be a private method

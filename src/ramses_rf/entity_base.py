@@ -196,13 +196,13 @@ class _MessageDB(_Entity):
                 Code, dict[VerbT, dict[bool | str | None, Message]]
             ] = {}  # code/verb/ctx, deprecated Q1 2026
 
-        # As of 0.51.9 we use SQLite MessageIndex, see ramses_rf/database.py
+        # As of 0.52.0 we use SQLite MessageIndex, see ramses_rf/database.py
         # _msgz_ (nested) was only used in this module. Note:
         # _msgz (now rebuilt from _msgs) also used in: client, base, device.heat
 
     def _handle_msg(self, msg: Message) -> None:
         """Store a msg in the DBs.
-        Uses SQLite MessageIndex since 0.51.9
+        Uses SQLite MessageIndex since 0.52.0
         """
 
         if not (
@@ -218,23 +218,24 @@ class _MessageDB(_Entity):
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             self._gwy.msg_db.add(msg)
-            if msg.code == Code._3150 and msg.src.id.startswith("01:"):
-                print(
-                    f"Added msg from {msg.src} with code {msg.code} to _gwy.msg_db. hdr={msg._pkt._hdr}"
+            debug_code: Code = Code._3150
+            if msg.code == debug_code and msg.src.id.startswith("01:"):
+                _LOGGER.debug(
+                    "Added msg from %s with code %s to _gwy.msg_db. hdr=%s",
+                    msg.src,
+                    msg.code,
+                    msg._pkt._hdr,
                 )
-                # print(self._gwy.msg_db.get(src=str(msg.src[:9]), code=Code._0005))  # < success!
-                # print(self._gwy.msg_db.get(src=str(msg.src.id), code=Code._0005))  # print tuple
+                # print(self._gwy.msg_db.get(src=str(msg.src[:9]), code=debug_code))  # < success!
                 # Result in test log: lookup fails
                 # msg.src = 01:073976 (CTL)
                 # Added msg from 01:073976 (CTL) with code 0005 to _gwy.msg_db
                 # query is for: 01:073976  < no suffix
-                # ()
-                # Added msg with code 0005 to 01:073976._msgs_
 
             # ignore any replaced message that might be returned
         else:  # TODO(eb): remove Q1 2026
-            if msg.code not in self._msgz_:  # deprecated
-                # Store msg verb + ctx by code in nested self._msgz_ Dict (deprecated)
+            if msg.code not in self._msgz_:  # deprecated since 0.52.0
+                # Store msg verb + ctx by code in nested self._msgz_ Dict
                 self._msgz_[msg.code] = {msg.verb: {msg._pkt._ctx: msg}}
             elif msg.verb not in self._msgz_[msg.code]:
                 # Same, 1 level deeper
@@ -246,12 +247,12 @@ class _MessageDB(_Entity):
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
         # TODO(eb): remove next block _msgs_ Q1 2026
         if msg.verb in (I_, RP):  # drop RQ's
-            if msg.code == Code._3150 and msg.src.id.startswith(
-                "02:"
-            ):  # print for UFC only, 1 failing test
-                print(
-                    f"Added msg with code {msg.code} to {self.id}._msgs_.  hdr={msg._pkt._hdr}"
-                )
+            # if msg.code == Code._3150 and msg.src.id.startswith(
+            #     "02:"
+            # ):  # print for UFC only, 1 failing test
+            #     print(
+            #         f"Added msg with code {msg.code} to {self.id}._msgs_.  hdr={msg._pkt._hdr}"
+            #     )
             self._msgs_[msg.code] = msg
 
     @property
@@ -481,13 +482,13 @@ class _MessageDB(_Entity):
             if k not in ("dhw_idx", SZ_DOMAIN_ID, SZ_ZONE_IDX) and k[:1] != "_"
         }
 
-    # SQLite methods, since 0.51.9
+    # SQLite methods, since 0.52.0
 
     def _msg_dev_qry(self) -> list[Code] | None:
         """
         Retrieve from the MessageIndex a list of Code keys involving this device.
 
-        :param kwargs: not used as of 0.51.9
+        :param kwargs: not used as of 0.52.0
         :return: list of Codes or empty list when query returned empty
         """
         if self._gwy.msg_db:
@@ -504,9 +505,6 @@ class _MessageDB(_Entity):
                 _LOGGER.debug("Fetched from index: %s", rec[0])
                 # Example: "Fetched from index: code 1FD4"
                 res.append(Code(str(rec[0])))
-            print(
-                f"_msg_dev_qry for {self.id} fetched {res}"
-            )  # TODO(eb): use _LOGGER/%s
             return res
         else:
             _LOGGER.warning("Missing MessageIndex")
@@ -576,7 +574,7 @@ class _MessageDB(_Entity):
 
         :param code: (optional) a single message Code to use, e.g. 31DA
         :param key: (optional) message keyword to fetch the value for, e.g. SZ_HUMIDITY or * (wildcard)
-        :param kwargs: not used as of 0.51.7
+        :param kwargs: not used as of 0.52.0
         :return: a single string or float value or None when qry returned empty
         """
         val_msg: dict | list | None = None
@@ -606,7 +604,6 @@ class _MessageDB(_Entity):
         :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
         :return: list of payload dicts from the selected messages, or an empty list
         """
-        # not used yet as of 0.51.9
 
         res: list[dict] = []
         if sql and self._gwy.msg_db:
@@ -662,10 +659,10 @@ class _MessageDB(_Entity):
         """
 
         # handy routine to debug dict creation, see test_systems.py
-        # print(f"Create _msgs for {self.id} for:")
+        # print(f"Create _msgs for {self.id}:")
         # results = self._gwy.msg_db._cu.execute("SELECT dtm, src, code from messages WHERE verb in (' I', 'RP') and code is '3150'")
         # for r in results:
-        #     print(r)  # TODO(eb): remove print when fixed
+        #     print(r)
 
         _msg_dict = {  # ? use ctx (context) instead of just the address?
             m.code: m
