@@ -619,7 +619,7 @@ class _MessageDB(_Entity):
         SQLite custom query for an entity's stored payloads using the full MessageIndex.
         See ramses_rf/database.py
 
-        :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs
+        :param sql: custom SQLite query on MessageIndex. Can include multiple CODEs in SELECT.
         :return: list of payload dicts from the selected messages, or an empty list
         """
 
@@ -782,11 +782,32 @@ class _Discovery(_MessageDB):
         # def _to_msg_id(data_id: OtDataId | int) -> MsgId:  # not used
         #     return f"{data_id:02X}"  # type: ignore[return-value]
 
+        res: list[str] = []
+        # look for the "sim" OT 3220 record initially added in OtbGateway.init
+        if self._gwy.msg_db:
+            # SQLite query for ctx field on MessageIndex
+            sql = """
+                SELECT ctx from messages WHERE
+                verb = 'RP'
+                AND code = '3220'
+                AND (src = ? OR dst = ?)
+            """
+            for rec in self._gwy.msg_db.qry_field(
+                sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
+            ):
+                _LOGGER.debug("Fetched OT ctx from index: %s", rec[0])
+                res.append(rec[0])
+        else:  # TODO(eb): remove next Q1 2026
+            res_dict: dict[bool | str | None, Message] | list[Any] = self._msgz[
+                Code._3220
+            ].get(RP, [])
+            assert isinstance(res_dict, dict)
+            res = list(res_dict.keys())
+            # raise NotImplementedError
+
         return {
             f"0x{msg_id}": OPENTHERM_MESSAGES[_to_data_id(msg_id)].get("en")  # type: ignore[misc]
-            # TODO(eb): migrate _msgz to msg_db
-            # looks for the "sim" OT 3220 record that was added in OtbGateway.init
-            for msg_id in sorted(self._msgz[Code._3220].get(RP, []))  # type: ignore[type-var]
+            for msg_id in sorted(res)
             if (
                 self._is_not_deprecated_cmd(Code._3220, ctx=msg_id)
                 and _to_data_id(msg_id) in OPENTHERM_MESSAGES
