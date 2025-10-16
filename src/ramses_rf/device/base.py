@@ -209,7 +209,7 @@ class DeviceBase(Entity):
 
     @property
     def traits(self) -> dict[str, Any]:
-        """Return the traits of the device."""
+        """Get the traits of the device."""
 
         result = super().traits
 

@@ -10,7 +10,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, NewType
 
-from ramses_tx import Message
+from ramses_tx import CODES_SCHEMA, Code, Message
 
 if TYPE_CHECKING:
     DtmStrT = NewType("DtmStrT", str)
@@ -359,10 +359,26 @@ class MessageIndex:
 
         return msgs
 
+    # MessageIndex msg_db query methods
+    # | ix |method name   | args        | returns    | uses | used by |
+    # |----|--------------|-------------|------------|------|---------|
+    # | i1 | get          | Msg/kwargs  | tuple[Msg] | i3   |
+    # | i2 | contains     | kwargs      | bool       | i4   |
+    # | i3 | _select_from | kwargs      | tuple[Msg] | i4   |
+    # | i4 | qry_dtms     | kwargs      | list(dtm)  |      |
+    # | i5 | qry          | sql, kwargs | tuple[Msg] |      | _msgs() |
+    # | i6 | qry_field    | sql, kwargs | tuple[fld] |      | e4, e5  |
+    # | i7 | get_rp_codes | src, dst    | list[Code] |      | Discovery#supported_cmds |
+
     def get(
         self, msg: Message | None = None, **kwargs: bool | dt | str
     ) -> tuple[Message, ...]:
-        """Get a set of message(s) from the index."""
+        """
+        Public method to get a set of message(s) from the index.
+        :param msg: Message to return, by dtm (expect a single result as dtm is unique key)
+        :param kwargs: data table field names and criteria, e.g. (hdr=...)
+        :return: tuple of matching Messages
+        """
 
         if not (bool(msg) ^ bool(kwargs)):
             raise ValueError("Either a Message or kwargs should be provided, not both")
@@ -372,7 +388,33 @@ class MessageIndex:
 
         return self._select_from(**kwargs)
 
+    def contains(self, **kwargs: bool | dt | str) -> bool:
+        """
+        Check if the MessageIndex contains at least 1 record that matches the provided fields.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
+        :return: True if at least one message fitting the given conditions is present, False when qry returned empty
+        """
+
+        return len(self.qry_dtms(**kwargs)) > 0
+
+    def _select_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
+        """
+        Select message(s) using the MessageIndex.
+        :param kwargs: (exact) SQLite table field_name: required_value pairs
+        :returns: a tuple of qualifying messages
+        """
+
+        return tuple(
+            self._msgs[row[0].isoformat(timespec="microseconds")]
+            for row in self.qry_dtms(**kwargs)
+        )
+
     def qry_dtms(self, **kwargs: bool | dt | str) -> list[Any]:
+        """
+        Select from the ImageIndex a list of dtms that match the provided arguments.
+        :param kwargs: data table field names and criteria
+        :return: list of unformatted dtms that match, useful for msg lookup, or an empty list if 0 matches
+        """
         # tweak kwargs as stored in SQLite, inverse from _insert_into():
         kw = {key: value for key, value in kwargs.items() if key != "ctx"}
         if "ctx" in kwargs:
@@ -389,28 +431,13 @@ class MessageIndex:
         self._cu.execute(sql, tuple(kw.values()))
         return self._cu.fetchall()
 
-    def contains(self, **kwargs: bool | dt | str) -> bool:
-        """
-        Check if the MessageIndex contains at least 1 record that matches the provided fields.
-        :param kwargs: (exact) SQLite table field_name: required_value pairs
-        :return: True if at least one message fitting the given conditions is present, False when qry returned empty
-        """
-        # adapted from _select_from()
-
-        return len(self.qry_dtms(**kwargs)) > 0
-
-    def _select_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
-        """Select message(s) using the MessageIndex.
-        :param kwargs: (exact) SQLite table field_name: required_value pairs
-        :returns: a tuple of qualifying messages"""
-
-        return tuple(
-            self._msgs[row[0].isoformat(timespec="microseconds")]
-            for row in self.qry_dtms(**kwargs)
-        )
-
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
-        """Get a tuple of messages from the index, given sql and parameters."""
+        """
+        Get a tuple of messages from _msgs using the index, given sql and parameters.
+        :param sql:
+        :param parameters: tuple of kwargs
+        :return: a tuple of qualifying messages
+        """
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
@@ -434,18 +461,43 @@ class MessageIndex:
                 _LOGGER.warning("MessageIndex timestamp %s not in device messages", ts)
         return tuple(lst)
 
+    def get_rp_codes(self, parameters: tuple[str, ...]) -> list[Code]:
+        """
+        Get a list of Codes from the index, given parameters.
+        :param parameters: tuple of additional kwargs
+        :return: list of Code: value pairs
+        """
+
+        def get_code(code: str) -> Code:
+            for Cd in CODES_SCHEMA:
+                if code == Cd:
+                    return Cd
+            raise LookupError(f"Failed to find matching code for {code}")
+
+        sql = """
+                SELECT code from messages WHERE verb is 'RP' AND (src = ? OR dst = ?)
+            """
+        if "SELECT" not in sql:
+            raise ValueError(f"{self}: Only SELECT queries are allowed")
+
+        self._cu.execute(sql, parameters)
+        res = self._cu.fetchall()
+        return [get_code(res[0]) for res[0] in self._cu.fetchall()]
+
     def qry_field(
         self, sql: str, parameters: tuple[str, ...]
     ) -> list[tuple[dt | str, str]]:
         """
-        Get a list of message field values from the index, given sql and parameters.
+        Get a list of fields from the index, given select sql and parameters.
+        :param sql: a bespoke SQL query SELECT string
+        :param parameters: tuple of additional kwargs
+        :return: list of key: value pairs as defined in sql
         """
 
         if "SELECT" not in sql:
             raise ValueError(f"{self}: Only SELECT queries are allowed")
 
         self._cu.execute(sql, parameters)
-
         return self._cu.fetchall()
 
     def all(self, include_expired: bool = False) -> tuple[Message, ...]:

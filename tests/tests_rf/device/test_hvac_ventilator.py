@@ -40,10 +40,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     gateway._loop.call_later = MagicMock()
     gateway._loop.time = MagicMock(return_value=0.0)
     gateway._include = {}
-    # Add msg_db attribute accessed by the message store
-    # gateway.msg_db = MagicMock()
-    # gateway.msg_db.get.return_value = {}
-    # activate the SQLite MessageIndex
+    # Add msg_db attribute accessed by the message store, activates the SQLite MessageIndex
     gateway.msg_db = MessageIndex(maintain=False)
 
     yield gateway
@@ -169,8 +166,9 @@ class TestHvacVentilator:
             "_hgi": MagicMock(),
         }
 
-        # Set up the message store
-        hvac_ventilator._msgs_ = {}
+        # Set up the message store  # deprecated, TODO(eb): remove Q1 2026
+        if not hvac_ventilator._gwy.msg_db:
+            hvac_ventilator._msgs_ = {}
 
         # Patch the _handle_2411_message method
         with patch.object(hvac_ventilator, "_handle_2411_message") as mock_handle:
@@ -195,8 +193,9 @@ class TestHvacVentilator:
         msg.verb = " I"
         msg.payload = {"some_key": "some_value"}
 
-        # Set up the message store
-        hvac_ventilator._msgs_ = {}
+        # Set up the message store  # deprecated, TODO(eb): remove Q1 2026
+        if not hvac_ventilator._gwy.msg_db:
+            hvac_ventilator._msgs_ = {}
 
         # Patch the parent class's _handle_msg method
         with patch(

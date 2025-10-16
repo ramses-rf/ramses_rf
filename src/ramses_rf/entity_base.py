@@ -190,11 +190,13 @@ class _MessageDB(_Entity):
     def __init__(self, gwy: Gateway) -> None:
         super().__init__(gwy)
 
-        self._msgs_: dict[Code, Message] = {}  # code, should be code/ctx?
-        if not self._gwy.msg_db:
+        self._msgs_: dict[
+            Code, Message
+        ] = {}  # TODO(eb): deprecated, used in test, remove Q1 2026
+        if not self._gwy.msg_db:  # TODO(eb): deprecated since 0.52.0, remove Q1 2026
             self._msgz_: dict[
                 Code, dict[VerbT, dict[bool | str | None, Message]]
-            ] = {}  # code/verb/ctx, deprecated Q1 2026
+            ] = {}  # code/verb/ctx,
 
         # As of 0.52.0 we use SQLite MessageIndex, see ramses_rf/database.py
         # _msgz_ (nested) was only used in this module. Note:
@@ -226,7 +228,7 @@ class _MessageDB(_Entity):
                     msg.code,
                     msg._pkt._hdr,
                 )
-                # print(self._gwy.msg_db.get(src=str(msg.src[:9]), code=debug_code))  # < success!
+                # print(self._gwy.get(src=str(msg.src[:9]), code=debug_code))  # < success!
                 # Result in test log: lookup fails
                 # msg.src = 01:073976 (CTL)
                 # Added msg from 01:073976 (CTL) with code 0005 to _gwy.msg_db
@@ -245,7 +247,7 @@ class _MessageDB(_Entity):
                 self._msgz_[msg.code][msg.verb][msg._pkt._ctx] = msg
 
         # Also store msg by code in flat self._msgs_ dict (stores the latest I/RP msgs by code)
-        # TODO(eb): remove next block _msgs_ Q1 2026
+        # TODO(eb): deprecated since 0.52.0, remove next block _msgs_ Q1 2026
         if msg.verb in (I_, RP):  # drop RQ's
             # if msg.code == Code._3150 and msg.src.id.startswith(
             #     "02:"
@@ -270,7 +272,7 @@ class _MessageDB(_Entity):
                     else:
                         _LOGGER.debug("Could not fetch self._msgs[%s]", c)
             return msg_list_qry
-        # legacy nested dict
+        # else create from legacy nested dict
         return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
 
     def _add_record(
@@ -313,10 +315,25 @@ class _MessageDB(_Entity):
                 with contextlib.suppress(KeyError):
                     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
+    # EntityBase msg_db query methods (ix = database.py.MessageIndex method)
+    # | ex |method name           | args               | returns    | uses     | used by  |
+    # |----|----------------------|--------------------|------------|----------|----------|
+    # | e1 | _get_msg_by_hdr      | hdr                | Message    | i3       | discover |
+    # | e2 | _msg_value           | code(s), Msg, args | dict[k,v]  | e3,e4    |          |
+    # | e3 | _msg_value_code      | code, verb, key    | dict[k,v]  | e4,e5,e6 | e6       |
+    # | e4 | _msg_value_msg       | Msg, (code)        | dict[k,v]  |          | e2,e3    |
+    # | e5 | _msg_qry_by_code_key | code, key, (verb=) |            |          | e6,      |
+    # | e6 | _msg_value_qry_by_code_key | code, key    | str/float  | e3,e5    |          |
+    # | e7 | _msg_qry             | sql                |            |          | e8       |
+    # | e8 | _msg_count           | sql                |            | e7       |          |
+    # | e9 | supported_cmds       |                    | list(Codes)| i7       |          |
+    # | e10| _msgs()              |                    |            | i5       |          |
+
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""
 
-        if self._gwy.msg_db:  # central SQLite MessageIndex
+        if self._gwy.msg_db:
+            # use central SQLite MessageIndex
             msgs = self._gwy.msg_db.get(hdr=hdr)
             # only 1 result expected since hdr is a unique key in _gwy.msg_db
             if msgs:
@@ -366,7 +383,7 @@ class _MessageDB(_Entity):
         """
         if isinstance(code, str | tuple):  # a code or a tuple of codes
             return self._msg_value_code(code, *args, **kwargs)
-        # raise RuntimeError
+
         assert isinstance(code, Message), (
             f"Invalid format: _msg_value({code})"
         )  # catch invalidly formatted code, only handle Message
@@ -401,7 +418,7 @@ class _MessageDB(_Entity):
                 )
                 key = None
             try:
-                if self._gwy.msg_db:  # central SQLite MessageIndex
+                if self._gwy.msg_db:  # central SQLite MessageIndex, use verb= kwarg
                     code = Code(self._msg_qry_by_code_key(code, key, verb=verb))
                     msg = self._msgs.get(code)
                 else:  # deprecated lookup in nested _msgz
@@ -432,7 +449,7 @@ class _MessageDB(_Entity):
         optionally filtering for a zone or a domain
 
         :param msg: a Message to inspect
-        :param key: the key to filiter on
+        :param key: the key to filter on
         :param zone_idx: the zone to filter on
         :param domain_id: the domain to filter on
         :return: a dict containing key: value pairs, or a list of those
@@ -517,7 +534,8 @@ class _MessageDB(_Entity):
         **kwargs: Any,
     ) -> Code | None:
         """
-        Retrieve from the MessageIndex the most current Code for a code(s) & keyword combination.
+        Retrieve from the MessageIndex the most current Code for a code(s) &
+        keyword combination involving this device.
 
         :param code: (optional) a message Code to use, e.g. 31DA or a tuple of Codes
         :param key: (optional) message keyword to fetch, e.g. SZ_HUMIDITY
@@ -628,7 +646,7 @@ class _MessageDB(_Entity):
         return len(self._msg_qry(sql))
 
     @property
-    def traits(self) -> dict:
+    def traits(self) -> dict[str, Any]:
         """Get the codes seen by the entity."""
 
         codes = {
@@ -690,11 +708,11 @@ class _MessageDB(_Entity):
 
         :return: dict of messages involving this device, nested by Code, Verb, Context
         """
-        # TODO(eb): Deprecated since 0.52.0
         if not self._gwy.msg_db:
-            return self._msgz_  # TODO(eb): remove Q1 2026
+            return self._msgz_  # TODO(eb): remove and uncomment next Q1 2026
             # _LOGGER.warning("Missing MessageIndex")
             # raise NotImplementedError
+
         # build _msgz from MessageIndex/_msgs:
         msgs_1: dict[Code, dict[VerbT, dict[bool | str | None, Message]]] = {}
         msg: Message
@@ -738,11 +756,20 @@ class _Discovery(_MessageDB):
     @property
     def supported_cmds(self) -> dict[Code, Any]:
         """Return the current list of pollable command codes."""
-        return {
+        if self._gwy.msg_db:
+            return {
+                code: CODES_SCHEMA[code][SZ_NAME]
+                for code in sorted(
+                    self._gwy.msg_db.get_rp_codes(
+                        (self.id[:_ID_SLICE], self.id[:_ID_SLICE])
+                    )
+                )
+                if self._is_not_deprecated_cmd(code)
+            }
+        return {  # TODO(eb): deprecated since 0.52.0, remove Q1 2026
             code: (CODES_SCHEMA[code][SZ_NAME] if code in CODES_SCHEMA else None)
-            for code in sorted(self._msgz)  # TODO(eb): migrate _msgz to msg_db
-            if self._msgz[code].get(RP)  # TODO(eb): migrate _msgz to msg_db - 3220?
-            and self._is_not_deprecated_cmd(code)
+            for code in sorted(self._msgz)
+            if self._msgz[code].get(RP) and self._is_not_deprecated_cmd(code)
         }
 
     @property
