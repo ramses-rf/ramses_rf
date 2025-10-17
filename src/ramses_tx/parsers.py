@@ -1955,6 +1955,8 @@ def parser_2411(payload: str, msg: Message) -> dict[str, Any]:
                 "max_value": parser(payload[26:34][-length:]),  # type: ignore[operator]
                 "precision": parser(payload[34:42][-length:]),  # type: ignore[operator]
                 "_value_42": payload[42:],
+                # Flexible footer - capture everything after precision
+                # eg. older Orcon models may have a footer of 2 bytes
             }
         )
     except AssertionError as err:
