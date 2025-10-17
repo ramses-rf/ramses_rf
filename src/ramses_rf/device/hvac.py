@@ -918,30 +918,27 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: string describing fan mode, speed
         """
+        if self._gwy.msg_db:
+            # Use SQLite query on MessageIndex. res_rate/res_mode not exposed yet
+            sql = f"""
+                SELECT code from messages WHERE verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+                AND (plk LIKE '%{SZ_FAN_MODE}%')
+            """
+            res_mode: list = self._msg_qry(sql)
+            # SQLite query on MessageIndex
+            _LOGGER.info(f"{res_mode} # FAN_MODE FETCHED from MessageIndex")
 
-        # Use SQLite query on MessageIndex
-        sql = f"""
-            SELECT code from messages WHERE verb in (' I', 'RP')
-            AND (src = ? OR dst = ?)
-            AND code in ('22F4', '31D9', '31DA')
-            AND (plk LIKE '%{SZ_FAN_MODE}%')
-        """
-        res_mode: list = self._msg_qry(sql)
-        # SQLite query on MessageIndex
-        _LOGGER.info(f"{res_mode} # FAN_MODE FETCHED from MessageIndex")  # DEBUG
-
-        sql = f"""
-            SELECT code from messages WHERE verb in (' I', 'RP')
-            AND (src = ? OR dst = ?)
-            AND code in ('22F4', '31D9', '31DA')
-            AND (plk LIKE '%{SZ_FAN_RATE}%')
-        """
-        res_rate: list = self._msg_qry(sql)
-        # SQLite query on MessageIndex
-        _LOGGER.info(
-            f"{res_rate} # FAN_RATE FETCHED from MessageIndex"
-        )  # DEBUG always empty?
-        # WIP res_rate/res_mode not used yet
+            sql = f"""
+                SELECT code from messages WHERE verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+                AND (plk LIKE '%{SZ_FAN_RATE}%')
+            """
+            res_rate: list = self._msg_qry(sql)
+            # SQLite query on MessageIndex
+            _LOGGER.info(
+                f"{res_rate} # FAN_RATE FETCHED from MessageIndex"
+            )  # DEBUG always empty?
 
         if Code._31D9 in self._msgs:
             # was a dict by Code

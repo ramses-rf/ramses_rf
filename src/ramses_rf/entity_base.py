@@ -489,7 +489,7 @@ class _MessageDB(_Entity):
             f"full dict:{msg_dict}, payload:{msg.payload} < Coding error: key='{idx}', val='{val}'"
         )  # should not be there (BUG TODO(eb): but it is when using SQLite MessageIndex)
 
-        if key == "*":  # from a SQLite wildcard query, return first/only k,v
+        if key == "*":  # from a SQLite wildcard query, return first=only? k,v
             return msg_dict
         if key:
             return msg_dict.get(key)
