@@ -434,8 +434,8 @@ class MessageIndex:
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
         """
         Get a tuple of messages from _msgs using the index, given sql and parameters.
-        :param sql:
-        :param parameters: tuple of kwargs
+        :param sql: a bespoke SQL query SELECT string that should return dtm as first field
+        :param parameters: tuple of kwargs with the selection filter
         :return: a tuple of qualifying messages
         """
 

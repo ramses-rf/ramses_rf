@@ -912,7 +912,25 @@ class _Discovery(_MessageDB):
 
             try:
                 if task[_SZ_COMMAND].code in (Code._000A, Code._30C9):
-                    msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
+                    if self._gwy.msg_db:  # use bespoke MessageIndex qry
+                        sql = """
+                            SELECT dtm from messages WHERE
+                            code = ?
+                            verb = ' I'
+                            AND ctx = 'True'
+                            AND (src = ? OR dst = ?)
+                        """
+                        msgs += self._gwy.msg_db.qry(
+                            sql,
+                            (
+                                task[_SZ_COMMAND].code,
+                                self.tcs.id[:_ID_SLICE],
+                                self.tcs.id[:_ID_SLICE],
+                            ),
+                        )[0]  # expect 1 Message in returned tuple
+                    else:  # TODO(eb) remove next Q1 2026
+                        msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
+                        # raise NotImplementedError
             except KeyError:
                 pass
 
