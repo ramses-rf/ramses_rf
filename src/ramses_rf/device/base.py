@@ -60,7 +60,7 @@ class DeviceBase(Entity):
     def __init__(self, gwy: Gateway, dev_addr: Address, **kwargs: Any) -> None:
         super().__init__(gwy)
 
-        # FIXME: ZZZ gwy.msg_db entities must know their parent device ID and their own idx
+        # FIXME: gwy.msg_db entities must know their parent device ID and their own idx
         self._z_id = dev_addr.id  # the responsible device is itself
         self._z_idx = None  # depends upon its location in the schema
 
@@ -166,12 +166,12 @@ class DeviceBase(Entity):
     @property
     def has_battery(self) -> None | bool:  # 1060
         """Return True if the device is battery powered (excludes battery-backup)."""
-
-        code_list = self._msg_dev_qry()
-        _LOGGER.info(code_list)  # TODO(eb): clean up
-        return isinstance(self, BatteryState) or (
-            code_list is not None and Code._1060 in code_list
-        )
+        if self._gwy.msg_db:
+            code_list = self._msg_dev_qry()
+            return isinstance(self, BatteryState) or (
+                code_list is not None and Code._1060 in code_list
+            )  # TODO(eb): clean up next line Q1 2026
+        return isinstance(self, BatteryState) or Code._1060 in self._msgz
 
     @property
     def is_faked(self) -> bool:
