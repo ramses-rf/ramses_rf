@@ -438,14 +438,29 @@ def print_summary(gwy: Gateway, **kwargs: Any) -> None:
 
     if kwargs.get("show_crazys"):
         for device in [d for d in gwy.devices if d.type == DEV_TYPE_MAP.CTL]:
-            for msg in gwy.msg_db.get(device=device.id, code=Code._0005):
-                print(f"{msg._pkt}")
-            for msg in gwy.msg_db.get(device=device.id, code=Code._000C):
-                print(f"{msg._pkt}")
+            if gwy.msg_db:
+                for msg in gwy.msg_db.get(device=device.id, code=Code._0005):
+                    print(f"{msg._pkt}")
+                for msg in gwy.msg_db.get(device=device.id, code=Code._000C):
+                    print(f"{msg._pkt}")
+            else:  # TODO(eb): replace next block by
+                #  raise NotImplementedError
+                for code, verbs in device._msgz.items():
+                    if code in (Code._0005, Code._000C):
+                        for verb in verbs.values():
+                            for pkt in verb.values():
+                                print(f"{pkt}")
             print()
         for device in [d for d in gwy.devices if d.type == DEV_TYPE_MAP.UFC]:
-            for msg in gwy.msg_db.get(device=device.id):
-                print(f"{msg._pkt}")
+            if gwy.msg_db:
+                for msg in gwy.msg_db.get(device=device.id):
+                    print(f"{msg._pkt}")
+            else:  # TODO(eb): replace next block by
+                #  raise NotImplementedError
+                for code in device._msgz.values():
+                    for verb in code.values():
+                        for pkt in verb.values():
+                            print(f"{pkt}")
             print()
 
 
