@@ -359,16 +359,26 @@ class MessageIndex:
 
         return msgs
 
-    # MessageIndex msg_db query methods
-    # | ix |method name   | args        | returns    | uses | used by |
-    # |----|--------------|-------------|------------|------|---------|
-    # | i1 | get          | Msg/kwargs  | tuple[Msg] | i3   |
-    # | i2 | contains     | kwargs      | bool       | i4   |
-    # | i3 | _select_from | kwargs      | tuple[Msg] | i4   |
-    # | i4 | qry_dtms     | kwargs      | list(dtm)  |      |
-    # | i5 | qry          | sql, kwargs | tuple[Msg] |      | _msgs() |
-    # | i6 | qry_field    | sql, kwargs | tuple[fld] |      | e4, e5  |
+    # MessageIndex msg_db query methods > copy to docs/source/ramses_rf.rst
+    # (ex = entity_base.py query methods
+    #
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | ix |method name   | args        | returns    | uses | used by                  |
+    # +====+==============+=============+============+======+==========================+
+    # | i1 | get          | Msg/kwargs  | tuple[Msg] | i3   |                          |
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | i2 | contains     | kwargs      | bool       | i4   |                          |
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | i3 | _select_from | kwargs      | tuple[Msg] | i4   |                          |
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | i4 | qry_dtms     | kwargs      | list(dtm)  |      |                          |
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | i5 | qry          | sql, kwargs | tuple[Msg] |      | _msgs()                  |
+    # +----+--------------+-------------+------------+------+--------------------------+
+    # | i6 | qry_field    | sql, kwargs | tuple[fld] |      | e4, e5                   |
+    # +----+--------------+-------------+------------+------+--------------------------+
     # | i7 | get_rp_codes | src, dst    | list[Code] |      | Discovery#supported_cmds |
+    # +----+--------------+-------------+------------+------+--------------------------+
 
     def get(
         self, msg: Message | None = None, **kwargs: bool | dt | str
