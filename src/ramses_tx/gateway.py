@@ -113,7 +113,7 @@ class Engine:
             self._include,
             self._exclude,
         )
-        self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX)
+        self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX, False)  # default True?
         self._kwargs: dict[str, Any] = kwargs  # HACK
 
         self._engine_lock = Lock()  # FIXME: threading lock, or asyncio lock?

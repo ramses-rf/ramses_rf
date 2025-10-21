@@ -226,14 +226,14 @@ class MessageIndex:
         if (
             dup and msg.src is not msg.dst and not msg.dst.id.startswith("18:")  # HGI
         ):  # when src==dst, expect to add duplicate, don't warn
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "Overwrote dtm (%s) for %s: %s (contrived log?)",
                 msg.dtm,
                 msg._pkt._hdr,
                 dup[0]._pkt,
             )
         if old is not None:
-            _LOGGER.info("Old msg replaced: %s", old)
+            _LOGGER.debug("Old msg replaced: %s", old)
 
         return old
 
@@ -305,7 +305,7 @@ class MessageIndex:
                 payload_keys(msg.payload),
             ),
         )
-        _LOGGER.info(f"Added {msg} to gwy.msg_db")
+        _LOGGER.debug(f"Added {msg} to gwy.msg_db")
 
         return _old_msgs[0] if _old_msgs else None
 
@@ -468,7 +468,7 @@ class MessageIndex:
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
             else:  # happens in tests with artificial msg from heat
-                _LOGGER.warning("MessageIndex timestamp %s not in device messages", ts)
+                _LOGGER.info("MessageIndex timestamp %s not in device messages", ts)
         return tuple(lst)
 
     def get_rp_codes(self, parameters: tuple[str, ...]) -> list[Code]:
@@ -529,7 +529,7 @@ class MessageIndex:
                 # if include_expired or not self._msgs[ts].HAS_EXPIRED:  # not working
                 lst.append(self._msgs[ts])
             else:  # happens in tests with dummy msg from heat init
-                _LOGGER.warning("MessageIndex ts %s not in device messages", ts)
+                _LOGGER.info("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
 
     def clr(self) -> None:
