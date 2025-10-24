@@ -728,12 +728,15 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         In HomeAssistant, ramses_cc, you can set a bound device in the device configuration.
 
         System schema and known devices example:
-        "32:153289":
-          bound: "37:168270"
-          class: FAN
-        "37:168270":
-          class: REM
-          faked: true
+
+        .. code-block::
+
+            "32:153289":
+              bound: "37:168270"
+              class: FAN
+            "37:168270":
+              class: REM
+              faked: true
 
         :param device_id: The unique identifier of the device to bind
         :type device_id: str
@@ -1142,7 +1145,7 @@ def class_dev_hvac(
 ) -> type[DeviceHvac]:
     """Return a device class, but only if the device must be from the HVAC group.
 
-    May return a base clase, DeviceHvac, which will need promotion.
+    May return a base class, `DeviceHvac`, which will need promotion.
     """
 
     if not eavesdrop:
@@ -1206,54 +1209,111 @@ _REMOTES = {
 # see: https://github.com/arjenhiemstra/ithowifi/blob/master/software/NRG_itho_wifi/src/IthoPacket.h
 
 """
-# CVE/HRU remote (536-0124) [RFT W: 3 modes, timer]
-    "away":       (Code._22F1, 00, 01|04"),  # how to invoke?
-    "low":        (Code._22F1, 00, 02|04"),  # aka eco
-    "medium":     (Code._22F1, 00, 03|04"),  # aka auto (with sensors) - is that only for 63?
-    "high":       (Code._22F1, 00, 04|04"),  # aka full
+Itho Remote (model) enums.
 
-    "timer_1":    (Code._22F3, 00, 00|0A"),  # 10 minutes full speed
-    "timer_2":    (Code._22F3, 00, 00|14"),  # 20 minutes full speed
-    "timer_3":    (Code._22F3, 00, 00|1E"),  # 30 minutes full speed
+CVE/HRU remote (536-0124) RFT W: 3 modes, timer
+-------------------------------------------------
 
-# RFT-AUTO (536-0150) [RFT CAR: 2 modes, auto, timer]: idx = 63, essentially same as above, but also...
-    "auto_night": (Code._22F8, 63, 02|03"),  # additional - press auto x2
+.. table:: 536-0124
+   :widths: auto
 
-# RFT-RV (04-00046), RFT-CO2 (04-00045) - sensors with control
-    "medium":     (Code._22F1, 00, 03|07"), 1=away, 2=low?
-    "auto":       (Code._22F1, 00, 05|07"), 4=high
-    "auto_night": (Code._22F1, 00, 0B|0B"),
+   ===========  =========================  ================================================
+    "away":     (Code._22F1, 00, 01|04"),  how to invoke?
+    "low":      (Code._22F1, 00, 02|04"),  aka eco
+    "medium":   (Code._22F1, 00, 03|04"),  aka auto (with sensors) - is that only for 63?
+    "high":     (Code._22F1, 00, 04|04"),  aka full
 
-    "timer_1":    (Code._22F3, 00, 00|0A, 00|00, 0000"),  # 10 minutes
-    "timer_2":    (Code._22F3, 00, 00|14, 00|00, 0000"),  # 20 minutes
-    "timer_3":    (Code._22F3, 00, 00|1E, 00|00, 0000"),  # 30 minutes
+    "timer_1":  (Code._22F3, 00, 00|0A"),  10 minutes full speed
+    "timer_2":  (Code._22F3, 00, 00|14"),  20 minutes full speed
+    "timer_3":  (Code._22F3, 00, 00|1E"),  30 minutes full speed
+   ===========  =========================  ================================================
 
-# RFT-PIR (545-7550) - presence sensor
+RFT-AUTO (536-0150) RFT CAR: 2 modes, auto, timer: idx = 63, essentially same as above, but also...
+-----------------------------------------------------------------------------------------------------
 
-# RFT_DF: DemandFlow remote (536-0146)
-    "timer_1":    (Code._22F3, 00, 42|03, 03|03"),  # 0b01-000-010 = 3 hrs, back to last mode
-    "timer_2":    (Code._22F3, 00, 42|06, 03|03"),  # 0b01-000-010 = 6 hrs, back to last mode
-    "timer_3":    (Code._22F3, 00, 42|09, 03|03"),  # 0b01-000-010 = 9 hrs, back to last mode
-    "cook_30":    (Code._22F3, 00, 02|1E, 02|03"),  # 30 mins (press 1x)
-    "cook_60":    (Code._22F3, 00, 02|3C, 02|03"),  # 60 mins (press 2x)
+.. table:: 536-0150
+   :widths: auto
 
-    "low":        (Code._22F8, 00, 01|02"),  # ?eco     co2 <= 1200 ppm?
-    "high":       (Code._22F8, 00, 02|02"),  # ?comfort co2 <= 1000 ppm?
+   =============  =========================  ================================================
+   "auto_night":  (Code._22F8, 63, 02|03"),  additional - press auto x2
+   =============  =========================  ================================================
 
-# Join commands:
-    "CVERFT":     (Code._1FC9,  00, Code._22F1, 0x000000,                        01, Code._10E0, 0x000000"),  # CVE/HRU remote    (536-0124)
-    "AUTORFT":    (Code._1FC9,  63, Code._22F8, 0x000000,                        01, Code._10E0, 0x000000"),  # AUTO RFT          (536-0150)
-    "DF":         (Code._1FC9,  00, Code._22F8, 0x000000,                        00, Code._10E0, 0x000000"),  # DemandFlow remote (536-0146)
-    "RV":         (Code._1FC9,  00, Code._12A0, 0x000000,                        01, Code._10E0, 0x000000,  00, Code._31E0, 0x000000,  00, Code._1FC9, 0x000000"),  # RFT-RV   (04-00046)
-    "CO2":        (Code._1FC9,  00, Code._1298, 0x000000,  00, Code._2E10, 0x000000,  01, Code._10E0, 0x000000,  00, Code._31E0, 0x000000,  00, Code._1FC9, 0x000000"),  # RFT-CO2  (04-00045)
+RFT-RV (04-00046), RFT-CO2 (04-00045) - sensors with control
+------------------------------------------------------------
 
-# Leave commands:
-    "Others":      (Code._1FC9, 00, Code._1FC9, 0x000000"),  # standard leave command
-    "AUTORFT":     (Code._1FC9, 63, Code._1FC9, 0x000000"),  # leave command of AUTO RFT (536-0150)
+.. table:: 04-00046
+   :widths: auto
 
-    # RQ 0x00
-    # I_ 0x01
-    # W_ 0x02
-    # RP 0x03
+   ==============  ========================================   =============
+    "medium":      (Code._22F1, 00, 03|07"),                  1=away, 2=low?
+    "auto":        (Code._22F1, 00, 05|07"),                  4=high
+    "auto_night":  (Code._22F1, 00, 0B|0B"),
+
+    "timer_1":     (Code._22F3, 00, 00|0A, 00|00, 0000"),     10 minutes
+    "timer_2":     (Code._22F3, 00, 00|14, 00|00, 0000"),     20 minutes
+    "timer_3":     (Code._22F3, 00, 00|1E, 00|00, 0000"),     30 minutes
+   ==============  ========================================   =============
+
+RFT-PIR (545-7550) - presence sensor
+------------------------------------
+
+RFT_DF: DemandFlow remote (536-0146)
+------------------------------------
+
+.. table:: 536-0146
+   :widths: auto
+
+   ===========  ================================  =========================================
+    "timer_1":  (Code._22F3, 00, 42|03, 03|03"),  0b01-000-010 = 3 hrs, back to last mode
+    "timer_2":  (Code._22F3, 00, 42|06, 03|03"),  0b01-000-010 = 6 hrs, back to last mode
+    "timer_3":  (Code._22F3, 00, 42|09, 03|03"),  0b01-000-010 = 9 hrs, back to last mode
+    "cook_30":  (Code._22F3, 00, 02|1E, 02|03"),  30 mins (press 1x)
+    "cook_60":  (Code._22F3, 00, 02|3C, 02|03"),  60 mins (press 2x)
+
+    "low":      (Code._22F8, 00, 01|02"),         ?eco     co2 <= 1200 ppm?
+    "high":     (Code._22F8, 00, 02|02"),         ?comfort co2 <= 1000 ppm?
+   ===========  ================================  =========================================
+
+
+Join commands:
+--------------
+
+.. table:: join per accessory type
+   :widths: auto
+
+   ==========  =================  =====================  =========================  ==========================  =========================  ==========================  =================  ==========
+   type        set 1              set 2                  set 3                      set 4                       set 5                      set 6                       description        art #
+   ==========  =================  =====================  =========================  ==========================  =========================  ==========================  =================  ==========
+   "CVERFT":   (Code._1FC9,  00,  Code._22F1, 0x000000,                             01, Code._10E0, 0x000000")                                                         CVE/HRU remote     (536-0124)
+   "AUTORFT":  (Code._1FC9,  63,  Code._22F8, 0x000000,                             01, Code._10E0, 0x000000")                                                         AUTO RFT           (536-0150)
+   "DF":       (Code._1FC9,  00,  Code._22F8, 0x000000,                             00, Code._10E0, 0x000000")                                                         DemandFlow remote  (536-0146)
+   "RV":       (Code._1FC9,  00,  Code._12A0, 0x000000,                             01, Code._10E0, 0x000000,   00, Code._31E0, 0x000000,  00, Code._1FC9, 0x000000")  RFT-RV             (04-00046)
+   "CO2":      (Code._1FC9,  00,  Code._1298, 0x000000,  00, Code._2E10, 0x000000,  01, Code._10E0, 0x000000,   00, Code._31E0, 0x000000,  00, Code._1FC9, 0x000000")  RFT-CO2            (04-00045)
+   ==========  =================  =====================  =========================  ==========================  =========================  ==========================  =================  ==========
+
+Leave commands:
+---------------
+
+.. table:: leave per accessory type
+   :widths: auto
+
+   ==========  =================  ======================  =========================  ==========
+   type        set 1              set 2                   description                art #
+   ==========  =================  ======================  =========================  ==========
+   "Others":   (Code._1FC9, 00,   Code._1FC9, 0x000000")  standard leave command
+   "AUTORFT":  (Code._1FC9, 63,   Code._1FC9, 0x000000")  leave command of AUTO RFT  (536-0150)
+   ==========  =================  ======================  =========================  ==========
+
+.. table:: verbs
+   :widths: 2, 4
+
+   ======  ========
+   verb    byte
+   ======  ========
+   ``RQ``  ``0x00``
+   ``I_``  ``0x01``
+   ``W_``  ``0x02``
+   ``RP``  ``0x03``
+   ======  ========
 
 """

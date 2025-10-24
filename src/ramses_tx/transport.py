@@ -3,30 +3,38 @@
 
 Operates at the pkt layer of: app - msg - pkt - h/w
 
-For ser2net, use the following YAML with: ser2net -c misc/ser2net.yaml
-  connection: &con00
-  accepter: telnet(rfc2217),tcp,5001
-  timeout: 0
-  connector: serialdev,/dev/ttyUSB0,115200n81,local
-  options:
-    max-connections: 3
+For ser2net, use the following YAML with: ``ser2net -c misc/ser2net.yaml``
 
-For socat, see:
-  socat -dd pty,raw,echo=0 pty,raw,echo=0
-  python client.py monitor /dev/pts/0
-  cat packet.log | cut -d ' ' -f 2- | unix2dos > /dev/pts/1
+.. code-block::
+
+    connection: &con00
+    accepter: telnet(rfc2217),tcp,5001
+    timeout: 0
+    connector: serialdev,/dev/ttyUSB0,115200n81,local
+    options:
+        max-connections: 3
+
+For ``socat``, see:
+
+.. code-block::
+
+    socat -dd pty,raw,echo=0 pty,raw,echo=0
+    python client.py monitor /dev/pts/0
+    cat packet.log | cut -d ' ' -f 2- | unix2dos > /dev/pts/1
 
 For re-flashing evofw3 via Arduino IDE on *my* atmega328p (YMMV):
- - Board:      atmega328p (SW UART)
- - Bootloader: Old Bootloader
- - Processor:  atmega328p (5V, 16 MHz)
- - Host:       57600 (or 115200, YMMV)
- - Pinout:     Nano
+
+  - Board:      atmega328p (SW UART)
+  - Bootloader: Old Bootloader
+  - Processor:  atmega328p (5V, 16 MHz)
+  - Host:       57600 (or 115200, YMMV)
+  - Pinout:     Nano
 
 For re-flashing evofw3 via Arduino IDE on *my* atmega32u4 (YMMV):
- - Board:      atmega32u4 (HW UART)
- - Processor:  atmega32u4 (5V, 16 MHz)
- - Pinout:     Pro Micro
+
+  - Board:      atmega32u4 (HW UART)
+  - Processor:  atmega32u4 (5V, 16 MHz)
+  - Pinout:     Pro Micro
 """
 
 from __future__ import annotations
@@ -250,11 +258,12 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
 
 
 def _normalise(pkt_line: str) -> str:
-    """Perform any (transparent) frame-level hacks, as required at (near-)RF layer.
+    """
+    Perform any (transparent) frame-level hacks, as required at (near-)RF layer.
 
     Goals:
     - ensure an evofw3 provides the same output as a HGI80 (none, presently)
-    - handle 'strange' packets (e.g. I|08:|0008)
+    - handle 'strange' packets (e.g. ``I|08:|0008``)
     """
 
     # TODO: deprecate as only for ramses_esp <0.4.0

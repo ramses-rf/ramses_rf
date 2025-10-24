@@ -213,7 +213,7 @@ class Gateway(Engine):
     def _pause(self, *args: Any) -> None:
         """Pause the (unpaused) gateway (disables sending/discovery).
 
-        There is the option to save other objects, as *args.
+        There is the option to save other objects, as `args`.
         """
         _LOGGER.debug("Gateway: Pausing engine...")
 
@@ -228,7 +228,7 @@ class Gateway(Engine):
     def _resume(self) -> tuple[Any]:
         """Resume the (paused) gateway (enables sending/discovery, if applicable).
 
-        Will restore other objects, as *args.
+        Will restore other objects, as `args`.
         """
         args: tuple[Any]
 

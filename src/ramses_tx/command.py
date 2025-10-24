@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""RAMSES RF - a RAMSES-II protocol decoder & analyser.
+"""
+RAMSES RF - a RAMSES-II protocol decoder & analyser.
 
 This module provides the `Command` class for constructing and managing RAMSES-II protocol
 commands (packets) that are to be sent to HVAC devices. It includes methods for creating
@@ -1394,7 +1395,7 @@ class Command(Frame):
 
         :param ctl_id: The device ID of the DHW controller
         :type ctl_id: DeviceIdT | str
-        :param **kwargs: Additional parameters (currently only 'dhw_idx' is supported)
+        :param kwargs: Additional parameters (currently only 'dhw_idx' is supported)
         :key dhw_idx: The DHW circuit index (0 or 1, defaults to 0 for single-DHW systems)
         :type dhw_idx: int, optional
         :return: A Command object for the RQ|1F41 message
@@ -1438,7 +1439,7 @@ class Command(Frame):
         :type until: datetime | str | None
         :param duration: Duration in seconds for temporary mode (alternative to 'until')
         :type duration: int | None
-        :param **kwargs: Additional parameters (currently only 'dhw_idx' is supported)
+        :param kwargs: Additional parameters (currently only 'dhw_idx' is supported)
         :key dhw_idx: The DHW circuit index (0 or 1, defaults to 0 for single-DHW systems)
         :type dhw_idx: int, optional
         :return: A Command object for the W|1F41 message
@@ -1501,7 +1502,7 @@ class Command(Frame):
         :type codes: Code | Iterable[Code] | None
         :param dst_id: Optional destination device ID (defaults to broadcast)
         :type dst_id: DeviceIdT | str | None
-        :param **kwargs: Additional parameters
+        :param kwargs: Additional parameters
         :key oem_code: OEM code for bind offers (only used with I-type messages)
         :type oem_code: str, optional
         :return: A Command object for the bind operation
@@ -2531,7 +2532,7 @@ class Command(Frame):
         :type supply_flow: float | None
         :param exhaust_flow: Current exhaust air flow rate (if available)
         :type exhaust_flow: float | None
-        :param **kwargs: Additional parameters (reserved for future use)
+        :param kwargs: Additional parameters (reserved for future use)
         :return: A configured Command object for the HVAC fan status update
         :rtype: Command
 

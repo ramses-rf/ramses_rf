@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""RAMSES RF - a RAMSES-II protocol decoder & analyser."""
+"""RAMSES RF - a RAMSES-II protocol decoder & analyser.
+`ramses_tx` takes care of the RF protocol (lower) layer.
+"""
 
 from __future__ import annotations
 

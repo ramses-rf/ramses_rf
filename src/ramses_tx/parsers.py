@@ -3,9 +3,11 @@
 
 NOTES: aspirations on a consistent Schema, going forward:
 
-  :mode/state: | :bool:  | :mutex (infinitive. vs -ing):      | :flags:
-mode (config.) | enabled | disabled, heat, cool, heat_cool... | ch_enabled, dhw_enabled
-state (action) | active  | idle, heating, cooling...          | is_heating, is_cooling
+==============  ========  ===================================  ========================
+  :mode/state:   :bool:    :mutex (infinitive. vs -ing):        :flags:
+mode (config.)   enabled   disabled, heat, cool, heat_cool...   ch_enabled, dhw_enabled
+state (action)   active    idle, heating, cooling...            is_heating, is_cooling
+==============  ========  ===================================  ========================
 
 - prefer: enabled: True over xx_enabled: True (if only ever 1 flag)
 - prefer:  active: True over is_heating: True (if only ever 1 flag)
@@ -362,8 +364,9 @@ def parser_0009(payload: str, msg: Message) -> dict | list[dict]:  # TODO: only 
 
     The failsafe mode defines the relay behaviour if the RF communication is lost (e.g.
     when a room thermostat stops communicating due to discharged batteries):
-        False (disabled) - if RF comms are lost, relay will be held in OFF position
-        True  (enabled)  - if RF comms are lost, relay will cycle at 20% ON, 80% OFF
+
+    - False (disabled) - if RF comms are lost, relay will be held in OFF position
+    - True  (enabled)  - if RF comms are lost, relay will cycle at 20% ON, 80% OFF
 
     This setting may need to be enabled to ensure frost protect mode.
     """
@@ -2289,44 +2292,45 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
 def parser_31e0(payload: str, msg: Message) -> dict | list[dict]:  # TODO: only dict
     """Notes are.
 
-    van means “of”.
+    "van" means "of".
     - 0 = min. van min. potm would be:
     - 0 = minimum of minimum potentiometer
 
     See: https://www.industrialcontrolsonline.com/honeywell-t991a
     - modulates air temperatures in ducts
-
-    case 0x31E0:  ' 12768:
-    {
-        string str4;
-        unchecked
-        {
-            result.Fan = Conversions.ToString((double)(int)data[checked(start + 1)] / 2.0);
-            str4 = "";
-        }
-        str4 = (data[start + 2] & 0xF) switch
-        {
-            0 => str4 + "0 = min. potm. ",
-            1 => str4 + "0 = min. van min. potm ",
-            2 => str4 + "0 = min. fan ",
-            _ => "",
-        };
-        switch (data[start + 2] & 0xF0)
-        {
-        case 16:
-            str4 += "100 = max. potm";
-            break;
-        case 32:
-            str4 += "100 = max. van max. potm ";
-            break;
-        case 48:
-            str4 += "100 = max. fan ";
-            break;
-        }
-        result.Data = str4;
-        break;
-    }
     """
+
+    # coding note:
+    # case 0x31E0:  ' 12768:
+    # {
+    #     string str4;
+    #     unchecked
+    #     {
+    #         result.Fan = Conversions.ToString((double)(int)data[checked(start + 1)] / 2.0);
+    #         str4 = "";
+    #     }
+    #     str4 = (data[start + 2] & 0xF) switch
+    #     {
+    #         0 => str4 + "0 = min. potm. ",
+    #         1 => str4 + "0 = min. van min. potm ",
+    #         2 => str4 + "0 = min. fan ",
+    #         _ => "",
+    #     };
+    #     switch (data[start + 2] & 0xF0)
+    #     {
+    #     case 16:
+    #         str4 += "100 = max. potm";
+    #         break;
+    #     case 32:
+    #         str4 += "100 = max. van max. potm ";
+    #         break;
+    #     case 48:
+    #         str4 += "100 = max. fan ";
+    #         break;
+    #     }
+    #     result.Data = str4;
+    #     break;
+    # }
 
     # .I --- 37:005302 32:132403 --:------ 31E0 008 00-0000-00 01-0064-00  # RF15 CO2 to Orcon HRC400 series SmartComfort Valve
 

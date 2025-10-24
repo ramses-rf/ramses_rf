@@ -172,7 +172,31 @@ class _Entity:
 
 
 class _MessageDB(_Entity):
-    """Maintain/utilize an entity's state database."""
+    """Maintain/utilize an entity's state database.
+
+        EntityBase msg_db query methods
+
+        (ix = database.py.MessageIndex method)
+
+    .. table:: Database Query Methods
+       :widths: auto
+
+       ====  ======================  ====================  ============  ==========  ==========
+        e.   method name             args                  returns       uses        used by
+       ====  ======================  ====================  ============  ==========  ==========
+       e1    _get_msg_by_hdr         hdr                   Message       i3          discover
+       e2    _msg_value              code(s), Msg, args    dict[k,v]     e3,e4
+       e3    _msg_value_code         code, verb, key       dict[k,v]     e4,e5,e6    e6
+       e4    _msg_value_msg          Msg, (code)           dict[k,v]                 e2,e3
+       e5    _msg_qry_by_code_key    code, key, (verb=)                              e6,
+       e6    _msg_value_qry_by_code  key   code, key       str/float     e3,e5
+       e7    _msg_qry                sql                                             e8
+       e8    _msg_count              sql                                 e7
+       e9    supported_cmds                                list(Codes)   i7
+       e10   _msgs()                                                     i5
+       ====  ======================  ====================  ============  ==========  ==========
+
+    """
 
     _gwy: Gateway
     ctl: Controller
@@ -316,32 +340,7 @@ class _MessageDB(_Entity):
                 with contextlib.suppress(KeyError):
                     del obj._msgz_[msg.code][msg.verb][msg._pkt._ctx]
 
-    # EntityBase msg_db query methods > copy to docs/source/ramses_rf.rst
-    # (ix = database.py.MessageIndex method)
-    #
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e. |method name           | args               | returns    | uses     | used by  |
-    # +====+======================+====================+============+==========+==========+
-    # | e1 | _get_msg_by_hdr      | hdr                | Message    | i3       | discover |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e2 | _msg_value           | code(s), Msg, args | dict[k,v]  | e3,e4    |          |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e3 | _msg_value_code      | code, verb, key    | dict[k,v]  | e4,e5,e6 | e6       |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e4 | _msg_value_msg       | Msg, (code)        | dict[k,v]  |          | e2,e3    |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e5 | _msg_qry_by_code_key | code, key, (verb=) |            |          | e6,      |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e6 | _msg_value_qry_by_code_key | code, key    | str/float  | e3,e5    |          |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e7 | _msg_qry             | sql                |            |          | e8       |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e8 | _msg_count           | sql                |            | e7       |          |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e9 | supported_cmds       |                    | list(Codes)| i7       |          |
-    # +----+----------------------+--------------------+------------+----------+----------+
-    # | e10| _msgs()              |                    |            | i5       |          |
-    # +----+----------------------+--------------------+------------+----------+----------+
+    ### entity_base query methods
 
     def _get_msg_by_hdr(self, hdr: HeaderT) -> Message | None:
         """Return a msg, if any, that matches a given header."""

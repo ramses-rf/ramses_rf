@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """RAMSES RF - a RAMSES-II protocol decoder & analyser.
+`ramses_rf` takes care of the device (upper) layer.
 
 Works with (amongst others):
 - evohome (up to 12 zones)

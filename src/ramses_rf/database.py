@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
-"""RAMSES RF - Message database and index."""
+"""
+RAMSES RF - Message database and index.
+
+.. table:: Database Query Methods[^1][#fn1]
+   :widths: auto
+
+   =====  ============  ===========  ==========  ====  ========================
+    ix    method name   args         returns     uses  used by
+   =====  ============  ===========  ==========  ====  ========================
+   i1     get           Msg, kwargs  tuple(Msg)  i3
+   i2     contains      kwargs       bool        i4
+   i3     _select_from  kwargs       tuple(Msg)  i4
+   i4     qry_dtms      kwargs       list(dtm)
+   i5     qry           sql, kwargs  tuple(Msg)        _msgs()
+   i6     qry_field     sql, kwargs  tuple(fld)        e4, e5
+   i7     get_rp_codes  src, dst     list(Code)        Discovery-supported_cmds
+   =====  ============  ===========  ==========  ====  ========================
+
+[#fn1] A word of explanation.
+[^1]: ex = entity_base.py query methods
+"""
 
 from __future__ import annotations
 
@@ -62,9 +82,10 @@ def payload_keys(parsed_payload: list[dict] | dict) -> str:  # type: ignore[type
 
 
 class MessageIndex:
-    """A simple in-memory SQLite3 database for indexing RF messages.
-    Index holds the latest message to & from all devices by header
-    (example of a hdr: 000C|RP|01:223036|0208)."""
+    """A central in-memory SQLite3 database for indexing RF messages.
+    Index holds all the latest messages to & from all devices by `dtm`
+    (timestamp) and `hdr` header
+    (example of a hdr: ``000C|RP|01:223036|0208``)."""
 
     _housekeeping_task: asyncio.Task[None]
 
@@ -72,7 +93,8 @@ class MessageIndex:
         """Instantiate a message database/index."""
 
         self.maintain = maintain
-        self._msgs: MsgDdT = OrderedDict()  # stores all messages for retrieval. Filled & cleaned up in housekeeping_loop.
+        self._msgs: MsgDdT = OrderedDict()  # stores all messages for retrieval.
+        # Filled & cleaned up in housekeeping_loop.
 
         # Connect to a SQLite DB in memory
         self._cx = sqlite3.connect(
@@ -122,16 +144,17 @@ class MessageIndex:
     def _setup_db_schema(self) -> None:
         """Set up the message database schema.
 
-        messages TABLE Fields:
+        .. note::
+            messages TABLE Fields:
 
-        - dtm  message timestamp
-        - verb " I", "RQ" etc.
-        - src  message origin address
-        - dst  message destination address
-        - code packet code aka command class e.g. _0005, _31DA
-        - ctx  message context, created from payload as index + extra markers (Heat)
-        - hdr  packet header e.g. 000C|RP|01:223036|0208 (see: src/ramses_tx/frame.py)
-        - plk the keys stored in the parsed payload, separated by the | char
+            - dtm  message timestamp
+            - verb " I", "RQ" etc.
+            - src  message origin address
+            - dst  message destination address
+            - code packet code aka command class e.g. _0005, _31DA
+            - ctx  message context, created from payload as index + extra markers (Heat)
+            - hdr  packet header e.g. 000C|RP|01:223036|0208 (see: src/ramses_tx/frame.py)
+            - plk the keys stored in the parsed payload, separated by the | char
         """
 
         self._cu.execute(
@@ -160,7 +183,7 @@ class MessageIndex:
 
     async def _housekeeping_loop(self) -> None:
         """Periodically remove stale messages from the index,
-        unless self.maintain is False."""
+        unless `self.maintain` is False."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
             """
@@ -196,6 +219,7 @@ class MessageIndex:
         """
         Add a single message to the MessageIndex.
         Logs a warning if there is a duplicate dtm.
+
         :returns: any message that was removed because it had the same header
         """
         # TODO: eventually, may be better to use SqlAlchemy
@@ -239,7 +263,11 @@ class MessageIndex:
 
     def add_record(self, src: str, code: str = "", verb: str = "") -> None:
         """
-        Add a single record to the MessageIndex with timestamp now() and no Message contents.
+        Add a single record to the MessageIndex with timestamp `now()` and no Message contents.
+
+        :param src: device id to use as source address
+        :param code: device id to use as destination address (can be identical)
+        :param verb: two letter verb str to use
         """
         # Used by OtbGateway init, via entity_base.py
         dtm: DtmStrT = dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S")  # type: ignore[assignment]
@@ -274,6 +302,7 @@ class MessageIndex:
     def _insert_into(self, msg: Message) -> Message | None:
         """
         Insert a message into the index.
+
         :returns: any message replaced (by same hdr)
         """
         assert msg._pkt._hdr is not None, "Skipping: Packet has no hdr: {msg._pkt}"
@@ -348,6 +377,7 @@ class MessageIndex:
 
     def _delete_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
         """Remove message(s) from the index.
+
         :returns: any messages that were removed"""
 
         msgs = self._select_from(**kwargs)
@@ -359,32 +389,14 @@ class MessageIndex:
 
         return msgs
 
-    # MessageIndex msg_db query methods > copy to docs/source/ramses_rf.rst
-    # (ex = entity_base.py query methods
-    #
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | ix |method name   | args        | returns    | uses | used by                  |
-    # +====+==============+=============+============+======+==========================+
-    # | i1 | get          | Msg/kwargs  | tuple[Msg] | i3   |                          |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i2 | contains     | kwargs      | bool       | i4   |                          |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i3 | _select_from | kwargs      | tuple[Msg] | i4   |                          |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i4 | qry_dtms     | kwargs      | list(dtm)  |      |                          |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i5 | qry          | sql, kwargs | tuple[Msg] |      | _msgs()                  |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i6 | qry_field    | sql, kwargs | tuple[fld] |      | e4, e5                   |
-    # +----+--------------+-------------+------------+------+--------------------------+
-    # | i7 | get_rp_codes | src, dst    | list[Code] |      | Discovery#supported_cmds |
-    # +----+--------------+-------------+------------+------+--------------------------+
+    # MessageIndex msg_db query methods
 
     def get(
         self, msg: Message | None = None, **kwargs: bool | dt | str
     ) -> tuple[Message, ...]:
         """
         Public method to get a set of message(s) from the index.
+
         :param msg: Message to return, by dtm (expect a single result as dtm is unique key)
         :param kwargs: data table field names and criteria, e.g. (hdr=...)
         :return: tuple of matching Messages
@@ -401,6 +413,7 @@ class MessageIndex:
     def contains(self, **kwargs: bool | dt | str) -> bool:
         """
         Check if the MessageIndex contains at least 1 record that matches the provided fields.
+
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :return: True if at least one message fitting the given conditions is present, False when qry returned empty
         """
@@ -410,6 +423,7 @@ class MessageIndex:
     def _select_from(self, **kwargs: bool | dt | str) -> tuple[Message, ...]:
         """
         Select message(s) using the MessageIndex.
+
         :param kwargs: (exact) SQLite table field_name: required_value pairs
         :returns: a tuple of qualifying messages
         """
@@ -422,6 +436,7 @@ class MessageIndex:
     def qry_dtms(self, **kwargs: bool | dt | str) -> list[Any]:
         """
         Select from the ImageIndex a list of dtms that match the provided arguments.
+
         :param kwargs: data table field names and criteria
         :return: list of unformatted dtms that match, useful for msg lookup, or an empty list if 0 matches
         """
@@ -444,6 +459,7 @@ class MessageIndex:
     def qry(self, sql: str, parameters: tuple[str, ...]) -> tuple[Message, ...]:
         """
         Get a tuple of messages from _msgs using the index, given sql and parameters.
+
         :param sql: a bespoke SQL query SELECT string that should return dtm as first field
         :param parameters: tuple of kwargs with the selection filter
         :return: a tuple of qualifying messages
@@ -474,6 +490,7 @@ class MessageIndex:
     def get_rp_codes(self, parameters: tuple[str, ...]) -> list[Code]:
         """
         Get a list of Codes from the index, given parameters.
+
         :param parameters: tuple of additional kwargs
         :return: list of Code: value pairs
         """
@@ -499,6 +516,7 @@ class MessageIndex:
     ) -> list[tuple[dt | str, str]]:
         """
         Get a list of fields from the index, given select sql and parameters.
+
         :param sql: a bespoke SQL query SELECT string
         :param parameters: tuple of additional kwargs
         :return: list of key: value pairs as defined in sql

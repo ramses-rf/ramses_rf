@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """RAMSES RF - a RAMSES-II protocol decoder & analyser.
 
-Schema processor for protocol (lower) layer.
+:term:`Schema` processor for protocol (lower) layer.
 """
 
 from __future__ import annotations
@@ -73,13 +73,17 @@ class PktLogConfigT(TypedDict):
 def sch_packet_log_dict_factory(
     default_backups: int = 0,
 ) -> dict[vol.Required, vol.Any]:
-    """Return a packet log dict with a configurable default rotation policy.
+    """
+    :return: a packet log dict with a configurable default rotation policy.
 
-    usage:
+    Usage:
 
-    SCH_PACKET_LOG_7 = vol.Schema(
-        packet_log_dict_factory(default_backups=7), extra=vol.PREVENT_EXTRA
-    )
+    .. code-block::
+
+        SCH_PACKET_LOG_7 = vol.Schema(
+            packet_log_dict_factory(default_backups=7), extra=vol.PREVENT_EXTRA
+        )
+
     """
 
     SCH_PACKET_LOG_CONFIG = vol.Schema(
@@ -162,11 +166,13 @@ class PortConfigT(TypedDict):
 def sch_serial_port_dict_factory() -> dict[vol.Required, vol.Any]:
     """Return a serial port dict.
 
-    usage:
+    Usage:
 
-    SCH_SERIAL_PORT = vol.Schema(
-        sch_serial_port_dict_factory(), extra=vol.PREVENT_EXTRA
-    )
+    .. code-block::
+
+        SCH_SERIAL_PORT = vol.Schema(
+            sch_serial_port_dict_factory(), extra=vol.PREVENT_EXTRA
+        )
     """
 
     SCH_SERIAL_PORT_NAME = str
@@ -252,11 +258,13 @@ def sch_global_traits_dict_factory(
 ) -> tuple[dict[vol.Optional, vol.Any], vol.Any]:
     """Return a global traits dict with a configurable extra traits.
 
-    usage:
+    Usage:
 
-    SCH_GLOBAL_TRAITS = vol.Schema(
-        sch_global_traits_dict(heat=traits), extra=vol.PREVENT_EXTRA
-    )
+    .. code-block::
+
+        SCH_GLOBAL_TRAITS = vol.Schema(
+            sch_global_traits_dict(heat=traits), extra=vol.PREVENT_EXTRA
+        )
     """
 
     heat_traits = heat_traits or {}
@@ -348,7 +356,8 @@ def select_device_filter_mode(
     known_list: DeviceListT,
     block_list: DeviceListT,
 ) -> bool:
-    """Determine which device filter to use, if any.
+    """
+    Determine which device filter to use, if any.
 
     Either:
      - block if device_id in block_list (could be empty), otherwise

@@ -66,4 +66,7 @@ The rules for pre-commit are in git in `.pre-commit-config.yaml`.
 Check [issue 170](https://github.com/ramses-rf/ramses_rf/issues/170) when you run into troubles here.
 
 ## More
+Build and view the code documentation locally for easier access and to confirm that
+your own code contribution include proper documentation. See [Usage](docs/source/usage.md) for details.
+
 For more hints, see the [How to submit a PR wiki page](https://github.com/ramses-rf/ramses_cc/wiki/7.-How-to-submit-a-PR)
