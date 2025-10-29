@@ -128,10 +128,7 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
     for dev in gwy.devices:  # SQLite refactor should pass this test
         if dev._gwy.msg_db:
             # depends on ramses_rf/entity_base.py def _msgs() from msg_db
-            # # prefer to have 2 extra msg instead of missing 1
-            assert 0 <= (len(dev._msgs) - len(dev._msgs_)) <= 1, (
-                "more than 1 code extra in _msgs"
-            )
+            assert len(dev._msgs) == len(dev._msgs_), "_msgs not equal to _msgs_"
             # and make sure that every code from _msgs_ is in _msgb
             assert set(dev._msgs_).issubset(set(dev._msgs)), (
                 "_msgs_ not a subset of _msgs"
