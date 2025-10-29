@@ -413,6 +413,7 @@ SZ_EVOFW_FLAG: Final = "evofw_flag"
 SZ_SQLITE_INDEX: Final = (
     "sqlite_index"  # temporary 0.52.x SQLite dev config option in ramses_cc
 )
+SZ_LOG_ALL_MQTT: Final = "log_all_mqtt"
 SZ_USE_REGEX: Final = "use_regex"
 
 SCH_ENGINE_DICT = {

@@ -1283,8 +1283,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         if _DBG_FORCE_FRAME_LOGGING:
             _LOGGER.warning("Rx: %s", msg.payload)
-        elif _LOGGER.getEffectiveLevel() == logging.INFO:  # log for INFO not DEBUG
-            _LOGGER.info("Rx: %s", msg.payload)
+        elif (
+            _LOGGER.getEffectiveLevel() == logging.INFO and _LOGGER._log_all_mqtt
+        ):  # EBR set in ramses_cc
+            # log for INFO not DEBUG
+            _LOGGER.info("mq Rx: %s", msg.payload)
 
         if msg.topic[-3:] != "/rx":  # then, e.g. 'RAMSES/GATEWAY/18:017804'
             if msg.payload == b"offline":
