@@ -120,7 +120,7 @@ _LOGGER = logging.getLogger(__name__)
 
 class Actuator(DeviceHeat):  # 3EF0, 3EF1 (for 10:/13:)
     # .I --- 13:109598 --:------ 13:109598 3EF0 003 00C8FF                # event-driven, 00/C8
-    # RP --- 13:109598 18:002563 --:------ 0008 002 00C8                  # 00/C8, as abobe
+    # RP --- 13:109598 18:002563 --:------ 0008 002 00C8                  # 00/C8, as above
     # RP --- 13:109598 18:002563 --:------ 3EF1 007 0000BF-00BFC8FF       # 00/C8, as above
 
     # RP --- 10:048122 18:140805 --:------ 3EF1 007 007FFF-003C2A10       # 10:s only RP, always 7FFF

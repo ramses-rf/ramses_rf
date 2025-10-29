@@ -1024,6 +1024,7 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
 
 class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     """Send/receive packets to/from ramses_esp via MQTT.
+    For full RX logging, turn on debug logging.
 
     See: https://github.com/IndaloTech/ramses_esp
     """
@@ -1283,7 +1284,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         if _DBG_FORCE_FRAME_LOGGING:
             _LOGGER.warning("Rx: %s", msg.payload)
-        elif _LOGGER.getEffectiveLevel() == logging.INFO:  # log for INFO not DEBUG
+        elif _LOGGER.getEffectiveLevel() == logging.DEBUG:  # log for INFO not DEBUG?
             _LOGGER.info("Rx: %s", msg.payload)
 
         if msg.topic[-3:] != "/rx":  # then, e.g. 'RAMSES/GATEWAY/18:017804'

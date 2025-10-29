@@ -734,8 +734,8 @@ class _MessageDB(_Entity):
             # _LOGGER.warning("Missing MessageIndex")
             # raise NotImplementedError
 
-        if self.id[:3] == "18:":  # HGI, confirm this is correct, tests suggest so
-            return {}
+        # if self.id[:3] == "18:":  # HGI, confirm this is correct, tests suggest so
+        #     return {}
 
         # a routine to debug dict creation, see test_systems.py:
         # print(f"Create _msgs for {self.id}:")
@@ -751,6 +751,7 @@ class _MessageDB(_Entity):
                 AND (ctx IN ('FC', 'FA', 'F9', 'FA') OR plk LIKE ?)
             """
             _ctx_qry = "%dhw_idx%"
+            # TODO add Children messages? self.ctl.dhw
         else:
             sql = """
                 SELECT dtm from messages WHERE

@@ -15,7 +15,7 @@ MyST [markup](https://myst-parser.readthedocs.io/en/latest/syntax/organising_con
 
 - Activate your virtual environment for ramses_rf as described in the [Wiki](https://github.com/ramses-rf/ramses_rf/blob/master/README-developers.md).
 
-- Install the extra required dependencies by running ``pip install -r requirements_docs.txt`` so you can build a local set.
+- Install the extra required dependencies by running ``pip install -r requirements/requirements_docs.txt`` so you can build a local set.
 
 - Then, in a Terminal, enter `cd docs/` and run `sphinx-build -b html source build/html`.
 
