@@ -117,7 +117,7 @@ class Engine:
         )
         self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX, False)  # default True?
         if not kwargs.pop(SZ_LOG_ALL_MQTT, False):
-            _LOGGER.addFilter(BlockMqttFilter())
+            logging.getLogger("transport").addFilter(BlockMqttFilter())
         self._kwargs: dict[str, Any] = kwargs  # HACK
 
         self._engine_lock = Lock()  # FIXME: threading lock, or asyncio lock?

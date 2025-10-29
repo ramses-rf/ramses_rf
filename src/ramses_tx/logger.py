@@ -163,10 +163,11 @@ class StdOutFilter(logging.Filter):  # record.levelno < logging.WARNING
 
 
 class BlockMqttFilter(logging.Filter):
-    """Block all mqtt traffic"""
+    """Block mqtt traffic"""
 
-    def filter(self, record):
-        return not record.getMessage().startswith("mq Rx:")
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Return True if the record is to be processed."""
+        return not record.getMessage().startswith("mq Rx: ")
 
 
 class TimedRotatingFileHandler(_TimedRotatingFileHandler):
