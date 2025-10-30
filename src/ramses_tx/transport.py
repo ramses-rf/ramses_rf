@@ -490,7 +490,7 @@ class _MqttTransportAbstractor:
         broker_url: str,
         protocol: RamsesProtocolT,
         loop: asyncio.AbstractEventLoop | None = None,
-        log_all: int = 1,  # 0,
+        log_all: int = 0,
     ) -> None:
         # per().__init__(extra=extra)  # done in _BaseTransport
 
