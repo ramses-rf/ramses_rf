@@ -498,9 +498,10 @@ class _MqttTransportAbstractor:
 
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
-        self._log_all = log_all > 0
+        self.log_all = log_all
+        self._log_all = self.log_all > 0
         _LOGGER.info(
-            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all
+            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, self.log_all
         )
 
 
