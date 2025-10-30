@@ -498,10 +498,11 @@ class _MqttTransportAbstractor:
 
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
-        self.log_all = log_all_mqtt
-        self._log_all = self.log_all > 0
+        _LOGGER.info(log_all_mqtt)
+        self.log_all_store: int = log_all_mqtt  # =0 here????
+        self._log_all = self.log_all_store > 0
         _LOGGER.info(
-            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, self.log_all
+            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all_mqtt
         )
 
 
@@ -1576,7 +1577,7 @@ async def transport_factory(
 
     # MQTT
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
-        _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)
+        _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)  # 1 here
         transport = MqttTransport(
             port_name, protocol, extra=extra, loop=loop, log_all_mqtt=log_all, **kwargs
         )
