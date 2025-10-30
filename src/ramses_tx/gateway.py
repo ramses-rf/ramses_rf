@@ -195,6 +195,7 @@ class Engine:
             pkt_source[SZ_PACKET_LOG] = self._input_file  # filename as string
 
         _log_all: int = 1 if self._log_all_mqtt else 0
+        _LOGGER.info(f"Log MQTT: {_log_all}")
         # incl. await protocol.wait_for_connection_made(timeout=5)
         self._transport = await transport_factory(
             self._protocol,
