@@ -489,7 +489,7 @@ class _MqttTransportAbstractor:
         self,
         broker_url: str,
         protocol: RamsesProtocolT,
-        log_all_mqtt: int,
+        log_all: int = 0,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         # per().__init__(extra=extra)  # done in _BaseTransport
@@ -498,11 +498,10 @@ class _MqttTransportAbstractor:
 
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
-        _LOGGER.info(log_all_mqtt)
-        self.log_all_store: int = log_all_mqtt  # =0 here????
-        self._log_all = self.log_all_store > 0
+        _LOGGER.info(log_all)
+        self._log_all = log_all
         _LOGGER.info(
-            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all_mqtt
+            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all
         )
 
 
@@ -1041,7 +1040,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     _TOKEN_RATE: Final[float] = _MAX_TOKENS / _TIME_WINDOW
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        _LOGGER.error("__init__(%s, %s)", args, kwargs)
+        # _LOGGER.error("__init__(%s, %s)", args, kwargs)
 
         super().__init__(*args, **kwargs)
 
@@ -1084,7 +1083,9 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self.client.username_pw_set(self._username, self._password)
         # connect to the mqtt server
         self._attempt_connection()
-        _LOGGER.info("Connected to MQTT log_all: %s (%s)", self._log_all, kwargs)
+        _LOGGER.info(
+            "Connected to MQTT log_all: %s (%s)", self._log_all, kwargs["log_all"]
+        )
 
     def _attempt_connection(self) -> None:
         """Attempt to connect to the MQTT broker."""
@@ -1579,7 +1580,7 @@ async def transport_factory(
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
         _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)  # 1 here
         transport = MqttTransport(
-            port_name, protocol, extra=extra, loop=loop, log_all_mqtt=log_all, **kwargs
+            port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
         )
 
         # TODO: remove this? better to invoke timeout after factory returns?
