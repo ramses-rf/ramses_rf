@@ -1084,7 +1084,9 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self.client.username_pw_set(self._username, self._password)
         # connect to the mqtt server
         self._attempt_connection()
-        _LOGGER.info("Connected to MQTT log_all: %s", self._log_all)
+        _LOGGER.info(
+            "Connected to MQTT log_all: %s (%s)", self._log_all, kwargs.items()
+        )
 
     def _attempt_connection(self) -> None:
         """Attempt to connect to the MQTT broker."""
