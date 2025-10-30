@@ -499,7 +499,9 @@ class _MqttTransportAbstractor:
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
         self._log_all = log_all > 0
-        _LOGGER.info("_MqttTransportAbstractor _log_all: %s", self._log_all)
+        _LOGGER.info(
+            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all
+        )
 
 
 # ### Base classes (common to all Transports) #########################################
@@ -1037,7 +1039,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     _TOKEN_RATE: Final[float] = _MAX_TOKENS / _TIME_WINDOW
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        # _LOGGER.error("__init__(%s, %s)", args, kwargs)
+        _LOGGER.error("__init__(%s, %s)", args, kwargs)
 
         super().__init__(*args, **kwargs)
 
