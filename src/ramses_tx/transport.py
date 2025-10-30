@@ -489,7 +489,6 @@ class _MqttTransportAbstractor:
         self,
         broker_url: str,
         protocol: RamsesProtocolT,
-        log_all: int = 0,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         # per().__init__(extra=extra)  # done in _BaseTransport
@@ -498,11 +497,6 @@ class _MqttTransportAbstractor:
 
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
-        _LOGGER.info(log_all)
-        self._log_all = log_all
-        _LOGGER.info(
-            "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, log_all
-        )
 
 
 # ### Base classes (common to all Transports) #########################################
@@ -1072,6 +1066,9 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._max_tokens: float = self._MAX_TOKENS * 2  # allow for the initial burst
         self._num_tokens: float = self._MAX_TOKENS * 2
 
+        # set log MQTT flag
+        self._log_all = kwargs["log_all"]
+
         # instantiate a paho mqtt client
         self.client = mqtt.Client(
             protocol=mqtt.MQTTv5, callback_api_version=CallbackAPIVersion.VERSION2
@@ -1083,9 +1080,6 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self.client.username_pw_set(self._username, self._password)
         # connect to the mqtt server
         self._attempt_connection()
-        _LOGGER.info(
-            "Connected to MQTT log_all: %s (%s)", self._log_all, kwargs["log_all"]
-        )
 
     def _attempt_connection(self) -> None:
         """Attempt to connect to the MQTT broker."""
