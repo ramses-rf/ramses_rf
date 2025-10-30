@@ -499,6 +499,7 @@ class _MqttTransportAbstractor:
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
         self._log_all = log_all > 0
+        _LOGGER.info("_MqttTransportAbstractor _log_all: %s", self._log_all)
 
 
 # ### Base classes (common to all Transports) #########################################
@@ -1079,6 +1080,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self.client.username_pw_set(self._username, self._password)
         # connect to the mqtt server
         self._attempt_connection()
+        _LOGGER.info("Connected to MQTT log_all: %s", self._log_all)
 
     def _attempt_connection(self) -> None:
         """Attempt to connect to the MQTT broker."""
@@ -1571,6 +1573,7 @@ async def transport_factory(
 
     # MQTT
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
+        _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)
         transport = MqttTransport(
             port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
         )
