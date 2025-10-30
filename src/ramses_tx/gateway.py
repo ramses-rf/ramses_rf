@@ -27,7 +27,6 @@ from .const import (
     SZ_ACTIVE_HGI,
     Priority,
 )
-from .logger import BlockMqttFilter
 from .message import Message
 from .packet import Packet
 from .protocol import protocol_factory
@@ -116,8 +115,7 @@ class Engine:
             self._exclude,
         )
         self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX, False)  # default True?
-        if not kwargs.pop(SZ_LOG_ALL_MQTT, False):
-            logging.getLogger("transport").addFilter(BlockMqttFilter())
+        self._log_all_mqtt = kwargs.pop(SZ_LOG_ALL_MQTT, False)
         self._kwargs: dict[str, Any] = kwargs  # HACK
 
         self._engine_lock = Lock()  # FIXME: threading lock, or asyncio lock?
@@ -196,11 +194,13 @@ class Engine:
         else:  # if self._input_file:
             pkt_source[SZ_PACKET_LOG] = self._input_file  # filename as string
 
+        _log_all: int = 1 if self._log_all_mqtt else 0
         # incl. await protocol.wait_for_connection_made(timeout=5)
         self._transport = await transport_factory(
             self._protocol,
             disable_sending=self._disable_sending,
             loop=self._loop,
+            log_all=_log_all,
             **pkt_source,
             **self._kwargs,  # HACK: odd/misc params, e.g. comms_params
         )
