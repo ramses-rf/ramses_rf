@@ -490,7 +490,7 @@ class _MqttTransportAbstractor:
         broker_url: str,
         protocol: RamsesProtocolT,
         loop: asyncio.AbstractEventLoop | None = None,
-        log_all: int = 0,
+        log_all_mqtt: int = 0,
     ) -> None:
         # per().__init__(extra=extra)  # done in _BaseTransport
 
@@ -498,7 +498,7 @@ class _MqttTransportAbstractor:
 
         self._protocol = protocol
         self._loop = loop or asyncio.get_event_loop()
-        self.log_all = log_all
+        self.log_all = log_all_mqtt
         self._log_all = self.log_all > 0
         _LOGGER.info(
             "_MqttTransportAbstractor _log_all: %s from %s", self._log_all, self.log_all
@@ -1578,7 +1578,7 @@ async def transport_factory(
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
         _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)
         transport = MqttTransport(
-            port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
+            port_name, protocol, extra=extra, loop=loop, log_all_mqtt=log_all, **kwargs
         )
 
         # TODO: remove this? better to invoke timeout after factory returns?
