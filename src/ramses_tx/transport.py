@@ -1067,6 +1067,9 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._max_tokens: float = self._MAX_TOKENS * 2  # allow for the initial burst
         self._num_tokens: float = self._MAX_TOKENS * 2
 
+        # set log MQTT flag
+        self._log_all = kwargs.pop("log_all", False)
+
         # instantiate a paho mqtt client
         self.client = mqtt.Client(
             protocol=mqtt.MQTTv5, callback_api_version=CallbackAPIVersion.VERSION2
@@ -1284,8 +1287,9 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         if _DBG_FORCE_FRAME_LOGGING:
             _LOGGER.warning("Rx: %s", msg.payload)
-        elif _LOGGER.getEffectiveLevel() == logging.INFO:  # log for INFO not DEBUG?
-            _LOGGER.info("Rx: %s", msg.payload)
+        elif self._log_all and _LOGGER.getEffectiveLevel() == logging.INFO:
+            # log for INFO not DEBUG
+            _LOGGER.info("mq Rx: %s", msg.payload)  # TODO remove mq marker?
 
         if msg.topic[-3:] != "/rx":  # then, e.g. 'RAMSES/GATEWAY/18:017804'
             if msg.payload == b"offline":
@@ -1508,6 +1512,7 @@ async def transport_factory(
     disable_sending: bool | None = False,
     extra: dict[str, Any] | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
+    log_all: bool = False,
     **kwargs: Any,  # HACK: odd/misc params
 ) -> RamsesTransportT:
     """Create and return a Ramses-specific async packet Transport."""
@@ -1559,19 +1564,24 @@ async def transport_factory(
             "Packet source must be exactly one of: packet_dict, packet_log, port_name"
         )
 
+    # File
     if (pkt_source := packet_log or packet_dict) is not None:
         return FileTransport(pkt_source, protocol, extra=extra, loop=loop, **kwargs)
 
     assert port_name is not None  # mypy check
     assert port_config is not None  # mypy check
 
+    # MQTT
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
-        transport = MqttTransport(port_name, protocol, extra=extra, loop=loop, **kwargs)
+        transport = MqttTransport(
+            port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
+        )
 
         # TODO: remove this? better to invoke timeout after factory returns?
         await protocol.wait_for_connection_made(timeout=_DEFAULT_TIMEOUT_MQTT)
         return transport
 
+    # Serial
     ser_instance = get_serial_instance(port_name, port_config)
 
     if os.name == "nt" or ser_instance.portstr[:7] in ("rfc2217", "socket:"):

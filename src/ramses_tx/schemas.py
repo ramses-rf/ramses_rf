@@ -413,6 +413,7 @@ SZ_EVOFW_FLAG: Final = "evofw_flag"
 SZ_SQLITE_INDEX: Final = (
     "sqlite_index"  # temporary 0.52.x SQLite dev config option in ramses_cc
 )
+SZ_LOG_ALL_MQTT: Final = "log_all_mqtt"
 SZ_USE_REGEX: Final = "use_regex"
 
 SCH_ENGINE_DICT = {
@@ -427,6 +428,9 @@ SCH_ENGINE_DICT = {
     vol.Optional(
         SZ_SQLITE_INDEX, default=False
     ): bool,  # temporary 0.52.x dev config option
+    vol.Optional(
+        SZ_LOG_ALL_MQTT, default=False
+    ): bool,  # log all incoming MQTT traffic config option
     vol.Optional(SZ_USE_REGEX): dict,  # vol.All(ConvertNullToDict(), dict),
     vol.Optional(SZ_COMMS_PARAMS): SCH_COMMS_PARAMS,
 }

@@ -34,6 +34,7 @@ from .schemas import (
     SZ_DISABLE_QOS,
     SZ_DISABLE_SENDING,
     SZ_ENFORCE_KNOWN_LIST,
+    SZ_LOG_ALL_MQTT,
     SZ_PACKET_LOG,
     SZ_PORT_CONFIG,
     SZ_PORT_NAME,
@@ -114,6 +115,7 @@ class Engine:
             self._exclude,
         )
         self._sqlite_index = kwargs.pop(SZ_SQLITE_INDEX, False)  # default True?
+        self._log_all_mqtt = kwargs.pop(SZ_LOG_ALL_MQTT, False)
         self._kwargs: dict[str, Any] = kwargs  # HACK
 
         self._engine_lock = Lock()  # FIXME: threading lock, or asyncio lock?
@@ -197,6 +199,7 @@ class Engine:
             self._protocol,
             disable_sending=self._disable_sending,
             loop=self._loop,
+            log_all=self._log_all_mqtt,
             **pkt_source,
             **self._kwargs,  # HACK: odd/misc params, e.g. comms_params
         )
