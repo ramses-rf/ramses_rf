@@ -1067,7 +1067,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         self._num_tokens: float = self._MAX_TOKENS * 2
 
         # set log MQTT flag
-        self._log_all = kwargs["log_all"]
+        self._log_all = kwargs.pop("log_all", False)
 
         # instantiate a paho mqtt client
         self.client = mqtt.Client(
@@ -1511,7 +1511,7 @@ async def transport_factory(
     disable_sending: bool | None = False,
     extra: dict[str, Any] | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
-    log_all: int = 0,
+    log_all: bool = False,
     **kwargs: Any,  # HACK: odd/misc params
 ) -> RamsesTransportT:
     """Create and return a Ramses-specific async packet Transport."""
@@ -1572,7 +1572,7 @@ async def transport_factory(
 
     # MQTT
     if port_name[:4] == "mqtt":  # TODO: handle disable_sending
-        _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)  # 1 here
+        _LOGGER.info("transport_factory starting MQTT, log_all: %s", log_all)
         transport = MqttTransport(
             port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
         )
