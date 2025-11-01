@@ -22,7 +22,7 @@
 # used for testing
   pytest >= 8.3.5                                # HA uses 8.4.1 !
   pytest-asyncio >= 0.26.0                       # HA uses 1.1.0 !
-  pytest-cov >= 6.0.0                            # HA uses 6.2.1 !
+  pytest-cov >= 7.0.0                            # HA uses 6.2.1
   pytest-sugar >= 1.0.0                          # HA uses 1.0.0
   pytest-xdist >= 3.6.1                          # HA uses 3.8.0 !
 # syrupy >= 4.8.1                                # HA uses 4.9.1
