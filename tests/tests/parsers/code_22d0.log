@@ -1,6 +1,7 @@
-# 02:250708 is an itho daalderop autotemp (UFC), 21:064743 is the connected spider master thermostat
+# 02:250708 is an itho daalderop Spider autotemp (UFC), 21:064743 is the connected spider master thermostat
 2023-03-18T23:55:35.001909 064  W --- 21:064743 02:250708 --:------ 22D0 008 0314001E14030020  # {'zone_idx': '03', 'idx': '03', '_flags': [0, 0, 0, 1, 0, 1, 0, 0], 'cool_mode': False, 'heat_mode': True,  'is_active': True,  '_unknown': '001E14030020'}
 2023-03-18T23:55:35.051319 050  I --- 02:250708 21:064743 --:------ 22D0 004 03130000          # {'zone_idx': '03', 'idx': '03', '_flags': [0, 0, 0, 1, 0, 0, 1, 1], 'cool_mode': True,  'heat_mode': False, 'is_active': True,  '_unknown': '0000'}
+2025-11-07T00:00:00.000001 ...  W --- 21:041873 02:246902 --:------ 22D0 008 0304001E14030020  # {'zone_idx': '03', 'idx': '03', '_flags': [0, 0, 0, 0, 0, 1, 0, 0], 'cool_mode': False, 'heat_mode': True, 'is_active': False, '_unknown': '001E14030020'}
 
 # another pair that is in heating mode:
 2023-03-18T23:53:26.811524 037  W --- 21:033160 02:250704 --:------ 22D0 008 0304001E14030020  # {'zone_idx': '03', 'idx': '03', '_flags': [0, 0, 0, 0, 0, 1, 0, 0], 'cool_mode': False, 'heat_mode': True,  'is_active': False, '_unknown': '001E14030020'}

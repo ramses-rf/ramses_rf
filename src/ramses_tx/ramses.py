@@ -377,10 +377,10 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
         I_: r"^(0[0-9A-F][0-9A-F]{8}0[12]){1,4}(0[12]03)?$",  # (0[12]03)? only if len(array) == 1
         W_: r"^(0[0-9A-F][0-9A-F]{8}0[12])$",  # never an array
     },
-    Code._22D0: {  # unknown_22d0, HVAC system switch?
+    Code._22D0: {  # unknown_22d0, Spider thermostat, HVAC system switch?
         SZ_NAME: "message_22d0",
-        I_: r"^(00|03)",
-        W_: r"^03",
+        I_: r"^(00|03)[0-9]{6}$",
+        W_: r"^03[0-9]{4}1E14030020$",
     },
     Code._22D9: {  # boiler_setpoint
         SZ_NAME: "boiler_setpoint",
@@ -843,6 +843,7 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._000C: {I_: {}},
         Code._000E: {I_: {}},
         Code._0016: {RQ: {}},
+        Code._01FF: {I_: {}, RQ: {}},
         Code._042F: {I_: {}},
         Code._1030: {I_: {}},
         Code._1060: {I_: {}},
@@ -853,9 +854,11 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._1F09: {I_: {}},
         Code._1FC9: {I_: {}},
         Code._22C9: {W_: {}},  # DT4R
+        Code._22D0: {W_: {}},  # Spider master THM
         Code._2309: {I_: {}, RQ: {}, W_: {}},
         Code._2349: {RQ: {}, W_: {}},
         Code._30C9: {I_: {}},
+        Code._3110: {I_: {}},  # Spider THM
         Code._3120: {I_: {}},
         Code._313F: {
             I_: {}
@@ -880,6 +883,7 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._3110: {I_: {}},  # Spider Autotemp
         Code._3150: {I_: {}},
         Code._4E01: {I_: {}},  # Spider Autotemp Zone controller
+        Code._4E04: {I_: {}},  # idem
     },
     DevType.TRV: {  # e.g. HR92/HR91: Radiator Controller
         Code._0001: {W_: {r"^0[0-9A-F]"}},
@@ -1178,9 +1182,9 @@ _CODE_ONLY_FROM_CTL: tuple[Code, ...] = tuple(
 CODES_ONLY_FROM_CTL: tuple[Code, ...] = (
     Code._1030,
     Code._1F09,
-    Code._22D0,
+    # Code._22D0,  # also _W from the Spider master THM! issue #340
     Code._313F,
-)  # I packets, TODO: 31Dx too?
+)  # I packets, TODO: 31Dx too? not 31D9/31DA!
 
 #
 ########################################################################################
