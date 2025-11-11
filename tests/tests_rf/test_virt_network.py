@@ -10,6 +10,7 @@ import pytest
 import serial  # type: ignore[import-untyped]
 
 from ramses_rf import Address, Code, Command, Gateway
+from ramses_rf.database import MessageIndex
 from ramses_tx.schemas import DeviceIdT
 from ramses_tx.transport import PortTransport
 from tests_rf.virtual_rf import VirtualRf, rf_factory
@@ -191,10 +192,12 @@ async def test_virtual_rf_dev_disc() -> None:
     try:
         rf.set_gateway(rf.ports[0], "18:000000")
         gwy_0 = Gateway(rf.ports[0], **GWY_CONFIG)
+        gwy_0.msg_db = MessageIndex()
         await assert_devices(gwy_0, [])
 
         rf.set_gateway(rf.ports[1], "18:111111")
         gwy_1 = Gateway(rf.ports[1], **GWY_CONFIG)
+        gwy_1.msg_db = MessageIndex()
         await assert_devices(gwy_1, [])
 
         await _test_virtual_rf_dev_disc(rf, gwy_0, gwy_1)
@@ -214,10 +217,15 @@ async def test_virtual_rf_pkt_flow() -> None:
 
     rf: VirtualRf = None  # type: ignore[assignment]
 
+    gwy_0: Gateway = None  # type: ignore[assignment]
+    gwy_1: Gateway = None  # type: ignore[assignment]
+
     try:
         rf, (gwy_0, gwy_1) = await rf_factory(
             [GWY_CONFIG | SCHEMA_0, GWY_CONFIG | SCHEMA_1]
         )
+        gwy_0.msg_db = MessageIndex()
+        gwy_1.msg_db = MessageIndex()
 
         assert gwy_0._protocol._transport
         # NOTE: will pick up gwy 18:111111, since Foreign gwy detect has been removed
@@ -230,6 +238,8 @@ async def test_virtual_rf_pkt_flow() -> None:
 
     finally:
         if rf:
-            await gwy_0.stop()
-            await gwy_1.stop()
+            if gwy_0:
+                await gwy_0.stop()
+            if gwy_1:
+                await gwy_1.stop()
             await rf.stop()
