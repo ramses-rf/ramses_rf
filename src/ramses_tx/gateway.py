@@ -206,7 +206,7 @@ class Engine:
 
         self._kwargs = {}  # HACK
 
-        await self._protocol.wait_for_connection_made()
+        await self._protocol.wait_for_connection_made(timeout=10)  # EBR hack
 
         # TODO: should this be removed (if so, pytest all before committing)
         if self._input_file:
