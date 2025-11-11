@@ -597,7 +597,7 @@ class PortProtocol(_DeviceIdFilterMixin, _BaseProtocol):
             self._context.pkt_received(pkt)
 
     async def _send_impersonation_alert(self, cmd: Command) -> None:
-        """Send an puzzle packet warning that impersonation is occurring."""
+        """Send a puzzle packet warning that impersonation is occurring."""
 
         if _DBG_DISABLE_IMPERSONATION_ALERTS:
             return
