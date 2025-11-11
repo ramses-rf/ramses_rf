@@ -130,11 +130,15 @@ class MessageIndex:
     def stop(self) -> None:
         """Stop the housekeeper loop."""
 
-        if self._housekeeping_task and (not self._housekeeping_task.done()):
+        if (
+            self.maintain
+            and self._housekeeping_task
+            and (not self._housekeeping_task.done())
+        ):
             self._housekeeping_task.cancel()  # stop the housekeeper
 
         self._cx.commit()  # just in case
-        # self._cx.close()  # may still need to do queries after engine has stopped?
+        self._cx.close()  # may still need to do queries after engine has stopped?
 
     @property
     def msgs(self) -> MsgDdT:

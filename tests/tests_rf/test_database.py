@@ -103,6 +103,8 @@ class TestMessageIndex:
         msg_db.clr()
         assert len(msg_db.all()) == 0
 
+        msg_db.stop()  # close sqlite3 connection
+
     async def test_qry_msg(self) -> None:
         """Query the MessageIndex."""
         msg_db = MessageIndex()
@@ -209,3 +211,5 @@ class TestMessageIndex:
             sql, (_id[:_SQL_SLICE], _id[:_SQL_SLICE], _ctx_qry)
         )  # e.g. 01:123456_01
         assert len(m) == 1
+
+        msg_db.stop()  # close sqlite3 connection

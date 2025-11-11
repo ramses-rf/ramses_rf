@@ -68,6 +68,8 @@ class Test_dispatcher_gateway:
         mock_gateway._check_dst_slug = MagicMock(return_value="CTL")
         dispatcher._create_devices_from_addrs(mock_gateway, self.msg5)
 
+        mock_gateway.msg_db.stop()  # close sqlite3 connection
+
     async def test_check_msg_addrs(self) -> None:
         dispatcher._check_msg_addrs(self.msg5)
         dispatcher._check_msg_addrs(self.msg6)

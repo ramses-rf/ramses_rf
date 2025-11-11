@@ -72,6 +72,9 @@ def assert_expected_set(gwy: Gateway, expected: dict) -> None:
     assert_expected(gwy.status, expected.get("status"))
     assert_expected(gwy.known_list, expected.get("known_list"))
 
+    if gwy.msg_db:
+        gwy.msg_db.stop()  # close sqlite3 connection
+
 
 def assert_raises(exception: type[Exception], fnc: Callable, *args: Any) -> None:
     try:

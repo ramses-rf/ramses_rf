@@ -117,6 +117,8 @@ class Test_entity_base:
             "3220": {"RP": {"11": self.msg6}},
         }, "base _msgz wrong"
 
+        mock_gateway.msg_db.stop()  # close sqlite3 connection
+
     async def test_entity_base_zone(self, mock_gateway: MagicMock) -> None:
         # works as expected
         dev = _MessageDB(mock_gateway)
@@ -162,6 +164,8 @@ class Test_entity_base:
             "12B0": {" I": {"01": self.msg7}},
             "3150": {" I": {"01": self.msg5}},
         }, "zone _msgz wrong"
+
+        mock_gateway.msg_db.stop()  # close sqlite3 connection
 
     msg8: Message = Message._from_pkt(
         Packet(
@@ -226,3 +230,5 @@ class Test_entity_base:
             "1260": {"RP": {"00": self.msg9}},
             "3150": {" I": {"FC": self.msg8}},
         }, "dhw _msgz wrong"
+
+        mock_gateway.msg_db.stop()  # close sqlite3 connection
