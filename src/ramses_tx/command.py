@@ -114,11 +114,9 @@ class Qos:
     # tx (from sent to gwy, to get back from gwy) seems to takes approx. 0.025s
     TX_RETRIES_DEFAULT = 2
     TX_RETRIES_MAX = 5
-    TX_TIMEOUT_DEFAULT = td(seconds=9.0)  # EBR =0.2)  # 0.20 OK, but too high?
+    TX_TIMEOUT_DEFAULT = td(seconds=0.2)  # 0.20 OK, but too high?
 
-    RX_TIMEOUT_DEFAULT = td(
-        seconds=10.0
-    )  # EBR =0.50)  # 0.20 seems OK, 0.10 too low sometimes
+    RX_TIMEOUT_DEFAULT = td(seconds=0.50)  # 0.20 seems OK, 0.10 too low sometimes
 
     TX_BACKOFFS_MAX = 2  # i.e. tx_timeout 2 ** MAX_BACKOFF
 

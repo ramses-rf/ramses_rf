@@ -80,15 +80,15 @@ async def protocol(rf: VirtualRf) -> AsyncGenerator[PortProtocol, None]:
 
     protocol._disable_qos = False  # HACK: needed for tests to succeed (default: None?)
 
-    # assert protocol._context.echo_timeout == 0.5
-    # assert protocol._context.reply_timeout == 0.5
+    assert protocol._context.echo_timeout == 0.5
+    assert protocol._context.reply_timeout == 0.5
     assert protocol._context.SEND_TIMEOUT_LIMIT == 20.0
 
     await assert_protocol_state(protocol, Inactive, max_sleep=0)
 
     # for coverage in GitHub, must increase timeout
-    # protocol._context.echo_timeout = 6  # access private method, add setter?
-    # protocol._context.reply_timeout = 5  # access private method, add setter?
+    protocol._context.echo_timeout = 6.0  # access private method, add setter?
+    protocol._context.reply_timeout = 5.0  # access private method, add setter?
     assert protocol._context.echo_timeout == 6.0
     assert protocol._context.reply_timeout == 5.0
 

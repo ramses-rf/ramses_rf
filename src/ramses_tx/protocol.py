@@ -583,7 +583,7 @@ class PortProtocol(_DeviceIdFilterMixin, _BaseProtocol):
             self._context.pause_writing()
 
     def resume_writing(self) -> None:
-        """Inform the FSM that the Protocol has been paused."""
+        """Inform the FSM that the Protocol has been resumed."""
 
         super().resume_writing()
         if self._context:
