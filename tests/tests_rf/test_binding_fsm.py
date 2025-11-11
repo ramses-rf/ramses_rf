@@ -3,7 +3,7 @@
 # TODO: test addenda phase of binding handshake
 # TODO: get test working with (and without) disabled QoS
 
-"""TRAMSES RF - Test the binding protocol with a virtual RF.
+"""RAMSES RF - Test the binding protocol with a virtual RF.
 
 NB: This test will likely fail with pytest-repeat (pytest -n x); maybe because of
 concurrent access to pty.openpty().
