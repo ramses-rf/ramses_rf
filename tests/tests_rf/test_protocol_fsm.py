@@ -86,7 +86,9 @@ async def protocol(rf: VirtualRf) -> AsyncGenerator[PortProtocol, None]:
 
     await assert_protocol_state(protocol, Inactive, max_sleep=0)
 
-    transport = await transport_factory(protocol, port_name=rf.ports[0], port_config={})
+    transport = await transport_factory(
+        protocol, port_name=rf.ports[0], port_config={}, timeout=5
+    )
     transport._extra["virtual_rf"] = rf  # injected to aid any debugging
 
     await assert_protocol_state(protocol, IsInIdle, max_sleep=0)

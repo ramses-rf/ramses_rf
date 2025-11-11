@@ -1582,6 +1582,10 @@ async def transport_factory(
         return transport
 
     # Serial
+    timeout: float = kwargs.pop(
+        "timeout", _DEFAULT_TIMEOUT_PORT
+    )  # slower for GitHub testing
+
     ser_instance = get_serial_instance(port_name, port_config)
 
     if os.name == "nt" or ser_instance.portstr[:7] in ("rfc2217", "socket:"):
@@ -1597,5 +1601,5 @@ async def transport_factory(
     )
 
     # TODO: remove this? better to invoke timeout after factory returns?
-    await protocol.wait_for_connection_made(timeout=_DEFAULT_TIMEOUT_PORT)
+    await protocol.wait_for_connection_made(timeout=timeout)
     return transport
