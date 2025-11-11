@@ -16,7 +16,7 @@ DEFAULT_DISABLE_QOS: Final[bool | None] = None
 DEFAULT_WAIT_FOR_REPLY: Final[bool | None] = None
 
 DEFAULT_ECHO_TIMEOUT: Final[float] = (
-    5.0  # EBR hack 0.50  # waiting for echo pkt after cmd sent
+    6.0  # EBR hack 0.50  # waiting for echo pkt after cmd sent
 )
 DEFAULT_RPLY_TIMEOUT: Final[float] = (
     5.0  # EBR hack 0.50  # waiting for reply pkt after echo pkt rcvd
