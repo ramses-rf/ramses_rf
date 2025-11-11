@@ -15,12 +15,8 @@ DEV_MODE = __dev_mode__
 DEFAULT_DISABLE_QOS: Final[bool | None] = None
 DEFAULT_WAIT_FOR_REPLY: Final[bool | None] = None
 
-DEFAULT_ECHO_TIMEOUT: Final[float] = (
-    6.0  # EBR hack 0.50  # waiting for echo pkt after cmd sent
-)
-DEFAULT_RPLY_TIMEOUT: Final[float] = (
-    5.0  # EBR hack 0.50  # waiting for reply pkt after echo pkt rcvd
-)
+DEFAULT_ECHO_TIMEOUT: Final[float] = 0.50  # waiting for echo pkt after cmd sent
+DEFAULT_RPLY_TIMEOUT: Final[float] = 0.50  # waiting for reply pkt after echo pkt rcvd
 DEFAULT_BUFFER_SIZE: Final[int] = 32
 
 DEFAULT_SEND_TIMEOUT: Final[float] = 20.0  # total waiting for successful send: FIXME
