@@ -1597,5 +1597,7 @@ async def transport_factory(
     )
 
     # TODO: remove this? better to invoke timeout after factory returns?
-    await protocol.wait_for_connection_made(timeout=_DEFAULT_TIMEOUT_PORT)
+    await protocol.wait_for_connection_made(
+        timeout=10.0
+    )  # EBR hack =_DEFAULT_TIMEOUT_PORT)
     return transport
