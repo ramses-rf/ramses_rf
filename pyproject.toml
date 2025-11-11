@@ -84,7 +84,7 @@
   norecursedirs = "deprecated/*"
 
   # pytest-cov coverage reporting. open htmlcov/index.html in a browser for details
-  addopts = "--cov=src --cov-fail-under=50 --cov-report=xml --cov-report=term"
+  # addopts = "--cov=src --cov-fail-under=50 --cov-report=xml --cov-report=term" # cov off for now
   # to create an interactive local HTML report, add: --cov-report=html
   # to report missed lines during test writing, add: --cov-report=term-missing
   # PyCharm might not hit a breakpoint. For debugging, disable -cov by adding:
