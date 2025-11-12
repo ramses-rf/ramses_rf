@@ -94,6 +94,37 @@
   # cov_report_term = "term-missing:skip-covered"
 
 #
+### coverage #########################################################################
+
+[tool.coverage.run]
+branch = true
+
+source = [
+    "src",
+    "tests"
+]
+#
+#patch = ["subprocess"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_also = [
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+]
+format = "text"
+
+fail_under = 75
+
+ignore_errors = true
+
+[tool.coverage.html]
+directory = "coverage_html"
+
+#
 ### mypy #############################################################################
 
 [tool.mypy]
