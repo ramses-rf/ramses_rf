@@ -49,10 +49,10 @@ jobs:
       - name: Run coverage with pytest
         run: coverage run -m pytest
 
-      - name: Coverage xml report
+      - name: Create coverage xml
         run: coverage xml
 
-      - name: Code Coverage Report
+      - name: Create Code Coverage Report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
           filename: coverage.xml

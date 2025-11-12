@@ -995,7 +995,7 @@ class _Discovery(_MessageDB):
                         sql = """
                             SELECT dtm from messages WHERE
                             code = ?
-                            verb = ' I'
+                            AND verb = ' I'
                             AND ctx = 'True'
                             AND (src = ? OR dst = ?)
                         """
