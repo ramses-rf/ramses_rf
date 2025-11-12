@@ -193,7 +193,7 @@ class MessageIndex:
             """
             dtm = dt_now - _cutoff  # .isoformat(timespec="microseconds") < needed?
 
-            self._cu.execute("SELECT dtm FROM messages WHERE dtm => ?", (dtm,))
+            self._cu.execute("SELECT dtm FROM messages WHERE dtm >= ?", (dtm,))
             rows = self._cu.fetchall()  # fetch dtm of current messages to retain
 
             try:  # make this operation atomic, i.e. update self._msgs only on success
