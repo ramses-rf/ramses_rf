@@ -1597,7 +1597,6 @@ async def transport_factory(
     )
 
     # TODO: remove this? better to invoke timeout after factory returns?
-    await protocol.wait_for_connection_made(
-        timeout=30.0
-    )  # EBR hack =_DEFAULT_TIMEOUT_PORT)
+    await protocol.wait_for_connection_made(timeout=_DEFAULT_TIMEOUT_PORT)
+    # pytest-cov times out in virtual_rf.py when set below 30.0 on GitHub Actions
     return transport
