@@ -440,7 +440,7 @@ DEV_TYPE_MAP = attr_dict_factory(
         ),  # CH/DHW devices instead of HVAC/other
         "HEAT_ZONE_SENSORS": ("00", "01", "03", "04", "12", "22", "34"),
         "HEAT_ZONE_ACTUATORS": ("00", "02", "04", "13"),
-        "THM_DEVICES": ("03", "12", "22", "34"),
+        "THM_DEVICES": ("03", "12", "21", "22", "34"),
         "TRV_DEVICES": ("00", "04"),
         "CONTROLLERS": ("01", "02", "12", "22", "23", "34"),  # potentially controllers
         "PROMOTABLE_SLUGS": (DevType.DEV, DevType.HEA, DevType.HVC),
