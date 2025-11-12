@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from ramses_rf import Gateway
 from ramses_rf.const import DEV_TYPE_MAP, DevType
+from ramses_rf.database import MessageIndex
 from ramses_rf.schemas import SZ_CLASS, SZ_KNOWN_LIST
 
 from .const import HgiFwTypes
@@ -47,7 +48,7 @@ def _get_hgi_id_for_schema(
     hgi_ids = [k for k, v in known_list.items() if v.get(SZ_CLASS) == DevType.HGI]
 
     if len(hgi_ids) > 1:
-        raise TypeError("Multiple Gateways per schema are not support")
+        raise TypeError("Multiple Gateways per schema are not supported")
 
     elif len(hgi_ids) == 1:
         hgi_id = hgi_ids[0]
@@ -103,6 +104,7 @@ async def rf_factory(
 
         if start_gwys:
             await gwy.start()
+            gwy.msg_db = MessageIndex(maintain=False)
             assert gwy._transport is not None  # mypy
             gwy._transport._extra["virtual_rf"] = rf
 
