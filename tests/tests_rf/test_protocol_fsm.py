@@ -86,12 +86,6 @@ async def protocol(rf: VirtualRf) -> AsyncGenerator[PortProtocol, None]:
 
     await assert_protocol_state(protocol, Inactive, max_sleep=0)
 
-    # for coverage in GitHub, must increase timeout
-    protocol._context.echo_timeout = 6.0  # access private method, add setter?
-    protocol._context.reply_timeout = 5.0  # access private method, add setter?
-    assert protocol._context.echo_timeout == 6.0
-    assert protocol._context.reply_timeout == 5.0
-
     transport = await transport_factory(protocol, port_name=rf.ports[0], port_config={})
     transport._extra["virtual_rf"] = rf  # injected to aid any debugging
 

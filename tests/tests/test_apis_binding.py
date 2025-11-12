@@ -87,5 +87,3 @@ async def test_initiate_binding_process(dev_class: type[Fakeable]) -> None:
             mocked_method.assert_called_once_with(codes)
         else:
             mocked_method.assert_called_once()
-
-    # gwy.msg_db.stop()  # close sqlite3 connection

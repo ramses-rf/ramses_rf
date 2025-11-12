@@ -10,8 +10,6 @@ import pytest
 import serial  # type: ignore[import-untyped]
 
 from ramses_rf import Address, Code, Command, Gateway
-
-# from ramses_rf.database import MessageIndex
 from ramses_tx.schemas import DeviceIdT
 from ramses_tx.transport import PortTransport
 from tests_rf.virtual_rf import VirtualRf, rf_factory
@@ -110,14 +108,12 @@ async def _test_virtual_rf_dev_disc(
 
     # TEST 0: Tx of fingerprint packet with one on/one off
     await gwy_0.start()
-    # gwy_0.msg_db = MessageIndex(maintain=False)
     assert gwy_0._protocol._transport
 
     await assert_devices(gwy_0, ["18:000000"])
     await assert_devices(gwy_1, [])
 
     await gwy_1.start()
-    # gwy_1.msg_db = MessageIndex(maintain=False)
     assert gwy_1._protocol._transport
 
     # NOTE: will pick up gwy 18:111111, since Foreign gwy detect has been removed

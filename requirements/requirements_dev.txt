@@ -1,5 +1,5 @@
 # Requirements to dev/test the source code
-# - last checked/updated: 2025-08-16 (c.f. HA 2025.8.1)
+# - last checked/updated: 2025-11-12 (c.f. HA 2025.11.0)
 # - HA core reqs: https://github.com/home-assistant/core/blob/dev/requirements.txt
 
 # for using the ramses_rf library with CLI
@@ -20,9 +20,9 @@
   voluptuous >= 0.15.2                           # HA uses 0.15.2
 
 # used for testing
-  pytest >= 8.3.5                                # HA uses 8.4.2
-  pytest-asyncio >= 0.26.0                       # HA uses 1.2.0
-  pytest-cov >= 7.0.0                            # HA uses 6.2.1
+  pytest >= 8.4.2                                # HA uses 8.4.2
+  pytest-asyncio >= 1.2.0                        # HA uses 1.2.0
+  pytest-cov >= 7.0.0                            # HA uses 6.2.1, includes coverage.py as dep
   pytest-sugar >= 1.0.0                          # HA uses 1.0.0
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
 # syrupy >= 4.8.1                                # HA uses 4.9.1
