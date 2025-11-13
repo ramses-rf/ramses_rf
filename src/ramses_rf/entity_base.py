@@ -999,14 +999,20 @@ class _Discovery(_MessageDB):
                             AND ctx = 'True'
                             AND (src = ? OR dst = ?)
                         """
-                        msgs += self._gwy.msg_db.qry(
+                        res = self._gwy.msg_db.qry(
                             sql,
                             (
                                 task[_SZ_COMMAND].code,
                                 self.tcs.id[:_ID_SLICE],
                                 self.tcs.id[:_ID_SLICE],
                             ),
-                        )[0]  # expect 1 Message in returned tuple
+                        )
+                        if len(res) > 0:
+                            msgs += res[0]  # expect 1 Message in returned tuple
+                        else:
+                            _LOGGER.debug(
+                                f"No msg found for hdr {hdr}, tesk code {task[_SZ_COMMAND].code}"
+                            )
                     else:  # TODO(eb) remove next Q1 2026
                         msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
                         # raise NotImplementedError
