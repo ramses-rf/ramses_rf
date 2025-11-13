@@ -100,29 +100,28 @@
 ### coverage #########################################################################
 
 [tool.coverage.run]
-core = "sysmon"  # essential setting for speed on GitHub < 11 secs instead of >12 mins
-branch = false  # true takes a lot longer and can't be combined with sysmon
-patch = ["subprocess"]
-
-source = [
-    "src",
-    "tests"
-]
-data_file = ".coverage"
+  core = "sysmon"  # essential setting for speed on GitHub < 11 secs instead of >12 mins
+  branch = false  # true takes a lot longer and can't be combined with sysmon
+  patch = ["subprocess"]
+  data_file = ".coverage"
+  source = [
+    "src/",
+    "tests/"
+  ]
 
 [tool.coverage.report]
-# Regexes for lines to exclude from consideration
-exclude_also = [
+  # Regexes for lines to exclude from consideration
+  exclude_also = [
     # Don't complain if tests don't hit defensive assertion code:
     "raise AssertionError",
     "raise NotImplementedError",
-]
-format = "text"
-fail_under = 75
-ignore_errors = true
+  ]
+  format = "text"
+  fail_under = 75
+  ignore_errors = true
 
 [tool.coverage.html]
-directory = "coverage_html"
+  directory = "coverage_html"
 
 #
 ### mypy #############################################################################
