@@ -51,6 +51,9 @@ jobs:
       - name: Run coverage with pytest
         run: coverage run -m pytest
 
+      - name: Debug - Check if .coverage exists
+        run: test -f .coverage && echo ".coverage exists" || echo ".coverage does NOT exist"
+
       - name: Create coverage xml
         run: coverage xml
 
