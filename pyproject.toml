@@ -100,17 +100,17 @@
 ### coverage #########################################################################
 
 [tool.coverage.run]
-branch = false  # true takes a lot longer
+core = "sysmon"
+branch = false  # true takes a lot longer and can't be combined with sysmon
 patch = ["subprocess"]
 
-source = [
-    "src/",
-    "tests/"
-]
-
-#omit = [
-#    "*/test_binding_fsm.py"
+#source = [
+#    "."
 #]
+
+omit = [
+    "*/test_binding_fsm.py"
+]
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
