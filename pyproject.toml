@@ -100,14 +100,13 @@
 ### coverage #########################################################################
 
 [tool.coverage.run]
-branch = true  # takes a lot longer
+branch = false  # true takes a lot longer
 patch = ["subprocess"]
 
-source = ["."]
-#source = [
-#    "./src/*",
-#    "./tests/*"
-#]
+source = [
+    "./src/*",
+    "./tests/*"
+]
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
