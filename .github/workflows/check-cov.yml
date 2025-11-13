@@ -52,13 +52,16 @@ jobs:
         run: coverage run -m pytest
 
       - name: Debug - Check if .coverage exists
-        run: ls
-        # run: test -f .coverage && echo ".coverage exists" || echo ".coverage does NOT exist"
+        run: test -f .coverage && echo ".coverage exists" || echo ".coverage does NOT exist"
+
+      - name: Display coverage report
+        run: coverage report
 
       - name: Create coverage xml
         run: coverage xml
 
       - name: Create Code Coverage Report
+        # from: https://github.com/marketplace/actions/code-coverage-summary
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
           filename: coverage.xml
@@ -72,10 +75,32 @@ jobs:
           thresholds: '60 80'
 
       - name: Add Coverage PR Comment
+        # from: https://github.com/marketplace/actions/sticky-pull-request-comment
         uses: marocchino/sticky-pull-request-comment@v2
         if: github.event_name == 'pull_request'
         with:
           recreate: true
           path: code-coverage-results.md
+
+#      - name: Create Coverage Badge
+#        # from: https://github.com/marketplace/actions/coverage-py-badge
+#        uses: tj-actions/coverage-badge-py@v2
+#        id: coverage-badge-py
+#        with:
+#            # Output path to write the
+#            # coverage badge.
+#            # Type: string
+#            # Default: "coverage.svg"
+#            output: 'misc/coverage-badge.svg'
+#
+#            # Overwrite an existing coverage badge.
+#            # Type: boolean
+#            # Default: "true"
+#            overwrite: ''
+#
+#            # Current working directory
+#            # Type: string
+#            # Default: "."
+#            working-directory: ''
 
       - run: echo "🍏 This job's status is ${{ job.status }}."
