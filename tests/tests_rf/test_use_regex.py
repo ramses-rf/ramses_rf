@@ -67,6 +67,7 @@ GWY_CONFIG = {
 def patches_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("ramses_tx.protocol._DBG_DISABLE_IMPERSONATION_ALERTS", True)
     monkeypatch.setattr("ramses_tx.transport.MIN_INTER_WRITE_GAP", 0)
+    monkeypatch.setattr("ramses_tx.transport._DEFAULT_TIMEOUT_PORT", 30.0)  # EBR =3)
 
 
 async def assert_this_pkt(

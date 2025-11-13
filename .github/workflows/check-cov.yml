@@ -20,6 +20,8 @@ on:
 
   workflow_dispatch:
 
+permissions:
+  pull-requests: write
 
 jobs:
   coverage:
