@@ -108,6 +108,7 @@ source = [
     "src",
     "tests"
 ]
+data_file = ".coverage"
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
