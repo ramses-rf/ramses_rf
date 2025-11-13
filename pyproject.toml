@@ -104,9 +104,13 @@ branch = false  # true takes a lot longer
 patch = ["subprocess"]
 
 source = [
-    "./src/*",
-    "./tests/*"
+    "src/",
+    "tests/"
 ]
+
+#omit = [
+#    "*/test_binding_fsm.py"
+#]
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
