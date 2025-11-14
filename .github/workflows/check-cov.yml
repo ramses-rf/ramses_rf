@@ -21,8 +21,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  # pull-requests: write
-  issues: write
+  pull-requests: write
+  # issues: write
 
 jobs:
   coverage:
@@ -76,12 +76,16 @@ jobs:
           thresholds: '60 80'
 
       - name: Add Coverage PR Comment
-        # from: https://github.com/marketplace/actions/sticky-pull-request-comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: github.event_name == 'pull_request'
+        # from: https://github.com/marketplace/actions/comment-pull-request
+        uses: thollander/actions-comment-pull-request@v3
         with:
-          recreate: true
-          path: code-coverage-results.md
+          file-path: code-coverage-results.md
+          comment-tag: cov-report  # replaces existing by this name
+          # or: https://github.com/marketplace/actions/sticky-pull-request-comment
+          #        if: github.event_name == 'pull_request'
+          #        with:
+          #          recreate: true
+          #          path: code-coverage-results.md
           # GITHUB_TOKEN is implicitly passed in
 
 #      - name: Create Coverage Badge
