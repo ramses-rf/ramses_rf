@@ -10,7 +10,7 @@ on:
       "tests/**",
     ]
 
-  pull_request:
+  pull_request_target:  # instead of pull_request
     branches: [ "master" ]
     paths: [
       ".github/workflows/check-cov.yml",
@@ -21,6 +21,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: write
   pull-requests: write
 
 jobs:
@@ -81,7 +82,7 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
-          GITHUB_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+          # GITHUB_TOKEN is implicitly passed in
 
 #      - name: Create Coverage Badge
 #        # from: https://github.com/marketplace/actions/coverage-py-badge
