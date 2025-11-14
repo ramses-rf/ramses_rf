@@ -10,7 +10,7 @@ on:
       "tests/**",
     ]
 
-  pull_request:  # no repeat on pull_request_target:
+  pull_request:
     branches: [ "master" ]
     paths: [
       ".github/workflows/check-cov.yml",
@@ -21,7 +21,6 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
   pull-requests: write
 
 jobs:
@@ -31,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.14"]
 
     steps:
       - uses: actions/checkout@v5
