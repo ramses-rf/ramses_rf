@@ -1,6 +1,7 @@
 ![Linting](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-lint.yml/badge.svg)
 ![Typing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-type.yml/badge.svg)
 ![Testing](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-test.yml/badge.svg)
+[![Coverage](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-cov.yml/badge.svg?event=workflow_run)](https://github.com/ramses-rf/ramses_rf/actions/workflows/check-cov.yml)
 
 ## Overview
 
