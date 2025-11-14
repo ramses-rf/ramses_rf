@@ -995,24 +995,18 @@ class _Discovery(_MessageDB):
                         sql = """
                             SELECT dtm from messages WHERE
                             code = ?
-                            AND verb = ' I'
+                            verb = ' I'
                             AND ctx = 'True'
                             AND (src = ? OR dst = ?)
                         """
-                        res = self._gwy.msg_db.qry(
+                        msgs += self._gwy.msg_db.qry(
                             sql,
                             (
                                 task[_SZ_COMMAND].code,
                                 self.tcs.id[:_ID_SLICE],
                                 self.tcs.id[:_ID_SLICE],
                             ),
-                        )
-                        if len(res) > 0:
-                            msgs += res[0]  # expect 1 Message in returned tuple
-                        else:
-                            _LOGGER.debug(
-                                f"No msg found for hdr {hdr}, tesk code {task[_SZ_COMMAND].code}"
-                            )
+                        )[0]  # expect 1 Message in returned tuple
                     else:  # TODO(eb) remove next Q1 2026
                         msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
                         # raise NotImplementedError
