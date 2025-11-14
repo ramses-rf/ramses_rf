@@ -81,7 +81,7 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
 
 #      - name: Create Coverage Badge
 #        # from: https://github.com/marketplace/actions/coverage-py-badge
