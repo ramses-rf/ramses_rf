@@ -20,7 +20,7 @@ on:
 
   workflow_dispatch:
 
-permissions:
+# permissions:
   # pull-requests: write
   # issues: write
 
