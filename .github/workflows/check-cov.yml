@@ -21,7 +21,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  pull-requests: write
+  # pull-requests: write
+  issues: write
 
 jobs:
   coverage:
