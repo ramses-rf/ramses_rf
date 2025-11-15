@@ -450,7 +450,7 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
                 #     )
                 #     self._send_cmd(cmd)
 
-        elif msg.code == Code._0008:  # relay_demand, TODO: use msgIndex DB?
+        elif msg.code == Code._0008:  # relay_demand
             if msg.payload.get(SZ_DOMAIN_ID) == FC:
                 self._relay_demand = msg
             else:  # FA

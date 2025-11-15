@@ -258,14 +258,6 @@ class Gateway(Engine):
             #     return True
             return include_expired or not msg._expired
 
-        msgs = [m for device in self.devices for m in device._msg_list]
-
-        for system in self.systems:
-            msgs.extend(list(system._msgs.values()))
-            msgs.extend([m for z in system.zones for m in z._msgs.values()])
-            # msgs.extend([m for z in system.dhw for m in z._msgs.values()])  # TODO: DHW
-            # Related to/Fixes ramses_cc Issue 249 non-existing via-device _HW ?
-
         if self.msg_db:
             pkts = {
                 f"{repr(msg._pkt)[:26]}": f"{repr(msg._pkt)[27:]}"
@@ -273,12 +265,20 @@ class Gateway(Engine):
                 if wanted_msg(msg, include_expired=include_expired)
             }
         else:  # deprecated, to be removed in Q1 2026
-            # _LOGGER.warning("Missing MessageIndex")
+            msgs = [m for device in self.devices for m in device._msg_list]
+            # add systems._msgs and zones._msgs
+            for system in self.systems:
+                msgs.extend(list(system._msgs.values()))
+                msgs.extend([m for z in system.zones for m in z._msgs.values()])
+                # msgs.extend([m for z in system.dhw for m in z._msgs.values()])  # TODO: DHW
+                # Related to/Fixes ramses_cc Issue 249 non-existing via-device _HW ?
+
             pkts = {  # BUG: assumes pkts have unique dtms: may be untrue for contrived logs
                 f"{repr(msg._pkt)[:26]}": f"{repr(msg._pkt)[27:]}"
                 for msg in msgs
                 if wanted_msg(msg, include_expired=include_expired)
             }
+            # _LOGGER.warning("Missing MessageIndex")
 
         self._resume()
 

@@ -532,7 +532,7 @@ class MultiZone(SystemBase):  # 0005 (+/- 000C?)
         schema = shrink(SCH_TCS_ZONES_ZON(schema))
 
         zon: Zone = self.zone_by_idx.get(zone_idx)  # type: ignore[assignment]
-        if zon is None:
+        if zon is None:  # not found in tcs, create it
             zon = zone_factory(self, zone_idx, msg=msg, **schema)  # type: ignore[unreachable]
             self.zone_by_idx[zon.idx] = zon
             self.zones.append(zon)

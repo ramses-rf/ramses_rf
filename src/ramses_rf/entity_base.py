@@ -224,7 +224,10 @@ class _MessageDB(_Entity):
 
         # As of 0.52.1 we use SQLite MessageIndex, see ramses_rf/database.py
         # _msgz_ (nested) was only used in this module. Note:
-        # _msgz (now rebuilt from _msgs) also used in: client, base, device.heat
+        # _msgz (now rebuilt from _msgs) is also used in:
+        #   - client.py: for code in device._msgz.values()
+        #   - base.py: Code._1060 in self._msgz
+        #   [x] device.heat (no longer used)
 
     def _handle_msg(self, msg: Message) -> None:
         """Store a msg in the DBs.
@@ -244,14 +247,14 @@ class _MessageDB(_Entity):
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             _LOGGER.debug(
-                "For %s (z_id %s) add msg %s, src %s, dst %s to msg_db.",
+                "For %s (_z_id %s) add msg %s, src %s, dst %s to msg_db.",
                 self.id,
                 self._z_id,
                 msg,
                 msg.src,
                 msg.dst,
             )
-            debug_code: Code = Code._3150
+            debug_code: Code = Code._3150  # for debugging only log these, pick your own
             if msg.code == debug_code and msg.src.id.startswith("01:"):
                 _LOGGER.debug(
                     "Added msg from %s with code %s to _gwy.msg_db. hdr=%s",
@@ -293,6 +296,7 @@ class _MessageDB(_Entity):
     def _msg_list(self) -> list[Message]:
         """Return a flattened list of all messages logged on this device."""
         # (only) used in gateway.py#get_state() and in tests/tests/test_eavesdrop_schema.py
+        # TODO remove _msg_list Q1 2026
         if self._gwy.msg_db:
             msg_list_qry: list[Message] = []
             code_list = self._msg_dev_qry()
@@ -303,16 +307,21 @@ class _MessageDB(_Entity):
                         msg_list_qry.append(self._msgs[c])
                     else:
                         # evohome has these errors
-                        # _msg_list could not fetch self._msgs[7FFF] for 18:072981 (z_id 18:072981)
+                        # _msg_list could not fetch self._msgs[7FFF] for 18:072981 (_z_id 18:072981)
                         _LOGGER.debug(
-                            "_msg_list could not fetch self._msgs[%s] for %s (z_id %s)",
+                            "_msg_list could not fetch self._msgs[%s] for %s (_z_id %s)",
                             c,
                             self.id,
                             self._z_id,
                         )
             return msg_list_qry
         # else create from legacy nested dict
-        return [m for c in self._msgz.values() for v in c.values() for m in v.values()]
+        return [
+            msg
+            for code in self._msgz.values()
+            for ctx in code.values()
+            for msg in ctx.values()
+        ]
 
     def _add_record(
         self, address: Address, code: Code | None = None, verb: str = " I"
@@ -424,7 +433,7 @@ class _MessageDB(_Entity):
         **kwargs: Any,
     ) -> dict | list | None:
         """
-        Query the message dict or the SQLite index for the most recent
+        Query the _msgz message dict or the SQLite MessageIndex for the most recent
         key: value pairs(s) for a given code.
 
         :param code: filter messages by Code or a tuple of Codes, optional
@@ -517,7 +526,7 @@ class _MessageDB(_Entity):
             or (idx == SZ_DOMAIN_ID)
         ), (
             f"full dict:{msg_dict}, payload:{msg.payload} < Coding error: key='{idx}', val='{val}'"
-        )  # should not be there (TODO(eb): BUG but occurs when using SQLite MessageIndex)
+        )  # should not be there
 
         if (
             key == "*" or not key
@@ -535,21 +544,35 @@ class _MessageDB(_Entity):
         """
         Retrieve from the MessageIndex a list of Code keys involving this device.
 
-        :return: list of Codes or empty list when query returned empty
+        :return: list of Codes or an empty list when the query returned empty
         """
 
         if self._gwy.msg_db:
             # SQLite query on MessageIndex
             res: list[Code] = []
-            if self.id[_ID_SLICE:] == "_HW":
+
+            if len(self.id) == 9:
+                # fetch a ctl's message codes (add all its children?)
+                sql = """
+                    SELECT code from messages WHERE
+                    verb in (' I', 'RP')
+                    AND (src = ? OR dst = ?)
+                    AND ctx LIKE ?
+                """
+                _ctx_qry = "%"
+
+            elif self.id[_ID_SLICE:] == "_HW":
+                # fetch a DHW entity's message codes
                 sql = """
                     SELECT code from messages WHERE
                     verb in (' I', 'RP')
                     AND (src = ? OR dst = ?)
                     AND (ctx IN ('FC', 'FA', 'F9', 'FA') OR plk LIKE ?)
                 """
-                _ctx_qry = "%dhw_idx%"  # syntax error ?
+                _ctx_qry = "%dhw_idx%"
+
             else:
+                # fetch a zone's message codes
                 sql = """
                     SELECT code from messages WHERE
                     verb in (' I', 'RP')
@@ -562,12 +585,12 @@ class _MessageDB(_Entity):
                 sql, (self.id[:_ID_SLICE], self.id[:_ID_SLICE], _ctx_qry)
             ):
                 _LOGGER.debug(
-                    "Fetched from index: %s for %s (z_id %s)",
+                    "Fetched from index: %s for %s (_z_id %s)",
                     rec[0],
                     self.id,
                     self._z_id,
                 )
-                # Example: "Fetched from index: code 1FD4 for 01:123456 (z_id 01)"
+                # Example: "Fetched from index: code 1FD4 for 01:123456 (_z_id 01)"
                 res.append(Code(str(rec[0])))
             return res
         else:
@@ -743,7 +766,18 @@ class _MessageDB(_Entity):
         # for r in results:
         #     print(r)
 
-        if self.id[_ID_SLICE:] == "_HW":
+        if len(self.id) == 9:
+            # fetch a ctl's message dtms (add all its children?)
+            sql = """
+                SELECT dtm from messages WHERE
+                verb in (' I', 'RP')
+                AND (src = ? OR dst = ?)
+                AND ctx LIKE ?
+            """
+            _ctx_qry = "%"
+
+        elif self.id[_ID_SLICE:] == "_HW":
+            # fetch a DHW entity's message dtms
             sql = """
                 SELECT dtm from messages WHERE
                 verb in (' I', 'RP')
@@ -753,6 +787,7 @@ class _MessageDB(_Entity):
             _ctx_qry = "%dhw_idx%"
             # TODO add Children messages? self.ctl.dhw
         else:
+            # fetch a zone's message dtms
             sql = """
                 SELECT dtm from messages WHERE
                 verb in (' I', 'RP')
@@ -769,14 +804,14 @@ class _MessageDB(_Entity):
         }
         # if CTL, remove 3150, 3220 heat_demand, both are only stored on children
         # HACK
-        if self.id[:3] == "01:" and self._SLUG == "CTL":
-            # with next ON: 2 errors , both 1x UFC, 1x CTR
-            # with next OFF: 4 errors, all CTR
-            # if Code._3150 in _msg_dict:  # Note: CTL can send a 3150 (see heat_ufc_00)
-            #     _msg_dict.pop(Code._3150)  # keep, prefer to have 2 extra instead of missing 1
-            if Code._3220 in _msg_dict:
-                _msg_dict.pop(Code._3220)
-            # _LOGGER.debug(f"Removed 3150/3220 from %s._msgs dict", self.id)
+        # if self.id[:3] == "01:" and self._SLUG == "CTL":
+        # with next ON: 2 errors , both 1x UFC, 1x CTR
+        # with next OFF: 4 errors, all CTR
+        # if Code._3150 in _msg_dict:  # Note: CTL can send a 3150 (see heat_ufc_00)
+        #     _msg_dict.pop(Code._3150)  # keep, prefer to have 2 extra instead of missing 1
+        # if Code._3220 in _msg_dict:
+        #     _msg_dict.pop(Code._3220)
+        # _LOGGER.debug(f"Removed 3150/3220 from %s._msgs dict", self.id)
         return _msg_dict
 
     @property
@@ -862,7 +897,6 @@ class _Discovery(_MessageDB):
         #     return f"{data_id:02X}"  # type: ignore[return-value]
 
         res: list[str] = []
-        # look for the "sim" OT 3220 record initially added in OtbGateway.init
         if self._gwy.msg_db:
             # SQLite query for ctx field on MessageIndex
             sql = """
@@ -1151,6 +1185,7 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
     (incl. the DHW Zone), and also any UFH controllers.
 
     For a heating Zone, children are limited to a sensor, and a number of actuators.
+
     For the DHW Zone, the children are limited to a sensor, a DHW valve, and/or a
     heating valve.
 
