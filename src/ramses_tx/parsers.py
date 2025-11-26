@@ -1912,6 +1912,7 @@ def parser_2411(payload: str, msg: Message) -> dict[str, Any]:
         "01": (2, centile),  # 52 (0.0-25.0) (%)
         "0F": (2, hex_to_percent),  # xx (0.0-1.0) (%)
         "10": (4, counter),  # 31 (0-1800) (days)
+        # "20": (4, counter),  # unknown data type, uncomment when we have more info
         "92": (4, hex_to_temp),  # 75 (0-30) (C)
     }  # TODO: _2411_TYPES.get(payload[8:10], (8, no_op))
 
@@ -1938,11 +1939,35 @@ def parser_2411(payload: str, msg: Message) -> dict[str, Any]:
         return result
 
     try:
-        assert payload[8:10] in _2411_DATA_TYPES, (
-            f"param {param_id} has unknown data_type: {payload[8:10]}"
-        )  # _INFORM_DEV_MSG
-        length, parser = _2411_DATA_TYPES.get(payload[8:10], (8, lambda x: x))
+        # Handle unknown data types gracefully instead of asserting
+        if payload[8:10] not in _2411_DATA_TYPES:
+            warningmsg = (
+                f"{msg!r} < {_INFORM_DEV_MSG} (param {param_id} has unknown data_type: {payload[8:10]}). "
+                f"This parameter uses an unrecognized data type. "
+                f"Please report this packet and any context about what changed on your system."
+            )
+            # Return partial result with raw hex values for unknown data types
+            if msg.len == 9:
+                result |= {
+                    "value": f"0x{payload[10:18]}",  # Raw hex value
+                    "_value_06": payload[6:10],
+                    "_unknown_data_type": payload[8:10],
+                }
+            else:
+                result |= {
+                    "value": f"0x{payload[10:18]}",  # Raw hex value
+                    "_value_06": payload[6:10],
+                    "min_value": f"0x{payload[18:26]}",  # Raw hex value
+                    "max_value": f"0x{payload[26:34]}",  # Raw hex value
+                    "precision": f"0x{payload[34:42]}",  # Raw hex value
+                    "_value_42": payload[42:],
+                    # Flexible footer - capture everything after precision
+                }
+            _LOGGER.warning(f"{warningmsg}. Found values: {result}")
+            return result
 
+        # Handle known data types normally
+        length, parser = _2411_DATA_TYPES[payload[8:10]]
         result |= {
             "value": parser(payload[10:18][-length:]),  # type: ignore[operator]
             "_value_06": payload[6:10],
@@ -1962,10 +1987,11 @@ def parser_2411(payload: str, msg: Message) -> dict[str, Any]:
                 # eg. older Orcon models may have a footer of 2 bytes
             }
         )
-    except AssertionError as err:
-        _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} ({err})")
-        # Return partial result for unknown parameters
-        result["value"] = ""
+    except Exception as err:
+        _LOGGER.warning(f"{msg!r} < {_INFORM_DEV_MSG} (Error parsing 2411: {err})")
+        # Return partial result for any parsing errors
+        result["value"] = f"0x{payload[10:18]}"  # Raw hex value
+        result["_parse_error"] = f"Parser error: {err}"
         return result
 
 
@@ -2981,7 +3007,11 @@ def parser_unknown(payload: str, msg: Message) -> dict[str, Any]:
             "_value": hex_to_temp(payload[2:]),
         }
 
-    raise NotImplementedError
+    return {
+        "_payload": payload,
+        "_unknown_code": msg.code,
+        "_parse_error": "No parser available for this packet type",
+    }
 
 
 _PAYLOAD_PARSERS = {
@@ -2998,8 +3028,23 @@ def parse_payload(msg: Message) -> dict | list[dict]:
     :return: a dict of key: value pairs or a list of such dicts, e.g. {'temperature': 21.5}
     """
     result: dict | list[dict]
-    result = _PAYLOAD_PARSERS.get(msg.code, parser_unknown)(msg._pkt.payload, msg)
-    if isinstance(result, dict) and msg.seqn.isnumeric():  # e.g. 22F1/3
-        result["seqx_num"] = msg.seqn
+    try:
+        result = _PAYLOAD_PARSERS.get(msg.code, parser_unknown)(msg._pkt.payload, msg)
+        if isinstance(result, dict) and msg.seqn.isnumeric():  # e.g. 22F1/3
+            result["seqx_num"] = msg.seqn
+    except AssertionError as err:
+        _LOGGER.warning(
+            f"{msg!r} < {_INFORM_DEV_MSG} ({err}). "
+            f"This packet could not be parsed completely. "
+            f"Please report this message and any context about what changed on your system when this occurred."
+        )
+        # Return partial result with error info
+        result = {
+            "_payload": msg._pkt.payload,
+            "_parse_error": f"AssertionError: {err}",
+            "_unknown_code": msg.code,
+        }
+        if isinstance(result, dict) and msg.seqn.isnumeric():
+            result["seqx_num"] = msg.seqn
 
     return result
