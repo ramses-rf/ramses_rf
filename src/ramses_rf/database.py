@@ -155,7 +155,7 @@ class MessageIndex:
             - verb " I", "RQ" etc.
             - src  message origin address
             - dst  message destination address
-            - code packet code aka command class e.g. _0005, _31DA
+            - code packet code aka command class e.g. 0005, 31DA
             - ctx  message context, created from payload as index + extra markers (Heat)
             - hdr  packet header e.g. 000C|RP|01:223036|0208 (see: src/ramses_tx/frame.py)
             - plk the keys stored in the parsed payload, separated by the | char

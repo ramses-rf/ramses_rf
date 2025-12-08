@@ -26,7 +26,6 @@ async def test_schema_discover_from_log(f_name: Path) -> None:
     path = f"{WORK_DIR}/log_files/{f_name}.log"
     gwy = Gateway(None, input_file=path, config={})  # noqa: F811
     await gwy.start()  # this is what we're testing
-    await gwy.stop()
 
     with open(f"{WORK_DIR}/log_files/{f_name}.json") as f:
         schema = json.load(f)
@@ -39,6 +38,8 @@ async def test_schema_discover_from_log(f_name: Path) -> None:
         await gwy._restore_cached_packets(packets)
 
         assert shrink(gwy.schema) == shrink(schema)
+
+    await gwy.stop()
 
 
 @pytest.mark.parametrize(

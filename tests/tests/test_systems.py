@@ -123,8 +123,6 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
     assert_expected_set(gwy, expected)
     # sert shrink(gwy.schema) == shrink(schema)
 
-    await gwy.stop()
-
     for dev in gwy.devices:  # SQLite refactor should pass this test
         if dev._gwy.msg_db:
             # depends on ramses_rf/entity_base.py def _msgs() from msg_db
@@ -144,6 +142,8 @@ async def test_restore_from_log_file(dir_name: Path) -> None:
             # assert len(dev._gwy.msg_db.qry_field(sql, (dev.id[:12], dev.id[:12]))) == len(
             #     dev._msgs_
             # ), f"Assert 2: {dev} qry != _msgs_"
+
+    await gwy.stop()
 
 
 async def test_shuffle_from_log_file(dir_name: Path) -> None:
