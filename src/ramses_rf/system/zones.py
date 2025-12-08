@@ -728,14 +728,19 @@ class Zone(ZoneSchedule):
         """Set the target temperature, until the next scheduled setpoint."""
 
         if value is None:
-            return self.reset_mode()
+            self.reset_mode()
 
         cmd = Command.set_zone_setpoint(self.ctl.id, self.idx, value)
         self._gwy.send_cmd(cmd, priority=Priority.HIGH)
 
     @property
     def temperature(self) -> float | None:  # 30C9
-        return self._msg_value(Code._30C9, key=SZ_TEMPERATURE)  # type: ignore[no-any-return]
+        if zone_temp := self._msg_value(Code._30C9, key=SZ_TEMPERATURE):
+            return zone_temp # type: ignore[no-any-return]
+        # evohome zones don't pick up temp from the SQLite MessageIndex, try the sensor
+        if self._sensor:
+            return self._sensor._msg_value(Code._30C9, key=SZ_TEMPERATURE)
+        return None
 
     @property
     def heat_demand(self) -> float | None:  # 3150
