@@ -736,7 +736,7 @@ class Zone(ZoneSchedule):
     @property
     def temperature(self) -> float | None:  # 30C9
         if zone_temp := self._msg_value(Code._30C9, key=SZ_TEMPERATURE):
-            return zone_temp # type: ignore[no-any-return]
+            return zone_temp  # type: ignore[no-any-return]
         # evohome zones don't pick up temp from the SQLite MessageIndex, try the sensor
         if self._sensor:
             return self._sensor._msg_value(Code._30C9, key=SZ_TEMPERATURE)

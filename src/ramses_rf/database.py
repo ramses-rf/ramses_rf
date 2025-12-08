@@ -252,7 +252,10 @@ class MessageIndex:
             pass  # self._lock.release()
 
         if (
-            dup and msg.src is not msg.dst and not msg.dst.id.startswith("18:")  # HGI
+            dup
+            and (msg.src is not msg.dst)
+            and not msg.dst.id.startswith("18:")  # HGI
+            and msg.verb is not "RQ"
         ):  # when src==dst, expect to add duplicate, don't warn
             _LOGGER.debug(
                 "Overwrote dtm (%s) for %s: %s (contrived log?)",
