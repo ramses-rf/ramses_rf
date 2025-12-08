@@ -1029,7 +1029,7 @@ class _Discovery(_MessageDB):
                         sql = """
                             SELECT dtm from messages WHERE
                             code = ?
-                            AND verb = ' I'
+                            AND verb in (' I', 'RP')
                             AND ctx = 'True'
                             AND (src = ? OR dst = ?)
                         """
@@ -1045,7 +1045,7 @@ class _Discovery(_MessageDB):
                             msgs += res[0]  # expect 1 Message in returned tuple
                         else:
                             _LOGGER.debug(
-                                f"No msg found for hdr {hdr}, tesk code {task[_SZ_COMMAND].code}"
+                                f"No msg found for hdr {hdr}, task code {task[_SZ_COMMAND].code}"
                             )
                     else:  # TODO(eb) remove next Q1 2026
                         msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
