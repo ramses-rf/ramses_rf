@@ -30,7 +30,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, NewType
 
-from ramses_tx import CODES_SCHEMA, Code, Message
+from ramses_tx import CODES_SCHEMA, RQ, Code, Message
 
 if TYPE_CHECKING:
     DtmStrT = NewType("DtmStrT", str)
@@ -255,7 +255,7 @@ class MessageIndex:
             dup
             and (msg.src is not msg.dst)
             and not msg.dst.id.startswith("18:")  # HGI
-            and msg.verb is not "RQ"
+            and msg.verb != RQ
         ):  # when src==dst, expect to add duplicate, don't warn
             _LOGGER.debug(
                 "Overwrote dtm (%s) for %s: %s (contrived log?)",

@@ -752,7 +752,7 @@ class Zone(ZoneSchedule):
             )
             if msgs and len(msgs) > 0:
                 msgs_sorted = sorted(msgs, reverse=True)
-                return msgs_sorted[0].payload.get(SZ_TEMPERATURE)
+                return msgs_sorted[0].payload.get(SZ_TEMPERATURE)  # type: ignore[no-any-return]
             return None
         # else: TODO Q1 2026 remove remainder
         return self._msg_value(Code._30C9, key=SZ_TEMPERATURE)  # type: ignore[no-any-return]
