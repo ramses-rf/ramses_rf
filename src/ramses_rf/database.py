@@ -502,7 +502,7 @@ class MessageIndex:
             # _msgs stamp format: 2022-09-08T13:40:52.447364
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
-                _LOGGER.debug("MessageIndex ts %s added to qry.lst", ts)
+                # _LOGGER.debug("MessageIndex ts %s added to qry.lst", ts)  # too frequent
             else:  # happens in tests with artificial msg from heat
                 _LOGGER.info("MessageIndex timestamp %s not in device messages", ts)
         return tuple(lst)
