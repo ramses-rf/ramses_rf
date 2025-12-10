@@ -247,7 +247,7 @@ class _MessageDB(_Entity):
 
         if self._gwy.msg_db:  # central SQLite MessageIndex
             _LOGGER.debug(
-                "For %s (_z_id %s) add msg %s, src %s, dst %s to msg_db.",
+                "For %s (_z_id %s) add to msg_db: %s, src %s, dst %s",
                 self.id,
                 self._z_id,
                 msg,

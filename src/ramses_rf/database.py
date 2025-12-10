@@ -246,6 +246,7 @@ class MessageIndex:
         else:
             # _msgs dict requires a timestamp reformat
             dtm: DtmStrT = msg.dtm.isoformat(timespec="microseconds")  # type: ignore[assignment]
+            # add msg to self._msgs dict
             self._msgs[dtm] = msg
 
         finally:
@@ -263,8 +264,6 @@ class MessageIndex:
                 msg._pkt._hdr,
                 dup[0]._pkt,
             )
-        if old is not None:
-            _LOGGER.debug("Old msg replaced: %s", old)
 
         return old
 
@@ -490,6 +489,7 @@ class MessageIndex:
             # _msgs stamp format: 2022-09-08T13:40:52.447364
             if ts in self._msgs:
                 lst.append(self._msgs[ts])
+                _LOGGER.debug("MessageIndex ts %s added to qry.lst", ts)
             else:  # happens in tests with artificial msg from heat
                 _LOGGER.info("MessageIndex timestamp %s not in device messages", ts)
         return tuple(lst)
@@ -553,8 +553,10 @@ class MessageIndex:
             if ts in self._msgs:
                 # if include_expired or not self._msgs[ts].HAS_EXPIRED:  # not working
                 lst.append(self._msgs[ts])
+                _LOGGER.debug("MessageIndex ts %s added to all.lst", ts)
             else:  # happens in tests with dummy msg from heat init
-                _LOGGER.info("MessageIndex ts %s not in device messages", ts)
+                # and in real evohome setups
+                _LOGGER.debug("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
 
     def clr(self) -> None:
