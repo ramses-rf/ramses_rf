@@ -30,7 +30,7 @@ from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, NewType
 
-from ramses_tx import CODES_SCHEMA, RQ, Code, Message
+from ramses_tx import CODES_SCHEMA, RQ, Code, Message, Packet
 
 if TYPE_CHECKING:
     DtmStrT = NewType("DtmStrT", str)
@@ -187,7 +187,7 @@ class MessageIndex:
 
     async def _housekeeping_loop(self) -> None:
         """Periodically remove stale messages from the index,
-        unless `self.maintain` is False."""
+        unless `self.maintain` is False - as in tests."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
             """
@@ -195,6 +195,7 @@ class MessageIndex:
             :param dt_now: current timestamp
             :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
             """
+            msgs = None
             dtm = dt_now - _cutoff  # .isoformat(timespec="microseconds") < needed?
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm >= ?", (dtm,))
@@ -212,6 +213,8 @@ class MessageIndex:
                 self._msgs = msgs
             finally:
                 self._lock.release()
+                if msgs:
+                    _LOGGER.debug("MessageIndex size was: %d, now: %d", len(rows), len(msgs))
 
         while True:
             self._last_housekeeping = dt.now()
@@ -256,7 +259,7 @@ class MessageIndex:
             dup
             and (msg.src is not msg.dst)
             and not msg.dst.id.startswith("18:")  # HGI
-            and msg.verb != RQ
+            and msg.verb != RQ  # these may come very quickly
         ):  # when src==dst, expect to add duplicate, don't warn
             _LOGGER.debug(
                 "Overwrote dtm (%s) for %s: %s (contrived log?)",
@@ -276,7 +279,8 @@ class MessageIndex:
         :param verb: two letter verb str to use
         """
         # Used by OtbGateway init, via entity_base.py
-        dtm: DtmStrT = dt.strftime(dt.now(), "%Y-%m-%dT%H:%M:%S")  # type: ignore[assignment]
+        _now: dt = dt.now()
+        dtm: DtmStrT = dt.strftime(_now, "%Y-%m-%dT%H:%M:%S")  # type: ignore[assignment]
         hdr = f"{code}|{verb}|{src}|00"  # dummy record has no contents
 
         dup = self._delete_from(hdr=hdr)
@@ -301,6 +305,15 @@ class MessageIndex:
             )
         except sqlite3.Error:
             self._cx.rollback()
+        else:
+            # also add dummy 3220 msg to self._msgs dict to allow maintenance loop
+            msg: Message = Message._from_pkt(
+                Packet(
+                    _now,
+                    f"... {verb} --- {src} --:------ {src} {code} 005 0000000000"
+                )
+            )
+            self._msgs[dtm] = msg
 
         if dup:  # expected when more than one heat system in schema
             _LOGGER.debug("Replaced record with same hdr: %s", hdr)
@@ -377,7 +390,7 @@ class MessageIndex:
                 self._msgs.pop(dtm)
 
         finally:
-            pass  # self._lock.release()
+            pass  # self._lock.releasdtm_formate()
 
         return msgs
 
@@ -554,8 +567,7 @@ class MessageIndex:
                 # if include_expired or not self._msgs[ts].HAS_EXPIRED:  # not working
                 lst.append(self._msgs[ts])
                 _LOGGER.debug("MessageIndex ts %s added to all.lst", ts)
-            else:  # happens in tests with dummy msg from heat init
-                # and in real evohome setups
+            else:  # happens in tests and real evohome setups with dummy msg from heat init
                 _LOGGER.debug("MessageIndex ts %s not in device messages", ts)
         return tuple(lst)
 

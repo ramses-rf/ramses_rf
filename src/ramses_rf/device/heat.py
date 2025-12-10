@@ -669,7 +669,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
 
         # TODO(eb): cleanup
         if self._gwy.msg_db:
-            self._add_record(address=self.addr, code=Code._3220, verb="RP")
+            self._add_record(id=self.id, code=Code._3220, verb="RP")
         # adds a "sim" RP opentherm_msg to the SQLite MessageIndex with code _3220
         # causes exc when fetching ALL, when no "real" msg was added to _msgs_. We skip those.
         else:
