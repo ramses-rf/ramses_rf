@@ -921,29 +921,30 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: string describing fan mode, speed
         """
-        if self._gwy.msg_db:
+        # if self._gwy.msg_db:
             # Use SQLite query on MessageIndex. res_rate/res_mode not exposed yet
-            sql = f"""
-                SELECT code from messages WHERE verb in (' I', 'RP')
-                AND (src = ? OR dst = ?)
-                AND (plk LIKE '%{SZ_FAN_MODE}%')
-            """
-            res_mode: list = self._msg_qry(sql)
-            # SQLite query on MessageIndex
-            _LOGGER.debug(
-                f"# Fetched FAN_MODE for {self.id} from MessageIndex: {res_mode}"
-            )
+            # working fine in 0.52.4, no need to specify code, only payload key
+            # sql = f"""
+            #     SELECT code from messages WHERE verb in (' I', 'RP')
+            #     AND (src = ? OR dst = ?)
+            #     AND (plk LIKE '%{SZ_FAN_MODE}%')
+            # """
+            # res_mode: list = self._msg_qry(sql)
+            # # SQLite query on MessageIndex
+            # _LOGGER.debug(
+            #     f"# Fetched FAN_MODE for {self.id} from MessageIndex: {res_mode}"
+            # )
 
-            sql = f"""
-                SELECT code from messages WHERE verb in (' I', 'RP')
-                AND (src = ? OR dst = ?)
-                AND (plk LIKE '%{SZ_FAN_RATE}%')
-            """
-            res_rate: list = self._msg_qry(sql)
-            # SQLite query on MessageIndex
-            _LOGGER.debug(
-                f"# Fetched FAN_RATE for {self.id} from MessageIndex: {res_rate}"
-            )
+            # sql = f"""
+            #     SELECT code from messages WHERE verb in (' I', 'RP')
+            #     AND (src = ? OR dst = ?)
+            #     AND (plk LIKE '%{SZ_FAN_RATE}%')
+            # """
+            # res_rate: list = self._msg_qry(sql)
+            # # SQLite query on MessageIndex
+            # _LOGGER.debug(
+            #     f"# Fetched FAN_RATE for {self.id} from MessageIndex: {res_rate}"
+            # )
 
         if Code._31D9 in self._msgs:
             # was a dict by Code
