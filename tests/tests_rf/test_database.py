@@ -212,4 +212,9 @@ class TestMessageIndex:
         )  # e.g. 01:123456_01
         assert len(m) == 1
 
+        # run maintenance loop
+        # assert len(msg_db.all()) == 5
+        # await msg_db._housekeeping_loop.housekeeping(self._NOW, _cutoff=dt(second=10))
+        # assert len(msg_db.all()) == 5
+
         msg_db.stop()  # close sqlite3 connection

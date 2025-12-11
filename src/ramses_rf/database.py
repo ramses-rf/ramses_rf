@@ -187,7 +187,7 @@ class MessageIndex:
 
     async def _housekeeping_loop(self) -> None:
         """Periodically remove stale messages from the index,
-        unless `self.maintain` is False - as in tests."""
+        unless `self.maintain` is False - as in (most) tests."""
 
         async def housekeeping(dt_now: dt, _cutoff: td = td(days=1)) -> None:
             """
@@ -214,7 +214,9 @@ class MessageIndex:
             finally:
                 self._lock.release()
                 if msgs:
-                    _LOGGER.debug("MessageIndex size was: %d, now: %d", len(rows), len(msgs))
+                    _LOGGER.debug(
+                        "MessageIndex size was: %d, now: %d", len(rows), len(msgs)
+                    )
 
         while True:
             self._last_housekeeping = dt.now()
@@ -309,8 +311,7 @@ class MessageIndex:
             # also add dummy 3220 msg to self._msgs dict to allow maintenance loop
             msg: Message = Message._from_pkt(
                 Packet(
-                    _now,
-                    f"... {verb} --- {src} --:------ {src} {code} 005 0000000000"
+                    _now, f"... {verb} --- {src} --:------ {src} {code} 005 0000000000"
                 )
             )
             self._msgs[dtm] = msg
