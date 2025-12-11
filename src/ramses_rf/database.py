@@ -196,7 +196,7 @@ class MessageIndex:
             :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
             """
             msgs = None
-            dtm = dt_now - _cutoff  # .isoformat(timespec="microseconds") < needed?
+            dtm = dt_now - _cutoff
 
             self._cu.execute("SELECT dtm FROM messages WHERE dtm >= ?", (dtm,))
             rows = self._cu.fetchall()  # fetch dtm of current messages to retain
@@ -375,7 +375,7 @@ class MessageIndex:
         if not bool(msg) ^ bool(kwargs):
             raise ValueError("Either a Message or kwargs should be provided, not both")
         if msg:
-            kwargs["dtm"] = msg.dtm  # .isoformat(timespec="microseconds")
+            kwargs["dtm"] = msg.dtm
 
         msgs = None
         try:  # make this operation atomic, i.e. update self._msgs only on success
@@ -391,7 +391,7 @@ class MessageIndex:
                 self._msgs.pop(dtm)
 
         finally:
-            pass  # self._lock.releasdtm_formate()
+            pass  # self._lock.release()
 
         return msgs
 
@@ -426,7 +426,7 @@ class MessageIndex:
             raise ValueError("Either a Message or kwargs should be provided, not both")
 
         if msg:
-            kwargs["dtm"] = msg.dtm  # .isoformat(timespec="microseconds")
+            kwargs["dtm"] = msg.dtm
 
         return self._select_from(**kwargs)
 
