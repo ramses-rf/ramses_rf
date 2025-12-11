@@ -15,7 +15,7 @@ from types import ModuleType
 from typing import TYPE_CHECKING, Any, Final
 
 from ramses_rf.helpers import schedule_task
-from ramses_tx import Address, Priority, QosParams
+from ramses_tx import Priority, QosParams
 from ramses_tx.address import ALL_DEVICE_ID
 from ramses_tx.const import MsgId
 from ramses_tx.opentherm import OPENTHERM_MESSAGES

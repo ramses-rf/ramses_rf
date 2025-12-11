@@ -9,7 +9,7 @@ DEBUG_PORT = 5678
 
 
 def start_debugging(wait_for_client: bool) -> None:
-    import debugpy  # type: ignore[import-untyped]
+    import debugpy
 
     debugpy.listen(address=(DEBUG_ADDR, DEBUG_PORT))
     print(f" - Debugging is enabled, listening on: {DEBUG_ADDR}:{DEBUG_PORT}")
