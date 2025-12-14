@@ -258,7 +258,7 @@ class _BaseProtocol(asyncio.Protocol):
             _LOGGER.warning(f"{cmd} < num_repeats set to 0, as wait_for_reply is True")
             num_repeats = 0  # the lesser crime over wait_for_reply=False
 
-        pkt = await super().send_cmd(  # may: raise ProtocolError/ProtocolSendFailed
+        pkt = await self._send_cmd(  # may: raise ProtocolError/ProtocolSendFailed
             cmd,
             gap_duration=gap_duration,
             num_repeats=num_repeats,
