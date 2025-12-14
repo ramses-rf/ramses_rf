@@ -103,7 +103,7 @@ if TYPE_CHECKING:
 
 
 _DEFAULT_TIMEOUT_PORT: Final[float] = 3
-_DEFAULT_TIMEOUT_MQTT: Final[float] = 9
+_DEFAULT_TIMEOUT_MQTT: Final[float] = 60  # Updated from 9s to 60s for robustness
 
 _SIGNATURE_GAP_SECS = 0.05
 _SIGNATURE_MAX_TRYS = 40  # was: 24
@@ -1572,13 +1572,31 @@ async def transport_factory(
     assert port_config is not None  # mypy check
 
     # MQTT
-    if port_name[:4] == "mqtt":  # TODO: handle disable_sending
+    if port_name[:4] == "mqtt":
+        # Check for custom timeout in kwargs, fallback to constant
+        mqtt_timeout = kwargs.get("timeout", _DEFAULT_TIMEOUT_MQTT)
+
         transport = MqttTransport(
-            port_name, protocol, extra=extra, loop=loop, log_all=log_all, **kwargs
+            port_name,
+            protocol,
+            disable_sending=bool(
+                disable_sending
+            ),  # Feature Added: handled disable_sending
+            extra=extra,
+            loop=loop,
+            log_all=log_all,
+            **kwargs,
         )
 
-        # TODO: remove this? better to invoke timeout after factory returns?
-        await protocol.wait_for_connection_made(timeout=_DEFAULT_TIMEOUT_MQTT)
+        try:
+            # Robustness Fix: Wait with timeout, handle failure gracefully
+            await protocol.wait_for_connection_made(timeout=mqtt_timeout)
+        except Exception:
+            # CRITICAL FIX: Close the transport if setup fails to prevent "Zombie" callbacks
+            # This prevents the "AttributeError: 'NoneType'..." crash later on
+            transport.close()
+            raise
+
         return transport
 
     # Serial

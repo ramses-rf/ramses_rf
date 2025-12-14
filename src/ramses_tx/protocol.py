@@ -140,7 +140,14 @@ class _BaseProtocol(asyncio.Protocol):
         received or the connection was aborted or closed).
         """
 
-        assert self._wait_connection_lost  # mypy
+        # FIX: Check if _wait_connection_lost exists before asserting
+        # This handles cases where connection was never fully established
+        if not self._wait_connection_lost:
+            _LOGGER.debug(
+                "connection_lost called but no connection was established (ignoring)"
+            )
+            self._wait_connection_made = self._loop.create_future()
+            return
 
         if self._wait_connection_lost.done():  # BUG: why is callback invoked twice?
             return
@@ -555,8 +562,17 @@ class PortProtocol(_DeviceIdFilterMixin, _BaseProtocol):
         super().connection_made(transport)
         # TODO: needed? self.resume_writing()
 
-        self._set_active_hgi(self._transport.get_extra_info(SZ_ACTIVE_HGI))
-        self._is_evofw3 = self._transport.get_extra_info(SZ_IS_EVOFW3)
+        # ROBUSTNESS FIX: Ensure self._transport is set even if the wait future was cancelled
+        if self._transport is None:
+            _LOGGER.warning(
+                f"{self}: Transport bound after wait cancelled (late connection)"
+            )
+            self._transport = transport
+
+        # Safe access with check (optional but recommended)
+        if self._transport:
+            self._set_active_hgi(self._transport.get_extra_info(SZ_ACTIVE_HGI))
+            self._is_evofw3 = self._transport.get_extra_info(SZ_IS_EVOFW3)
 
         if not self._context:
             return
