@@ -207,28 +207,69 @@ class _BaseProtocol(asyncio.Protocol):
         gap_duration: float = DEFAULT_GAP_DURATION,
         num_repeats: int = DEFAULT_NUM_REPEATS,
         priority: Priority = Priority.DEFAULT,
-        qos: QosParams = DEFAULT_QOS,
+        qos: QosParams = DEFAULT_QOS,  # max_retries, timeout, wait_for_reply
     ) -> Packet:
-        """This is the wrapper for self._send_cmd(cmd)."""
+        """Send a Command with Qos (with retries, until success or ProtocolError).
 
-        # if not self._transport:
-        #     raise exc.ProtocolSendFailed("There is no connected Transport")
+        Returns the Command's response Packet or the Command echo if a response is not
+        expected (e.g. sending an RP).
 
-        if _DBG_FORCE_LOG_PACKETS:
-            _LOGGER.warning(f"QUEUED:     {cmd}")
-        else:
-            _LOGGER.debug(f"QUEUED:     {cmd}")
+        If wait_for_reply is True, return the RQ's RP (or W's I), or raise an exception
+        if one doesn't arrive. If it is False, return the echo of the Command only. If
+        it is None (the default), act as True for RQs, and False for all other Commands.
 
-        if self._pause_writing:
-            raise exc.ProtocolError("The Protocol is currently read-only/paused")
+        num_repeats is # of times to send the Command, in addition to the fist transmit,
+        with gap_duration seconds between each transmission. If wait_for_reply is True,
+        then num_repeats is ignored.
 
-        return await self._send_cmd(
+        Commands are queued and sent FIFO, except higher-priority Commands are always
+        sent first.
+
+        Will raise:
+            ProtocolSendFailed: tried to Tx Command, but didn't get echo/reply
+            ProtocolError:      didn't attempt to Tx Command for some reason
+        """
+
+        assert gap_duration == DEFAULT_GAP_DURATION
+        assert 0 <= num_repeats <= 3  # if QoS, only Tx x1, with no repeats
+
+        # FIX: Patch command with actual HGI ID if it uses the default placeholder
+        if (
+            self._active_hgi
+            and cmd.src.id == HGI_DEV_ADDR.id
+            and self._active_hgi != HGI_DEV_ADDR.id
+        ):
+            # The command uses the default 18:000730, but we know the real ID.
+            # Reconstruct the command string with the correct address.
+            new_addrs = [
+                self._active_hgi if a.id == HGI_DEV_ADDR.id else a.id
+                for a in cmd._addrs
+            ]
+            new_frame = f"{cmd.verb} {cmd.seqn} {new_addrs[0]} {new_addrs[1]} {new_addrs[2]} {cmd.code} {cmd.len_} {cmd.payload}"
+            cmd = Command(new_frame)
+
+        if qos and not self._context:
+            _LOGGER.warning(f"{cmd} < QoS is currently disabled by this Protocol")
+
+        if cmd.src.id != self.hgi_id:  # Was HGI_DEV_ADDR.id
+            await self._send_impersonation_alert(cmd)
+
+        if qos.wait_for_reply and num_repeats:
+            _LOGGER.warning(f"{cmd} < num_repeats set to 0, as wait_for_reply is True")
+            num_repeats = 0  # the lesser crime over wait_for_reply=False
+
+        pkt = await super().send_cmd(  # may: raise ProtocolError/ProtocolSendFailed
             cmd,
             gap_duration=gap_duration,
             num_repeats=num_repeats,
             priority=priority,
             qos=qos,
         )
+
+        if not pkt:  # HACK: temporary workaround for returning None
+            raise exc.ProtocolSendFailed(f"Failed to send command: {cmd} (REPORT THIS)")
+
+        return pkt
 
     async def _send_cmd(
         self,
