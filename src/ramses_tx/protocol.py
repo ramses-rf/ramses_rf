@@ -141,12 +141,14 @@ class _BaseProtocol(asyncio.Protocol):
         """
 
         # FIX: Check if _wait_connection_lost exists before asserting
-        # This handles cases where connection was never fully established
+        # This handles cases where connection was never fully established (e.g. timeout)
         if not self._wait_connection_lost:
             _LOGGER.debug(
                 "connection_lost called but no connection was established (ignoring)"
             )
-            self._wait_connection_made = self._loop.create_future()
+            # Reset the connection made future for next attempt
+            if self._wait_connection_made.done():
+                self._wait_connection_made = self._loop.create_future()
             return
 
         if self._wait_connection_lost.done():  # BUG: why is callback invoked twice?
