@@ -1368,7 +1368,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             )
         # FIXME: convert all dt early, and convert to aware, i.e. dt.now().astimezone()
 
-        self._frame_read(dtm.isoformat(), _normalise(payload["msg"]))
+        try:
+            self._frame_read(dtm.isoformat(), _normalise(payload["msg"]))
+        except exc.TransportError:
+            # If the transport is closing, we expect this error and can safely ignore it
+            # prevents "Uncaught thread exception" in paho.mqtt client
+            if not self._closing:
+                raise
 
     async def write_frame(self, frame: str, disable_tx_limits: bool = False) -> None:
         """Transmit a frame via the underlying handler (e.g. serial port, MQTT).
