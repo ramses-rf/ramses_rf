@@ -80,6 +80,9 @@ class _BaseProtocol(asyncio.Protocol):
 
         self._is_evofw3: bool | None = None
 
+        self._active_hgi: DeviceIdT | None = None
+        self._context: ProtocolContext | None = None
+
     @property
     def hgi_id(self) -> DeviceIdT:
         return HGI_DEV_ADDR.id
@@ -198,6 +201,10 @@ class _BaseProtocol(asyncio.Protocol):
         """
 
         self._pause_writing = False
+
+    async def _send_impersonation_alert(self, cmd: Command) -> None:
+        """Allow the Protocol to send an impersonation alert (stub)."""
+        pass
 
     async def send_cmd(
         self,
@@ -696,6 +703,8 @@ class PortProtocol(_DeviceIdFilterMixin, _BaseProtocol):
         #     raise exc.ProtocolError(
         #         f"{self}: Failed to send {cmd._hdr}: excluded by list"
         #     )
+
+        assert self._context
 
         try:
             return await self._context.send_cmd(send_cmd, cmd, priority, qos)
