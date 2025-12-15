@@ -66,7 +66,7 @@ class _BaseProtocol(asyncio.Protocol):
         self._msg_handler = msg_handler
         self._msg_handlers: list[MsgHandlerT] = []
 
-        self._transport: RamsesTransportT = None  # type: ignore[assignment]
+        self._transport: RamsesTransportT | None = None
         self._loop = asyncio.get_running_loop()
 
         self._pause_writing = False  # FIXME: Start in R/O mode as no connection yet?
@@ -258,6 +258,10 @@ class _BaseProtocol(asyncio.Protocol):
         self, frame: str, num_repeats: int = 0, gap_duration: float = 0.0
     ) -> None:  # _send_frame() -> transport
         """Write to the transport."""
+
+        if self._transport is None:
+            raise exc.ProtocolSendFailed("Transport is not connected")
+
         await self._transport.write_frame(frame)
         for _ in range(num_repeats - 1):
             await asyncio.sleep(gap_duration)
