@@ -241,17 +241,23 @@ class _BaseProtocol(asyncio.Protocol):
         assert 0 <= num_repeats <= 3  # if QoS, only Tx x1, with no repeats
 
         # FIX: Patch command with actual HGI ID if it uses the default placeholder
+        # NOTE: HGI80s (TI 3410) require the default ID (18:000730), or they will silent-fail
         if (
             self._active_hgi
-            and cmd.src.id == HGI_DEV_ADDR.id
+            and self._is_evofw3  # Only patch if using evofw3 (not HGI80)
+            and cmd._addrs[0].id == HGI_DEV_ADDR.id
             and self._active_hgi != HGI_DEV_ADDR.id
         ):
             # The command uses the default 18:000730, but we know the real ID.
             # Reconstruct the command string with the correct address.
-            new_addrs = [
-                self._active_hgi if a.id == HGI_DEV_ADDR.id else a.id
-                for a in cmd._addrs
-            ]
+
+            # Get current addresses as strings
+            new_addrs = [a.id for a in cmd._addrs]
+
+            # ONLY patch the Source Address (Index 0).
+            # Leave Dest (Index 1/2) alone to avoid breaking tests that expect 18:000730 there.
+            new_addrs[0] = self._active_hgi
+
             new_frame = f"{cmd.verb} {cmd.seqn} {new_addrs[0]} {new_addrs[1]} {new_addrs[2]} {cmd.code} {cmd.len_} {cmd.payload}"
             cmd = Command(new_frame)
 
