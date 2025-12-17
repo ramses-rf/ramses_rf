@@ -174,6 +174,9 @@ async def async_pkt_received(  # type: ignore[no-any-unimported]
 
 
 async def _test_flow_30x(protocol: PortProtocol) -> None:
+    assert (
+        protocol._transport is not None
+    )  # mypy: fixture ensures transport is connected
     # STEP 0: Setup...
     rf: VirtualRf = protocol._transport._extra["virtual_rf"]
     ser = serial.Serial(rf.ports[1])
