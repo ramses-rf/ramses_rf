@@ -204,7 +204,7 @@ class _BaseProtocol(asyncio.Protocol):
 
     async def _send_impersonation_alert(self, cmd: Command) -> None:
         """Allow the Protocol to send an impersonation alert (stub)."""
-        pass
+        return
 
     async def send_cmd(
         self,
@@ -750,9 +750,6 @@ class PortProtocol(_DeviceIdFilterMixin, _BaseProtocol):
 
         if qos and not self._context:
             _LOGGER.warning(f"{cmd} < QoS is currently disabled by this Protocol")
-
-        if cmd.src.id != HGI_DEV_ADDR.id:  # or actual HGI addr
-            await self._send_impersonation_alert(cmd)
 
         if qos.wait_for_reply and num_repeats:
             _LOGGER.warning(f"{cmd} < num_repeats set to 0, as wait_for_reply is True")
