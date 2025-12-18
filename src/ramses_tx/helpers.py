@@ -139,9 +139,9 @@ def timestamp() -> float:
         return time.time_ns() / 1e9
 
     # otherwise, is since 1601-01-01T00:00:00Z
-    ctypes.windll.kernel32.GetSystemTimePreciseAsFileTime(ctypes.byref(file_time))  # type: ignore[unreachable]
+    ctypes.windll.kernel32.GetSystemTimePreciseAsFileTime(ctypes.byref(file_time))
     _time = (file_time.dwLowDateTime + (file_time.dwHighDateTime << 32)) / 1e7
-    return _time - 134774 * 24 * 60 * 60
+    return float(_time - 134774 * 24 * 60 * 60)  # Cast to float to satisfy Mypy
 
 
 def dt_now() -> dt:
@@ -152,7 +152,7 @@ def dt_now() -> dt:
     """
     if sys.platform == "win32":
         return dt.fromtimestamp(timestamp())
-    return dt.now()
+    return dt.now()  # type: ignore[unreachable]
 
 
 def dt_str() -> str:
