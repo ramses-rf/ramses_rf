@@ -131,11 +131,15 @@ file_time = _FILE_TIME()
 def timestamp() -> float:
     """Return the number of seconds since the Unix epoch.
 
-    Return an accurate value, even for Windows-based systems.
+    This function attempts to return a high-precision value, using specific
+    system calls on Windows if available.
+
+    :return: The current timestamp in seconds.
+    :rtype: float
     """
 
     # see: https://www.python.org/dev/peps/pep-0564/
-    if sys.platform != "win32":
+    if sys.platform == "win32":
         # Windows uses a different epoch (1601-01-01)
         ctypes.windll.kernel32.GetSystemTimePreciseAsFileTime(ctypes.byref(file_time))
         _time = (file_time.dwLowDateTime + (file_time.dwHighDateTime << 32)) / 1e7
@@ -150,6 +154,9 @@ def dt_now() -> dt:
 
     This is slower, but potentially more accurate, than dt.now(), and is used mainly for
     packet timestamps.
+
+    :return: The current local datetime.
+    :rtype: dt
     """
     if sys.platform == "win32":
         return dt.fromtimestamp(timestamp())
@@ -158,7 +165,11 @@ def dt_now() -> dt:
 
 
 def dt_str() -> str:
-    """Return the current datetime as an isoformat string."""
+    """Return the current datetime as an isoformat string.
+
+    :return: The ISO formatted string representation.
+    :rtype: str
+    """
     return dt_now().isoformat(timespec="microseconds")
 
 
