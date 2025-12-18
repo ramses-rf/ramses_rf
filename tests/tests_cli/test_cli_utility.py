@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-sys.path.append(".")  # HACK: to access client.py
+sys.path.append("../tests")  # HACK: to access client.py
 
 try:
     import colorama  # noqa: F401
