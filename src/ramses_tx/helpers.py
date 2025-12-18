@@ -369,7 +369,14 @@ def hex_from_str(value: str) -> str:
 
 
 def hex_to_temp(value: HexStr4) -> bool | float | None:  # TODO: remove bool
-    """Convert a 2's complement 4-byte hex string to a float."""
+    """Convert a 4-byte 2's complement hex string to a float temperature ('C).
+
+    :param value: The 4-character hex string (e.g., '07D0')
+    :type value: HexStr4
+    :return: The temperature in Celsius, or None if N/A
+    :rtype: float | None
+    :raises ValueError: If input is not a 4-char hex string or temperature is invalid.
+    """
     if not isinstance(value, str) or len(value) != 4:
         raise ValueError(f"Invalid value: {value}, is not a 4-char hex string")
     if value == "31FF":  # means: N/A (== 127.99, 2s complement), signed?
@@ -488,13 +495,18 @@ AIR_QUALITY_BASIS: dict[str, str] = {
 
 # 31DA[2:6] and 12C8[2:6]
 def parse_air_quality(value: HexStr4) -> PayDictT.AIR_QUALITY:
-    """Return the air quality (%): poor (0.0) to excellent (1.0).
+    """Return the air quality percentage (0.0 to 1.0) and its basis.
 
     The basis of the air quality level should be one of: VOC, CO2 or relative humidity.
     If air_quality is EF, air_quality_basis should be 00.
 
     The sensor value is None if there is no sensor present (is not an error).
     The dict does not include the key if there is a sensor fault.
+
+    :param value: The 4-character hex string encoding quality and basis
+    :type value: HexStr4
+    :return: A dictionary containing the air quality and its basis (e.g., CO2, VOC)
+    :rtype: PayDictT.AIR_QUALITY
     """  # VOC: Volatile organic compounds
 
     # TODO: remove this as API used only internally...

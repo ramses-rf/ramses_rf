@@ -2254,7 +2254,13 @@ class Command(Frame):
 
     @classmethod  # constructor for RQ|2E04
     def get_system_mode(cls, ctl_id: DeviceIdT | str) -> Command:
-        """Constructor to get the mode of a system (c.f. parser_2e04)."""
+        """Get the mode of a system (c.f. parser_2e04).
+
+        :param ctl_id: The device ID of the controller
+        :type ctl_id: DeviceIdT | str
+        :return: A Command object for the RQ|2E04 message
+        :rtype: Command
+        """
 
         return cls.from_attrs(RQ, ctl_id, Code._2E04, FF)
 
@@ -2453,7 +2459,17 @@ class Command(Frame):
         datetime: dt | str,
         is_dst: bool = False,
     ) -> Command:
-        """Constructor to set the datetime of a system (c.f. parser_313f)."""
+        """Set the datetime of a system (c.f. parser_313f).
+
+        :param ctl_id: The device ID of the controller
+        :type ctl_id: DeviceIdT | str
+        :param datetime: The target date and time
+        :type datetime: dt | str
+        :param is_dst: Whether Daylight Saving Time is active, defaults to False
+        :type is_dst: bool
+        :return: A Command object for the W|313F message
+        :rtype: Command
+        """
         # .W --- 30:185469 01:037519 --:------ 313F 009 0060003A0C1B0107E5
 
         dt_str = hex_from_dtm(datetime, is_dst=is_dst, incl_seconds=True)
