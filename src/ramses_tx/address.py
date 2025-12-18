@@ -39,7 +39,12 @@ class Address:
     _SLUG = None
 
     def __init__(self, device_id: DeviceIdT) -> None:
-        """Create an address from a valid device id."""
+        """Create an address from a valid device ID.
+
+        :param device_id: The RAMSES II device ID (e.g., '01:123456')
+        :type device_id: DeviceIdT
+        :raises ValueError: If the device_id is not a valid format.
+        """
 
         # if device_id is None:
         #     device_id = NON_DEVICE_ID
@@ -91,7 +96,15 @@ class Address:
 
     @classmethod
     def convert_from_hex(cls, device_hex: str, friendly_id: bool = False) -> str:
-        """Convert (say) '06368E' to '01:145038' (or 'CTL:145038')."""
+        """Convert a 6-character hex string to a device ID.
+
+        :param device_hex: The hex string to convert (e.g., '06368E')
+        :type device_hex: str
+        :param friendly_id: If True, returns a named ID (e.g., 'CTL:145038'), defaults to False
+        :type friendly_id: bool
+        :return: The formatted device ID string
+        :rtype: str
+        """
 
         if device_hex == "FFFFFE":  # aka '63:262142'
             return ">null dev<" if friendly_id else ALL_DEVICE_ID
@@ -191,11 +204,13 @@ def is_valid_dev_id(value: str, dev_class: None | str = None) -> bool:
 
 @lru_cache(maxsize=256)  # there is definite benefit in caching this
 def pkt_addrs(addr_fragment: str) -> tuple[Address, Address, Address, Address, Address]:
-    """Return the address fields from (e.g): '01:078710 --:------ 01:144246'.
+    """Parse address fields from a 30-character address fragment.
 
-    returns: src_addr, dst_addr, addr_0, addr_1, addr_2
-
-    Will raise an InvalidAddrSetError if the address fields are not valid.
+    :param addr_fragment: The 30-char fragment (e.g., '01:078710 --:------ 01:144246')
+    :type addr_fragment: str
+    :return: A tuple of (src_addr, dst_addr, addr_0, addr_1, addr_2)
+    :rtype: tuple[Address, Address, Address, Address, Address]
+    :raises PacketAddrSetInvalid: If the address fields are not valid.
     """
     # for debug: print(pkt_addrs.cache_info())
 

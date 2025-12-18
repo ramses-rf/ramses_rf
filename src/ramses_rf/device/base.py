@@ -87,9 +87,10 @@ class DeviceBase(Entity):
         return self.id < other.id  # type: ignore[no-any-return]
 
     def _update_traits(self, **traits: Any) -> None:
-        """Update a device with new schema attrs.
+        """Update a device with new schema attributes.
 
-        Raise an exception if the new schema is not a superset of the existing schema.
+        :param traits: The traits to apply (e.g., alias, class, faked)
+        :raises TypeError: If the device is not fakeable but 'faked' is set.
         """
 
         traits = shrink(SCH_TRAITS(traits))
@@ -342,7 +343,17 @@ class Fakeable(DeviceBase):
         idx: IndexT = "00",
         require_ratify: bool = False,
     ) -> tuple[Packet, Packet, Packet, Packet | None]:
-        """Listen for a binding and return the Offer, or raise an exception."""
+        """Listen for a binding and return the Offer packets.
+
+        :param accept_codes: The codes allowed for this binding
+        :type accept_codes: Iterable[Code]
+        :param idx: The index to bind to, defaults to "00"
+        :type idx: IndexT
+        :param require_ratify: Whether a ratification step is required, defaults to False
+        :type require_ratify: bool
+        :return: A tuple of the four binding transaction packets
+        :rtype: tuple[Packet, Packet, Packet, Packet | None]
+        """
 
         if not self._bind_context:
             raise TypeError(f"{self}: Faking not enabled")

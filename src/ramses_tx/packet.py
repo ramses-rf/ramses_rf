@@ -48,9 +48,14 @@ class Packet(Frame):
     _rssi: str
 
     def __init__(self, dtm: dt, frame: str, **kwargs: Any) -> None:
-        """Create a packet from a string (actually from f"{RSSI} {frame}").
+        """Create a packet from a raw frame string.
 
-        Will raise InvalidPacketError if it is invalid.
+        :param dtm: The timestamp when the packet was received
+        :type dtm: dt
+        :param frame: The raw frame string, typically including RSSI
+        :type frame: str
+        :param kwargs: Metadata including 'comment', 'err_msg', or 'raw_frame'
+        :raises PacketInvalid: If the frame content is malformed.
         """
 
         super().__init__(frame[4:])  # remove RSSI
@@ -156,9 +161,12 @@ class Packet(Frame):
 
 # TODO: remove None as a possible return value
 def pkt_lifespan(pkt: Packet) -> td:  # import OtbGateway??
-    """Return the pkt lifespan, or dt.max() if the packet does not expire.
+    """Return the lifespan of a packet before it expires.
 
-    Some codes require a valid payload to best determine lifespan (e.g. 1F09).
+    :param pkt: The packet instance to evaluate
+    :type pkt: Packet
+    :return: The duration the packet's data remains valid
+    :rtype: td
     """
 
     if pkt.verb in (RQ, W_):

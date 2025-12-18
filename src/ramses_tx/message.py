@@ -54,7 +54,9 @@ class MessageBase:
     def __init__(self, pkt: Packet) -> None:
         """Create a message from a valid packet.
 
-        :raises InvalidPacketError if message payload is invalid.
+        :param pkt: The packet to process into a message
+        :type pkt: Packet
+        :raises PacketInvalid: If the packet payload cannot be parsed.
         """
 
         self._pkt = pkt
@@ -359,10 +361,14 @@ def re_compile_re_match(regex: str, string: str) -> bool:  # Optional[Match[Any]
 
 
 def _check_msg_payload(msg: MessageBase, payload: str) -> None:
-    """Validate the packet's payload against its verb/code pair.
+    """Validate a packet's payload against its verb/code pair.
 
-    :raises InvalidPayloadError if the payload is seen as invalid. Such payloads may
-    actually be valid, in which case the rules (likely the regex) will need updating.
+    :param msg: The message object being validated
+    :type msg: MessageBase
+    :param payload: The raw hex payload string
+    :type payload: str
+    :raises PacketInvalid: If the code is unknown or verb/code pair is invalid.
+    :raises PacketPayloadInvalid: If the payload does not match the expected regex.
     """
 
     _ = repr(msg._pkt)  # HACK: ? raise InvalidPayloadError
