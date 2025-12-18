@@ -360,13 +360,25 @@ class Gateway(Engine):
         child_id: str | None = None,
         is_sensor: bool | None = None,
     ) -> Device:  # TODO: **schema/traits) -> Device:  # may: LookupError
-        """Return a device, create it if required.
+        """Return a device, creating it if it does not already exist.
 
-        First, use the traits to create/update it, then pass it any msg to handle.
-        All devices have traits, but only controllers (CTL, UFC) have a schema.
+        This method uses provided traits to create or update a device and optionally
+        passes a message for it to handle. All devices have traits, but only
+        controllers (CTL, UFC) have a schema.
 
-        Devices are uniquely identified by a device id.
-        If a device is created, attach it to the gateway.
+        :param device_id: The unique identifier for the device (e.g., '01:123456')
+        :type device_id: DeviceIdT
+        :param msg: An optional initial message for the device to process, defaults to None
+        :type msg: Message | None
+        :param parent: The parent entity of this device, if any, defaults to None
+        :type parent: Parent | None
+        :param child_id: The specific ID of the child component if applicable, defaults to None
+        :type child_id: str | None
+        :param is_sensor: Indicates if this device should be treated as a sensor, defaults to None
+        :type is_sensor: bool | None
+        :return: The existing or newly created device instance
+        :rtype: Device
+        :raises LookupError: If the device ID is blocked or not in the allowed known_list.
         """
 
         def check_filter_lists(dev_id: DeviceIdT) -> None:  # may: LookupError
@@ -620,9 +632,8 @@ class Gateway(Engine):
         If wait_for_reply is True (*and* the Command has a rx_header), return the
         reply Packet. Otherwise, simply return the echo Packet.
 
-        If the expected Packet can't be returned, raise:
-            ProtocolSendFailed: tried to Tx Command, but didn't get echo/reply
-            ProtocolError:      didn't attempt to Tx Command for some reason
+        :raises ProtocolSendFailed: If the command was sent but no reply/echo was received.
+        :raises ProtocolError: If the system failed to attempt the transmission.
         """
 
         return await super().async_send_cmd(

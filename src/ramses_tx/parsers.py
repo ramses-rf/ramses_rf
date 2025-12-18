@@ -190,6 +190,15 @@ _LOGGER = _PKT_LOGGER = logging.getLogger(__name__)
 
 # rf_unknown
 def parser_0001(payload: str, msg: Message) -> Mapping[str, bool | str | None]:
+    """Parse the 0001 (rf_unknown) packet.
+
+    :param payload: The raw hex payload
+    :type payload: str
+    :param msg: The message object containing context
+    :type msg: Message
+    :return: A dictionary of parsed values
+    :rtype: Mapping[str, bool | str | None]
+    """
     # When in test mode, a 12: will send a W ?every 6 seconds:
     # 12:39:56.099 061  W --- 12:010740 --:------ 12:010740 0001 005 0000000501
     # 12:40:02.098 061  W --- 12:010740 --:------ 12:010740 0001 005 0000000501
