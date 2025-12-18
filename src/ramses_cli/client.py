@@ -588,6 +588,7 @@ def main() -> None:
         print(" - event_loop_policy set for win32")  # do before asyncio.run()
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+    profile = None
     try:
         if _PROFILE_LIBRARY:
             profile = cProfile.Profile()
