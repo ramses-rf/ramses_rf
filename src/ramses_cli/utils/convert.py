@@ -17,7 +17,7 @@ parser.add_argument("-i", "--input-file", type=argparse.FileType("r"), default="
 args = parser.parse_args()
 
 
-def convert_json_to_yaml(data: dict) -> str:
+def convert_json_to_yaml(data: dict) -> None:
     """Convert from json (client.py -C config.json) to yaml (HA configuration.yaml)."""
     (config, schema, include, exclude) = load_config("/dev/ttyMOCK", None, **data)
 
@@ -37,7 +37,7 @@ def convert_json_to_yaml(data: dict) -> str:
     print(yaml.dump({"ramses_cc": result}, sort_keys=False))
 
 
-def convert_yaml_to_json(data: dict) -> str:
+def convert_yaml_to_json(data: dict) -> None:
     """Convert from yaml (HA configuration.yaml) to json (client.py -C config.json)."""
 
     result = data["ramses_cc"]
