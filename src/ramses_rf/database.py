@@ -282,7 +282,7 @@ class MessageIndex:
         """
         # Used by OtbGateway init, via entity_base.py
         _now: dt = dt.now()
-        dtm: DtmStrT = dt.strftime(_now, "%Y-%m-%dT%H:%M:%S")  # type: ignore[assignment]
+        dtm: DtmStrT = _now.isoformat(timespec="microseconds")  # type: ignore[assignment]
         hdr = f"{code}|{verb}|{src}|00"  # dummy record has no contents
 
         dup = self._delete_from(hdr=hdr)
@@ -295,7 +295,7 @@ class MessageIndex:
             self._cu.execute(
                 sql,
                 (
-                    dtm,
+                    _now,
                     verb,
                     src,
                     src,
@@ -448,10 +448,15 @@ class MessageIndex:
         :returns: a tuple of qualifying messages
         """
 
-        return tuple(
-            self._msgs[row[0].isoformat(timespec="microseconds")]
-            for row in self.qry_dtms(**kwargs)
-        )
+        # CHANGE: Use a list comprehension with a check to avoid KeyError
+        res: list[Message] = []
+        for row in self.qry_dtms(**kwargs):
+            ts: DtmStrT = row[0].isoformat(timespec="microseconds")
+            if ts in self._msgs:
+                res.append(self._msgs[ts])
+            else:
+                _LOGGER.debug("MessageIndex timestamp %s not in device messages", ts)
+        return tuple(res)
 
     def qry_dtms(self, **kwargs: bool | dt | str) -> list[Any]:
         """
