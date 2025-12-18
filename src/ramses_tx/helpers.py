@@ -135,13 +135,14 @@ def timestamp() -> float:
     """
 
     # see: https://www.python.org/dev/peps/pep-0564/
-    if sys.platform != "win32":  # since 1970-01-01T00:00:00Z, time.gmtime(0)
+    if sys.platform != "win32":
+        # Windows uses a different epoch (1601-01-01)
+        ctypes.windll.kernel32.GetSystemTimePreciseAsFileTime(ctypes.byref(file_time))
+        _time = (file_time.dwLowDateTime + (file_time.dwHighDateTime << 32)) / 1e7
+        return float(_time - 134774 * 24 * 60 * 60)
+    else:
+        # Linux/macOS uses the Unix epoch (1970-01-01)
         return time.time_ns() / 1e9
-
-    # otherwise, is since 1601-01-01T00:00:00Z
-    ctypes.windll.kernel32.GetSystemTimePreciseAsFileTime(ctypes.byref(file_time))
-    _time = (file_time.dwLowDateTime + (file_time.dwHighDateTime << 32)) / 1e7
-    return float(_time - 134774 * 24 * 60 * 60)  # Cast to float to satisfy Mypy
 
 
 def dt_now() -> dt:
@@ -152,7 +153,8 @@ def dt_now() -> dt:
     """
     if sys.platform == "win32":
         return dt.fromtimestamp(timestamp())
-    return dt.now()  # type: ignore[unreachable]
+    else:
+        return dt.now()
 
 
 def dt_str() -> str:
