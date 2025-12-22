@@ -56,6 +56,8 @@ __all__ = [
     "VerbT",
     #
     "exceptions",
+    #
+    "GracefulExit",
 ]
 
 _LOGGER = logging.getLogger(__name__)

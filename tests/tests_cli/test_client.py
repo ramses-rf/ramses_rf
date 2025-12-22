@@ -38,17 +38,17 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     yield gateway
 
 
-def test_parse_no_input():
+def test_parse_no_input() -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["parse"])
     assert result.exit_code == 2  # missing input file
     assert result.output.startswith("Usage: cli parse")
 
 
-def test_parse_input(monkeypatch: pytest.MonkeyPatch):
+def test_parse_input(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", STDIN)
     runner = CliRunner()
-    result = runner.invoke(parse, [parse, "-"])
+    result = runner.invoke(parse, ["parse", "-"])
     assert result.exit_code == 1  # input file supplied
     assert result.output == ""
 

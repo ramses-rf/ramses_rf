@@ -3,6 +3,7 @@
 
 import io
 import sys
+from collections.abc import Collection
 
 import pytest
 
@@ -109,7 +110,26 @@ def id_fnc(param: int) -> str:
 
 @pytest.mark.parametrize("index", range(len(BASIC_TESTS)), ids=id_fnc)
 def test_client_basic(
-    monkeypatch: pytest.MonkeyPatch, index: int, tests: tuple = BASIC_TESTS
+    monkeypatch: pytest.MonkeyPatch,
+    index: int,
+    tests: tuple[
+        tuple[
+            list[str],
+            dict[str, int | tuple[None, None] | None],
+            dict[str, str | dict[str, int | None] | None],
+        ],
+        tuple[
+            list[str],
+            dict[str, int | None],
+            dict[str, str | dict[str, int | None] | None],
+        ],
+        tuple[
+            list[str],
+            dict[str, int | None],
+            dict[str, str | dict[str, int | None] | None],
+        ],
+        tuple[list[str], dict[str, int | None], dict[str, Collection[str]]],
+    ] = BASIC_TESTS,
 ) -> None:
     monkeypatch.setattr("sys.argv", tests[index][0])
     if tests[index][0][1] == PARSE:
