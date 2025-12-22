@@ -157,19 +157,29 @@ class AttrDict(dict):  # type: ignore[type-arg]
     _SZ_DEFAULT: Final = "_default"
     _SZ_SLUGS: Final = "SLUGS"
 
-    @classmethod
-    def __readonly(cls, *args: Any, **kwargs: Any) -> NoReturn:
-        raise TypeError(f"'{cls.__class__.__name__}' object is read only")
+    def _readonly(self, *args: Any, **kwargs: Any) -> NoReturn:
+        raise TypeError(f"'{self.__class__.__name__}' object is read only")
 
-    __delitem__ = __readonly
-    __setitem__ = __readonly
-    clear = __readonly
-    pop = __readonly
-    popitem = __readonly
-    setdefault = __readonly
-    update = __readonly
+    def __setitem__(self, key: Any, value: Any) -> NoReturn:
+        self._readonly()
 
-    del __readonly
+    def __delitem__(self, key: Any) -> NoReturn:
+        self._readonly()
+
+    def clear(self) -> NoReturn:
+        self._readonly()
+
+    def pop(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
+
+    def popitem(self) -> NoReturn:
+        self._readonly()
+
+    def setdefault(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
+
+    def update(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
 
     def __init__(self, main_table: dict[str, dict], attr_table: dict[str, Any]) -> None:  # type: ignore[type-arg]
         self._main_table = main_table
