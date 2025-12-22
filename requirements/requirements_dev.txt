@@ -17,7 +17,7 @@
   mypy >= 1.18.0                                 # HA uses  1.19.0a4 !
   types-colorama >= 0.4.15
   types-PyYAML >= 6.0.12                         # HA uses 6.0.12.20250516
-  voluptuous >= 0.15.2                           # HA uses 0.15.2
+  voluptuous >= 0.15.2, < 0.16.0                 # HA uses 0.15.2
 
 # used for testing
   pytest >= 8.4.2                                # HA uses 8.4.2
