@@ -43,7 +43,7 @@
     "colorlog>=6.9.0",              # latest
     "paho-mqtt>=2.1.0",             # latest
     "pyserial-asyncio-fast>=0.16",  # latest
-    "voluptuous>=0.15.2",           # latest
+    "voluptuous>=0.15.2,<0.16.0",   # pinned to fix CI failures
   ]
 
 #
