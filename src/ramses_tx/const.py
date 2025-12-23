@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""RAMSES RF - a RAMSES-II protocol decoder & analyser."""
+"""RAMSES RF - a RAMSES-II protocol decoder & analyser.
+
+This module contains constants, enums, and helper classes used throughout the
+library to decode and encode RAMSES-II protocol packets.
+"""
 
 from __future__ import annotations
 
@@ -15,16 +19,23 @@ DEV_MODE = __dev_mode__
 DEFAULT_DISABLE_QOS: Final[bool | None] = None
 DEFAULT_WAIT_FOR_REPLY: Final[bool | None] = None
 
-DEFAULT_ECHO_TIMEOUT: Final[float] = 0.50  # waiting for echo pkt after cmd sent
-DEFAULT_RPLY_TIMEOUT: Final[float] = 0.50  # waiting for reply pkt after echo pkt rcvd
+#: Waiting for echo pkt after cmd sent (seconds)
+DEFAULT_ECHO_TIMEOUT: Final[float] = 0.50
+
+#: Waiting for reply pkt after echo pkt rcvd (seconds)
+DEFAULT_RPLY_TIMEOUT: Final[float] = 0.50
 DEFAULT_BUFFER_SIZE: Final[int] = 32
 
-DEFAULT_SEND_TIMEOUT: Final[float] = 20.0  # total waiting for successful send: FIXME
-MAX_SEND_TIMEOUT: Final[float] = 20.0  # for a command to be sent, incl. queuing time
+#: Total waiting for successful send (seconds)
+DEFAULT_SEND_TIMEOUT: Final[float] = 20.0
+#: For a command to be sent, incl. queuing time (seconds)
+MAX_SEND_TIMEOUT: Final[float] = 20.0
 
-MAX_RETRY_LIMIT: Final[int] = 3  # for a command to be re-sent (not incl. 1st send)
+#: For a command to be re-sent (not incl. 1st send)
+MAX_RETRY_LIMIT: Final[int] = 3
 
-MIN_INTER_WRITE_GAP: Final[float] = 0.05  # seconds
+#: Minimum gap between writes (seconds)
+MIN_INTER_WRITE_GAP: Final[float] = 0.05
 DEFAULT_GAP_DURATION: Final[float] = MIN_INTER_WRITE_GAP
 DEFAULT_MAX_RETRIES: Final[int] = 3
 DEFAULT_NUM_REPEATS: Final[int] = 0
@@ -139,6 +150,8 @@ SZ_OTC_ACTIVE: Final = "otc_active"
 
 @verify(EnumCheck.UNIQUE)
 class Priority(IntEnum):
+    """Priority levels for protocol messages."""
+
     LOWEST = 4
     LOW = 2
     DEFAULT = 0
@@ -147,31 +160,60 @@ class Priority(IntEnum):
 
 
 def slug(string: str) -> str:
-    """Convert a string to snake_case."""
+    """Convert a string to snake_case.
+
+    :param string: The input string to convert.
+    :return: The string converted to snake_case (lowercase, with non-alphanumerics replaced by underscores).
+    """
     return re.sub(r"[\W_]+", "_", string.lower())
 
 
 # TODO: FIXME: This is a mess - needs converting to StrEnum
 class AttrDict(dict):  # type: ignore[type-arg]
+    """A read-only dictionary that supports dot-access and two-way lookup.
+
+    This class is typically used to map hex codes (keys) to human-readable slugs (values),
+    while also allowing reverse lookup via dot notation (e.g., ``map.SLUG``).
+
+    .. warning::
+        This class is immutable. Attempting to modify it will raise a :exc:`TypeError`.
+    """
+
     _SZ_AKA_SLUG: Final = "_root_slug"
     _SZ_DEFAULT: Final = "_default"
     _SZ_SLUGS: Final = "SLUGS"
 
-    @classmethod
-    def __readonly(cls, *args: Any, **kwargs: Any) -> NoReturn:
-        raise TypeError(f"'{cls.__class__.__name__}' object is read only")
+    def _readonly(self, *args: Any, **kwargs: Any) -> NoReturn:
+        """Raise TypeError for read-only operations."""
+        raise TypeError(f"'{self.__class__.__name__}' object is read only")
 
-    __delitem__ = __readonly
-    __setitem__ = __readonly
-    clear = __readonly
-    pop = __readonly
-    popitem = __readonly
-    setdefault = __readonly
-    update = __readonly
+    def __setitem__(self, key: Any, value: Any) -> NoReturn:
+        self._readonly()
 
-    del __readonly
+    def __delitem__(self, key: Any) -> NoReturn:
+        self._readonly()
+
+    def clear(self) -> NoReturn:
+        self._readonly()
+
+    def pop(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
+
+    def popitem(self) -> NoReturn:
+        self._readonly()
+
+    def setdefault(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
+
+    def update(self, *args: Any, **kwargs: Any) -> NoReturn:
+        self._readonly()
 
     def __init__(self, main_table: dict[str, dict], attr_table: dict[str, Any]) -> None:  # type: ignore[type-arg]
+        """Initialize the AttrDict.
+
+        :param main_table: A dictionary mapping keys (usually hex codes) to property dictionaries.
+        :param attr_table: A dictionary of additional attributes to expose on the object.
+        """
         self._main_table = main_table
         self._attr_table = attr_table
         self._attr_table[self._SZ_SLUGS] = tuple(sorted(main_table.keys()))
@@ -237,7 +279,12 @@ class AttrDict(dict):  # type: ignore[type-arg]
         return self.__getattribute__(name)
 
     def _hex(self, key: str) -> str:
-        """Return the key/ID (2-byte hex string) of the two-way dict (e.g. '04')."""
+        """Return the key/ID (2-byte hex string) of the two-way dict (e.g. '04').
+
+        :param key: The lookup key (can be slug or code).
+        :raises KeyError: If the key is not found.
+        :return: The 2-byte hex string identifier.
+        """
         if key in self._main_table:
             return list(self._main_table[key].keys())[0]  # type: ignore[no-any-return]
         if key in self._reverse:
@@ -245,7 +292,12 @@ class AttrDict(dict):  # type: ignore[type-arg]
         raise KeyError(key)
 
     def _str(self, key: str) -> str:
-        """Return the value (string) of the two-way dict (e.g. 'radiator_valve')."""
+        """Return the value (string) of the two-way dict (e.g. 'radiator_valve').
+
+        :param key: The lookup key.
+        :raises KeyError: If the key is not found.
+        :return: The human-readable slug string.
+        """
         if key in self._main_table:
             return list(self._main_table[key].values())[0]  # type: ignore[no-any-return]
         if key in self:
@@ -256,14 +308,23 @@ class AttrDict(dict):  # type: ignore[type-arg]
     #     return {k: k for k in super().values()}.values()
 
     def slug(self, key: str) -> str:
-        """WIP: Return master slug for a hex key/ID (e.g. 00 -> 'TRV', not 'TR0')."""
+        """Return master slug for a hex key/ID.
+
+        Example: 00 -> 'TRV' (master), not 'TR0'.
+
+        :param key: The hex key to look up.
+        :return: The master slug.
+        """
         slug_ = self._slug_lookup[key]
         # if slug_ in self._attr_table["_TRANSFORMS"]:
         #     return self._attr_table["_TRANSFORMS"][slug_]
         return slug_  # type: ignore[no-any-return]
 
     def slugs(self) -> tuple[str]:
-        """Return the slugs from the main table."""
+        """Return the slugs from the main table.
+
+        :return: A tuple of all available slugs.
+        """
         return self._attr_table[self._SZ_SLUGS]  # type: ignore[no-any-return]
 
 
@@ -271,6 +332,12 @@ def attr_dict_factory(
     main_table: dict[str, dict],  # type: ignore[type-arg]
     attr_table: dict | None = None,  # type: ignore[type-arg]
 ) -> AttrDict:  # is: SlottedAttrDict
+    """Create a new AttrDict instance with a slotted subclass.
+
+    :param main_table: The primary mapping of codes to slugs.
+    :param attr_table: Optional additional attributes to attach to the instance.
+    :return: An instance of a dynamic AttrDict subclass.
+    """
     if attr_table is None:
         attr_table = {}
 
@@ -295,6 +362,8 @@ def attr_dict_factory(
 # slugs for device/zone entity klasses, used by 0005/000C
 @verify(EnumCheck.UNIQUE)
 class DevRole(StrEnum):
+    """Slugs for device/zone entity classes, used by commands 0005/000C."""
+
     #
     # Generic device/zone classes
     ACT = "ACT"  # Generic heating zone actuator group
@@ -345,6 +414,8 @@ DEV_ROLE_MAP = attr_dict_factory(
 # slugs for device entity types, used in device_ids
 @verify(EnumCheck.UNIQUE)
 class DevType(StrEnum):
+    """Slugs for device entity types, used in device_ids."""
+
     #
     # Promotable/Generic devices
     DEV = "DEV"  # xx: Promotable device
@@ -457,6 +528,8 @@ DEV_TYPE_MAP = attr_dict_factory(
 
 # slugs for zone entity klasses, used by 0005/000C
 class ZoneRole(StrEnum):
+    """Slugs for zone entity classes, used by commands 0005/000C."""
+
     #
     # Generic device/zone classes
     ACT = "ACT"  # Generic heating zone actuator group
@@ -645,6 +718,8 @@ MESSAGE_REGEX = re.compile(f"^{r} {v} {r} {d} {d} {d} {c} {l} {p}$")
 
 # Used by 0418/system_fault parser
 class FaultDeviceClass(StrEnum):
+    """Device classes for system faults."""
+
     CONTROLLER = "controller"
     SENSOR = "sensor"
     SETPOINT = "setpoint"
@@ -666,6 +741,8 @@ FAULT_DEVICE_CLASS: Final[dict[str, FaultDeviceClass]] = {
 
 
 class FaultState(StrEnum):
+    """States for system faults."""
+
     FAULT = "fault"
     RESTORE = "restore"
     UNKNOWN_C0 = "unknown_c0"
@@ -680,6 +757,8 @@ FAULT_STATE: Final[dict[str, FaultState]] = {  # a bitmap?
 
 
 class FaultType(StrEnum):
+    """Types of system faults."""
+
     SYSTEM_FAULT = "system_fault"
     MAINS_LOW = "mains_low"
     BATTERY_LOW = "battery_low"
@@ -703,6 +782,8 @@ FAULT_TYPE: Final[dict[str, FaultType]] = {
 
 
 class SystemType(StrEnum):
+    """System types (e.g. Evohome, Hometronics)."""
+
     CHRONOTHERM = "chronotherm"
     EVOHOME = "evohome"
     HOMETRONICS = "hometronics"
@@ -742,6 +823,8 @@ FAN_RATE: Final = "fan_rate"  # percentage, 0.0 - 1.0  # deprecated, use SZ_FAN_
 # Below, verbs & codes - can use Verb/Code/Index for mypy type checking
 @verify(EnumCheck.UNIQUE)
 class VerbT(StrEnum):
+    """Protocol verbs (message types)."""
+
     I_ = " I"
     RQ = "RQ"
     RP = "RP"
@@ -756,6 +839,8 @@ W_: Final = VerbT.W_
 
 @verify(EnumCheck.UNIQUE)
 class MsgId(StrEnum):
+    """Message identifiers."""
+
     _00 = "00"
     _03 = "03"
     _06 = "06"
@@ -791,6 +876,8 @@ class MsgId(StrEnum):
 # StrEnum is intended to include all known codes, see: test suite, code schema in ramses.py
 @verify(EnumCheck.UNIQUE)
 class Code(StrEnum):
+    """Protocol command codes."""
+
     _0001 = "0001"
     _0002 = "0002"
     _0004 = "0004"
