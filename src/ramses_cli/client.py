@@ -8,10 +8,9 @@ import json
 import logging
 import sys
 from collections.abc import Mapping
-from typing import Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import click
-from _typeshed import SupportsRead
 from colorama import Fore, Style, init as colorama_init
 
 from ramses_rf import Gateway, GracefulExit, Message, exceptions as exc
@@ -48,6 +47,10 @@ from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused
     DEV_TYPE_MAP,
     Code,
 )
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsRead
+
 
 _PROFILE_LIBRARY = False  # NOTE: for profiling of library
 
