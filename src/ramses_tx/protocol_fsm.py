@@ -197,8 +197,16 @@ class ProtocolContext:
         #  _fut.cancel() (incl. via a send_cmd(qos.timeout) -> wait_for(timeout))
 
         # Changing the order of the following is fraught with danger
+        # Formatitng: [TRACE_FSM] [State: Old->New] [Reason] | ...
+
+        current_state_name = self._state.__class__.__name__
+        new_state_name = state_class.__name__
+        transition = f"{current_state_name}->{new_state_name}"
+
         if self._fut is None:  # logging only - IsInIdle, Inactive
-            _LOGGER.debug("BEFORE = %s", self)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: Fut=None] | ctx={self}"
+            )
             assert self._cmd is None, f"{self}: Coding error"  # mypy hint
             assert isinstance(self._state, IsInIdle | Inactive | None), (
                 f"{self}: Coding error"
@@ -207,14 +215,20 @@ class ProtocolContext:
         elif self._fut.cancelled() and not isinstance(self._state, IsInIdle):
             # cancelled by wait_for(timeout), cancel("buffer overflow"), or other?
             # was for previous send_cmd if currently IsInIdle (+/- Inactive?)
-            _LOGGER.debug("BEFORE = %s: expired=%s (global)", self, expired)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: Cancelled] | "
+                f"expired={expired} ctx={self}"
+            )
             assert self._cmd is not None, f"{self}: Coding error"  # mypy hint
             assert isinstance(self._state, WantEcho | WantRply), (
                 f"{self}: Coding error"
             )  # mypy hint
 
         elif exception:
-            _LOGGER.debug("BEFORE = %s: exception=%s", self, exception)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: Exception] | "
+                f"error={exception} ctx={self}"
+            )
             assert not self._fut.done(), (
                 f"{self}: Coding error ({self._fut})"
             )  # mypy hint
@@ -224,7 +238,10 @@ class ProtocolContext:
             self._fut.set_exception(exception)  # apologise to the sender
 
         elif result:
-            _LOGGER.debug("BEFORE = %s: result=%s", self, result._hdr)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: Result] | "
+                f"result={result._hdr} ctx={self}"
+            )
             assert not self._fut.done(), (
                 f"{self}: Coding error ({self._fut})"
             )  # mypy hint
@@ -234,7 +251,10 @@ class ProtocolContext:
             self._fut.set_result(result)
 
         elif expired:  # by expire_state_on_timeout(echo_timeout/reply_timeout)
-            _LOGGER.debug("BEFORE = %s: expired=%s", self, expired)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: Expired] | "
+                f"expired={expired} ctx={self}"
+            )
             assert not self._fut.done(), (
                 f"{self}: Coding error ({self._fut})"
             )  # mypy hint
@@ -246,7 +266,9 @@ class ProtocolContext:
             )
 
         else:  # logging only - WantEcho, WantRply
-            _LOGGER.debug("BEFORE = %s", self)
+            _LOGGER.debug(
+                f"[TRACE_FSM] [State: {transition}] [Status: OK] | ctx={self}"
+            )
             assert self._fut is None or self._fut.cancelled() or not self._fut.done(), (
                 f"{self}: Coding error ({self._fut})"
             )  # mypy hint
@@ -281,11 +303,11 @@ class ProtocolContext:
         self._loop.call_soon_threadsafe(effect_state, timed_out)  # calls expire_state
 
         if not isinstance(self._state, WantRply):
-            _LOGGER.debug("AFTER. = %s", self)
+            # _LOGGER.debug("AFTER. = %s", self)
             return
 
         assert self._qos is not None, f"{self}: Coding error"  # mypy hint
-        _LOGGER.debug("AFTER. = %s: wait_for_reply=%s", self, self._qos.wait_for_reply)
+        # _LOGGER.debug("AFTER. = %s: wait_for_reply=%s", self, self._qos.wait_for_reply)
 
     def connection_made(self, transport: RamsesTransportT) -> None:
         # may want to set some instance variables, according to type of transport
