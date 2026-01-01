@@ -211,18 +211,18 @@ KNOWN_LIST_BAD = (
     # known_list:
     #   05:111111: {class: REM, scheme: xxxxxx}
     # """,
-    """
-    known_list:
-      01:111111: {class: FAN}
-      02:111111: {class: RFS}
-      03:111111: {class: CO2, faked: true}
-      04:111111: {class: HUM, faked: true}
-      05:111111: {class: REM, faked: true, scheme: nuaire}
-      06:111111:
-        class: DIS
-        scheme: orcon
-        _note: this is a note
-    """,
+    # """
+    # known_list:
+    #   01:111111: {class: FAN}
+    #   02:111111: {class: RFS}
+    #   03:111111: {class: CO2, faked: true}
+    #   04:111111: {class: HUM, faked: true}
+    #   05:111111: {class: REM, faked: true, scheme: nuaire}
+    #   06:111111:
+    #     class: DIS
+    #     scheme: orcon
+    #     _note: this is a note
+    # """,
 )
 KNOWN_LIST_GOOD = (
     """
