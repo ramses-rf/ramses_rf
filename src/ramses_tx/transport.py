@@ -60,7 +60,12 @@ from typing import TYPE_CHECKING, Any, Final, TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
 from paho.mqtt import MQTTException, client as mqtt
-from paho.mqtt.enums import CallbackAPIVersion
+
+try:
+    from paho.mqtt.enums import CallbackAPIVersion
+except ImportError:
+    # Fallback for Paho MQTT < 2.0.0 (Home Assistant compatibility)
+    CallbackAPIVersion = None  # type: ignore[assignment, misc]
 from serial import (  # type: ignore[import-untyped]
     Serial,
     SerialException,
@@ -149,7 +154,14 @@ else:  # is linux
     from serial.tools.list_ports_linux import SysFS  # type: ignore[import-untyped]
 
     def list_links(devices: set[str]) -> list[str]:
-        """Search for symlinks to ports already listed in devices."""
+        """Search for symlinks to ports already listed in devices.
+
+        :param devices: A set of real device paths.
+        :type devices: set[str]
+        :return: A list of symlinks pointing to the devices.
+        :rtype: list[str]
+        """
+
         links: list[str] = []
         for device in glob.glob("/dev/*") + glob.glob("/dev/serial/by-id/*"):
             if os.path.islink(device) and os.path.realpath(device) in devices:
@@ -159,7 +171,15 @@ else:  # is linux
     def comports(  # type: ignore[no-any-unimported]
         include_links: bool = False, _hide_subsystems: list[str] | None = None
     ) -> list[SysFS]:
-        """Return a list of Serial objects for all known serial ports."""
+        """Return a list of Serial objects for all known serial ports.
+
+        :param include_links: Whether to include symlinks in the results, defaults to False.
+        :type include_links: bool, optional
+        :param _hide_subsystems: List of subsystems to hide, defaults to None.
+        :type _hide_subsystems: list[str] | None, optional
+        :return: A list of SysFS objects representing the ports.
+        :rtype: list[SysFS]
+        """
 
         if _hide_subsystems is None:
             _hide_subsystems = ["platform"]
@@ -182,10 +202,16 @@ else:  # is linux
 
 
 async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
-    """Return True/False if the device attached to the port has the attrs of an HGI80.
+    """Return True if the device attached to the port has the attributes of a Honeywell HGI80.
 
-    Return None if it's not possible to tell (falsy should assume is evofw3).
-    Raise TransportSerialError if the port is not found at all.
+    Return False if it appears to be an evofw3-compatible device (ATMega etc).
+    Return None if the type cannot be determined.
+
+    :param serial_port: The serial port path or URL.
+    :type serial_port: SerPortNameT
+    :return: True if HGI80, False if not (likely evofw3), None if undetermined.
+    :rtype: bool | None
+    :raises exc.TransportSerialError: If the serial port cannot be found.
     """
 
     if serial_port[:7] == "mqtt://":
@@ -258,12 +284,16 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
 
 
 def _normalise(pkt_line: str) -> str:
-    """
-    Perform any (transparent) frame-level hacks, as required at (near-)RF layer.
+    """Perform any (transparent) frame-level hacks, as required at (near-)RF layer.
 
     Goals:
-    - ensure an evofw3 provides the same output as a HGI80 (none, presently)
-    - handle 'strange' packets (e.g. ``I|08:|0008``)
+      - ensure an evofw3 provides the same output as a HGI80 (none, presently)
+      - handle 'strange' packets (e.g. ``I|08:|0008``)
+
+    :param pkt_line: The raw packet string from the hardware.
+    :type pkt_line: str
+    :return: The normalized packet string.
+    :rtype: str
     """
 
     # TODO: deprecate as only for ramses_esp <0.4.0
@@ -283,6 +313,14 @@ def _normalise(pkt_line: str) -> str:
 
 
 def _str(value: bytes) -> str:
+    """Decode bytes to a string, ignoring non-printable characters.
+
+    :param value: The bytes to decode.
+    :type value: bytes
+    :return: The decoded string.
+    :rtype: str
+    """
+
     try:
         result = "".join(
             c for c in value.decode("ascii", errors="strict") if c in printable
@@ -298,8 +336,12 @@ def limit_duty_cycle(
 ) -> Callable[..., Any]:
     """Limit the Tx rate to the RF duty cycle regulations (e.g. 1% per hour).
 
-    max_duty_cycle: bandwidth available per observation window (%)
-    time_window: duration of the sliding observation window (default 60 seconds)
+    :param max_duty_cycle: Bandwidth available per observation window (percentage as 0.0-1.0).
+    :type max_duty_cycle: float
+    :param time_window: Duration of the sliding observation window in seconds, defaults to 60.
+    :type time_window: int
+    :return: A decorator that enforces the duty cycle limit.
+    :rtype: Callable[..., Any]
     """
 
     TX_RATE_AVAIL: int = 38400  # bits per second (deemed)
@@ -368,7 +410,13 @@ _global_sync_cycles: deque[Packet] = deque(maxlen=_MAX_TRACKED_SYNCS)
 
 # TODO: doesn't look right at all...
 def avoid_system_syncs(fnc: Callable[..., Awaitable[None]]) -> Callable[..., Any]:
-    """Take measures to avoid Tx when any controller is doing a sync cycle."""
+    """Take measures to avoid Tx when any controller is doing a sync cycle.
+
+    :param fnc: The async function to decorate.
+    :type fnc: Callable[..., Awaitable[None]]
+    :return: The decorated function.
+    :rtype: Callable[..., Any]
+    """
 
     DURATION_PKT_GAP = 0.020  # 0.0200 for evohome, or 0.0127 for DTS92
     DURATION_LONG_PKT = 0.022  # time to tx I|2309|048 (or 30C9, or 000A)
@@ -408,7 +456,13 @@ def avoid_system_syncs(fnc: Callable[..., Awaitable[None]]) -> Callable[..., Any
 
 
 def track_system_syncs(fnc: Callable[..., None]) -> Callable[..., Any]:
-    """Track/remember any new/outstanding TCS sync cycle."""
+    """Track/remember any new/outstanding TCS sync cycle.
+
+    :param fnc: The function to decorate (usually a packet reader).
+    :type fnc: Callable[..., None]
+    :return: The decorated function.
+    :rtype: Callable[..., Any]
+    """
 
     @wraps(fnc)
     def wrapper(self: PortTransport, pkt: Packet) -> None:
@@ -441,7 +495,25 @@ def track_system_syncs(fnc: Callable[..., None]) -> Callable[..., Any]:
 # ### Do the bare minimum to abstract each transport from its underlying class
 
 
+class _CallbackTransportAbstractor:
+    """Do the bare minimum to abstract a transport from its underlying class."""
+
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop | None = None, **kwargs: Any
+    ) -> None:
+        """Initialize the callback transport abstractor.
+
+        :param loop: The asyncio event loop, defaults to None.
+        :type loop: asyncio.AbstractEventLoop | None, optional
+        """
+        self._loop = loop or asyncio.get_event_loop()
+        # Consume 'kwargs' here. Do NOT pass them to object.__init__().
+        super().__init__()
+
+
 class _BaseTransport:
+    """Base class for all transports."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
@@ -455,6 +527,15 @@ class _FileTransportAbstractor:
         protocol: RamsesProtocolT,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
+        """Initialize the file transport abstractor.
+
+        :param pkt_source: The source of packets (file path, file object, or dict).
+        :type pkt_source: dict[str, str] | str | TextIOWrapper
+        :param protocol: The protocol instance.
+        :type protocol: RamsesProtocolT
+        :param loop: The asyncio event loop, defaults to None.
+        :type loop: asyncio.AbstractEventLoop | None, optional
+        """
         # per().__init__(extra=extra)  # done in _BaseTransport
 
         self._pkt_source = pkt_source
@@ -474,6 +555,16 @@ class _PortTransportAbstractor(serial_asyncio.SerialTransport):
         protocol: RamsesProtocolT,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
+        """Initialize the port transport abstractor.
+
+        :param serial_instance: The serial object instance.
+        :type serial_instance: Serial
+        :param protocol: The protocol instance.
+        :type protocol: RamsesProtocolT
+        :param loop: The asyncio event loop, defaults to None.
+        :type loop: asyncio.AbstractEventLoop | None, optional
+        """
+
         super().__init__(loop or asyncio.get_event_loop(), protocol, serial_instance)
 
         # lf._serial = serial_instance  # ._serial, not .serial
@@ -491,6 +582,15 @@ class _MqttTransportAbstractor:
         protocol: RamsesProtocolT,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
+        """Initialize the MQTT transport abstractor.
+
+        :param broker_url: The URL of the MQTT broker.
+        :type broker_url: str
+        :param protocol: The protocol instance.
+        :type protocol: RamsesProtocolT
+        :param loop: The asyncio event loop, defaults to None.
+        :type loop: asyncio.AbstractEventLoop | None, optional
+        """
         # per().__init__(extra=extra)  # done in _BaseTransport
 
         self._broker_url = urlparse(broker_url)
@@ -516,6 +616,11 @@ class _ReadTransport(_BaseTransport):
     def __init__(
         self, *args: Any, extra: dict[str, Any] | None = None, **kwargs: Any
     ) -> None:
+        """Initialize the read-only transport.
+
+        :param extra: Extra info dict, defaults to None.
+        :type extra: dict[str, Any] | None, optional
+        """
         super().__init__(*args, loop=kwargs.pop("loop", None))
 
         self._extra: dict[str, Any] = {} if extra is None else extra
@@ -530,13 +635,17 @@ class _ReadTransport(_BaseTransport):
         self._prev_pkt: Packet | None = None
 
         for key in (SZ_ACTIVE_HGI, SZ_SIGNATURE):
-            self._extra[key] = None
+            self._extra.setdefault(key, None)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._protocol})"
 
     def _dt_now(self) -> dt:
-        """Return a precise datetime, using last packet's dtm field."""
+        """Return a precise datetime, using last packet's dtm field.
+
+        :return: The timestamp of the current packet or a default.
+        :rtype: dt
+        """
 
         try:
             return self._this_pkt.dtm  # type: ignore[union-attr]
@@ -545,20 +654,41 @@ class _ReadTransport(_BaseTransport):
 
     @property
     def loop(self) -> asyncio.AbstractEventLoop:
-        """The asyncio event loop as declared by SerialTransport."""
+        """The asyncio event loop as declared by SerialTransport.
+
+        :return: The event loop.
+        :rtype: asyncio.AbstractEventLoop
+        """
         return self._loop
 
     def get_extra_info(self, name: str, default: Any = None) -> Any:
+        """Get extra information about the transport.
+
+        :param name: The name of the information to retrieve.
+        :type name: str
+        :param default: Default value if name is not found, defaults to None.
+        :type default: Any, optional
+        :return: The value associated with name.
+        :rtype: Any
+        """
         if name == SZ_IS_EVOFW3:
             return not self._is_hgi80
         return self._extra.get(name, default)
 
     def is_closing(self) -> bool:
-        """Return True if the transport is closing or has closed."""
+        """Return True if the transport is closing or has closed.
+
+        :return: Closing state.
+        :rtype: bool
+        """
         return self._closing
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:
-        """Inform the protocol that this transport has closed."""
+        """Inform the protocol that this transport has closed.
+
+        :param exc: The exception that caused the closure, if any.
+        :type exc: exc.RamsesException | None, optional
+        """
 
         if self._closing:
             return
@@ -573,7 +703,11 @@ class _ReadTransport(_BaseTransport):
         self._close()
 
     def is_reading(self) -> bool:
-        """Return True if the transport is receiving."""
+        """Return True if the transport is receiving.
+
+        :return: Reading state.
+        :rtype: bool
+        """
         return self._reading
 
     def pause_reading(self) -> None:
@@ -585,6 +719,11 @@ class _ReadTransport(_BaseTransport):
         self._reading = True
 
     def _make_connection(self, gwy_id: DeviceIdT | None) -> None:
+        """Register the connection with the protocol.
+
+        :param gwy_id: The ID of the gateway device, if known.
+        :type gwy_id: DeviceIdT | None
+        """
         self._extra[SZ_ACTIVE_HGI] = gwy_id  # or HGI_DEV_ADDR.id
 
         self.loop.call_soon_threadsafe(  # shouldn't call this until we have HGI-ID
@@ -593,7 +732,13 @@ class _ReadTransport(_BaseTransport):
 
     # NOTE: all transport should call this method when they receive data
     def _frame_read(self, dtm_str: str, frame: str) -> None:
-        """Make a Packet from the Frame and process it (called by each specific Tx)."""
+        """Make a Packet from the Frame and process it (called by each specific Tx).
+
+        :param dtm_str: The timestamp string of the frame.
+        :type dtm_str: str
+        :param frame: The raw frame string.
+        :type frame: str
+        """
 
         if not frame.strip():
             return
@@ -613,7 +758,12 @@ class _ReadTransport(_BaseTransport):
 
     # NOTE: all protocol callbacks should be invoked from here
     def _pkt_read(self, pkt: Packet) -> None:
-        """Pass any valid Packets to the protocol's callback (_prev_pkt, _this_pkt)."""
+        """Pass any valid Packets to the protocol's callback (_prev_pkt, _this_pkt).
+
+        :param pkt: The parsed packet.
+        :type pkt: Packet
+        :raises exc.TransportError: If called while closing.
+        """
 
         self._this_pkt, self._prev_pkt = pkt, self._this_pkt
 
@@ -633,7 +783,14 @@ class _ReadTransport(_BaseTransport):
             _LOGGER.error("%s < exception from msg layer: %s", pkt, err)
 
     async def write_frame(self, frame: str, disable_tx_limits: bool = False) -> None:
-        """Transmit a frame via the underlying handler (e.g. serial port, MQTT)."""
+        """ "Transmit a frame via the underlying handler (e.g. serial port, MQTT).
+
+        :param frame: The frame to write.
+        :type frame: str
+        :param disable_tx_limits: Whether to bypass duty cycle limits, defaults to False.
+        :type disable_tx_limits: bool, optional
+        :raises exc.TransportSerialError: Because this transport is read-only.
+        """
         raise exc.TransportSerialError("This transport is read only")
 
 
@@ -643,24 +800,46 @@ class _FullTransport(_ReadTransport):  # asyncio.Transport
     def __init__(
         self, *args: Any, disable_sending: bool = False, **kwargs: Any
     ) -> None:
+        """Initialize the full transport.
+
+        :param disable_sending: Whether to disable sending capabilities, defaults to False.
+        :type disable_sending: bool, optional
+        """
         super().__init__(*args, **kwargs)
 
         self._disable_sending = disable_sending
         self._transmit_times: deque[dt] = deque(maxlen=_MAX_TRACKED_TRANSMITS)
 
     def _dt_now(self) -> dt:
-        """Return a precise datetime, using the current dtm."""
+        """Return a precise datetime, using the current dtm.
+
+        :return: Current datetime.
+        :rtype: dt
+        """
         # _LOGGER.error("Full._dt_now()")
 
         return dt_now()
 
     def get_extra_info(self, name: str, default: Any = None) -> Any:
+        """Get extra info, including transmit rate calculations.
+
+        :param name: Name of info.
+        :type name: str
+        :param default: Default value.
+        :type default: Any, optional
+        :return: The requested info.
+        :rtype: Any
+        """
         if name == "tx_rate":
             return self._report_transmit_rate()
         return super().get_extra_info(name, default=default)
 
     def _report_transmit_rate(self) -> float:
-        """Return the transmit rate in transmits per minute."""
+        """Return the transmit rate in transmits per minute.
+
+        :return: Transmits per minute.
+        :rtype: float
+        """
 
         dt_now = dt.now()
         dtm = dt_now - td(seconds=_MAX_TRACKED_DURATION)
@@ -684,7 +863,12 @@ class _FullTransport(_ReadTransport):  # asyncio.Transport
 
     # NOTE: Protocols call write_frame(), not write()
     def write(self, data: bytes) -> None:
-        """Write the data to the underlying handler."""
+        """Write the data to the underlying handler.
+
+        :param data: The data to write.
+        :type data: bytes
+        :raises exc.TransportError: Always raises, use write_frame instead.
+        """
         # _LOGGER.error("Full.write(%s)", data)
 
         raise exc.TransportError("write() not implemented, use write_frame() instead")
@@ -693,6 +877,12 @@ class _FullTransport(_ReadTransport):  # asyncio.Transport
         """Transmit a frame via the underlying handler (e.g. serial port, MQTT).
 
         Protocols call Transport.write_frame(), not Transport.write().
+
+        :param frame: The frame to transmit.
+        :type frame: str
+        :param disable_tx_limits: Whether to disable duty cycle limits, defaults to False.
+        :type disable_tx_limits: bool, optional
+        :raises exc.TransportError: If sending is disabled or transport is closed.
         """
 
         if self._disable_sending is True:
@@ -705,7 +895,12 @@ class _FullTransport(_ReadTransport):  # asyncio.Transport
         await self._write_frame(frame)
 
     async def _write_frame(self, frame: str) -> None:
-        """Write some data bytes to the underlying transport."""
+        """Write some data bytes to the underlying transport.
+
+        :param frame: The frame to write.
+        :type frame: str
+        :raises NotImplementedError: Abstract method.
+        """
         # _LOGGER.error("Full._write_frame(%s)", frame)
 
         raise NotImplementedError("_write_frame() not implemented here")
@@ -715,9 +910,16 @@ _RegexRuleT: TypeAlias = dict[str, str]
 
 
 class _RegHackMixin:
+    """Mixin to apply regex rules to inbound and outbound frames."""
+
     def __init__(
         self, *args: Any, use_regex: dict[str, _RegexRuleT] | None = None, **kwargs: Any
     ) -> None:
+        """Initialize the regex mixin.
+
+        :param use_regex: Dictionary containing inbound/outbound regex rules.
+        :type use_regex: dict[str, _RegexRuleT] | None, optional
+        """
         super().__init__(*args, **kwargs)
 
         use_regex = use_regex or {}
@@ -727,6 +929,15 @@ class _RegHackMixin:
 
     @staticmethod
     def _regex_hack(pkt_line: str, regex_rules: _RegexRuleT) -> str:
+        """Apply regex rules to a packet line.
+
+        :param pkt_line: The packet line to process.
+        :type pkt_line: str
+        :param regex_rules: The rules to apply.
+        :type regex_rules: _RegexRuleT
+        :return: The modified packet line.
+        :rtype: str
+        """
         if not regex_rules:
             return pkt_line
 
@@ -756,6 +967,12 @@ class FileTransport(_ReadTransport, _FileTransportAbstractor):
     """Receive packets from a read-only source such as packet log or a dict."""
 
     def __init__(self, *args: Any, disable_sending: bool = True, **kwargs: Any) -> None:
+        """Initialize the file transport.
+
+        :param disable_sending: Must be True for FileTransport.
+        :type disable_sending: bool
+        :raises exc.TransportSourceInvalid: If disable_sending is False.
+        """
         super().__init__(*args, **kwargs)
 
         if bool(disable_sending) is False:
@@ -768,6 +985,7 @@ class FileTransport(_ReadTransport, _FileTransportAbstractor):
         self._make_connection(None)
 
     async def _start_reader(self) -> None:  # TODO
+        """Start the reader task."""
         self._reading = True
         try:
             await self._reader()
@@ -825,7 +1043,11 @@ class FileTransport(_ReadTransport, _FileTransportAbstractor):
             )
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:
-        """Close the transport (cancel any outstanding tasks)."""
+        """Close the transport (cancel any outstanding tasks).
+
+        :param exc: The exception causing closure.
+        :type exc: exc.RamsesException | None, optional
+        """
 
         super()._close(exc)
 
@@ -845,6 +1067,7 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
     _recv_buffer: bytes = b""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the port transport."""
         super().__init__(*args, **kwargs)
 
         self._leaker_sem = asyncio.BoundedSemaphore()
@@ -975,6 +1198,11 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
         """Transmit a frame via the underlying handler (e.g. serial port, MQTT).
 
         Protocols call Transport.write_frame(), not Transport.write().
+
+        :param frame: The frame to transmit.
+        :type frame: str
+        :param disable_tx_limits: Whether to disable duty cycle limits, defaults to False.
+        :type disable_tx_limits: bool, optional
         """
 
         await self._leaker_sem.acquire()  # MIN_INTER_WRITE_GAP
@@ -984,14 +1212,21 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
     # then the code that avoids the controller sync cycles
 
     async def _write_frame(self, frame: str) -> None:
-        """Write some data bytes to the underlying transport."""
+        """Write some data bytes to the underlying transport.
+
+        :param frame: The frame to write.
+        :type frame: str
+        """
 
         data = bytes(frame, "ascii") + b"\r\n"
 
+        log_msg = f"Serial transport transmitting frame: {frame}"
         if _DBG_FORCE_FRAME_LOGGING:
-            _LOGGER.warning("Tx:     %s", data)
-        elif _LOGGER.getEffectiveLevel() == logging.INFO:  # log for INFO not DEBUG
-            _LOGGER.info("Tx:     %s", data)
+            _LOGGER.warning(log_msg)
+        elif _LOGGER.getEffectiveLevel() > logging.DEBUG:
+            _LOGGER.info(log_msg)
+        else:
+            _LOGGER.debug(log_msg)
 
         try:
             self._write(data)
@@ -1000,9 +1235,19 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
             return
 
     def _write(self, data: bytes) -> None:
+        """Perform the actual write to the serial port.
+
+        :param data: The bytes to write.
+        :type data: bytes
+        """
         self.serial.write(data)
 
     def _abort(self, exc: ExceptionT) -> None:  # type: ignore[override]  # used by serial_asyncio.SerialTransport
+        """Abort the transport.
+
+        :param exc: The exception causing the abort.
+        :type exc: ExceptionT
+        """
         super()._abort(exc)  # type: ignore[arg-type]
 
         if self._init_task:
@@ -1011,7 +1256,11 @@ class PortTransport(_RegHackMixin, _FullTransport, _PortTransportAbstractor):  #
             self._leaker_task.cancel()
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:  # type: ignore[override]
-        """Close the transport (cancel any outstanding tasks)."""
+        """Close the transport (cancel any outstanding tasks).
+
+        :param exc: The exception causing closure.
+        :type exc: exc.RamsesException | None, optional
+        """
 
         super()._close(exc)
 
@@ -1138,6 +1387,19 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         reason_code: Any,
         properties: Any | None,
     ) -> None:
+        """Handle MQTT connection success.
+
+        :param client: The MQTT client.
+        :type client: mqtt.Client
+        :param userdata: User data.
+        :type userdata: Any
+        :param flags: Connection flags.
+        :type flags: dict[str, Any]
+        :param reason_code: Connection reason code.
+        :type reason_code: Any
+        :param properties: Connection properties.
+        :type properties: Any | None
+        """
         # _LOGGER.error("Mqtt._on_connect(%s, %s, %s, %s)", client, userdata, flags, reason_code.getName())
 
         self._connecting = False
@@ -1190,6 +1452,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         client: mqtt.Client,
         userdata: Any,
     ) -> None:
+        """Handle MQTT connection failure.
+
+        :param client: The MQTT client.
+        :type client: mqtt.Client
+        :param userdata: User data.
+        :type userdata: Any
+        """
         _LOGGER.error("MQTT connection failed")
 
         self._connecting = False
@@ -1205,6 +1474,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         *args: Any,
         **kwargs: Any,
     ) -> None:
+        """Handle MQTT disconnection.
+
+        :param client: The MQTT client.
+        :type client: mqtt.Client
+        :param userdata: User data.
+        :type userdata: Any
+        """
         # Handle different paho-mqtt callback signatures
         reason_code = args[0] if len(args) >= 1 else None
 
@@ -1235,7 +1511,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             self._schedule_reconnect()
 
     def _create_connection(self, msg: mqtt.MQTTMessage) -> None:
-        """Invoke the Protocols's connection_made() callback MQTT is established."""
+        """Invoke the Protocols's connection_made() callback MQTT is established.
+
+        :param msg: The online message triggering the connection.
+        :type msg: mqtt.MQTTMessage
+        """
         # _LOGGER.error("Mqtt._create_connection(%s)", msg)
 
         assert msg.payload == b"online", "Coding error"
@@ -1277,7 +1557,15 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     def _on_message(
         self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage
     ) -> None:
-        """Make a Frame from the MQTT message and process it."""
+        """Make a Frame from the MQTT message and process it.
+
+        :param client: The MQTT client.
+        :type client: mqtt.Client
+        :param userdata: User data.
+        :type userdata: Any
+        :param msg: The received message.
+        :type msg: mqtt.MQTTMessage
+        """
         # _LOGGER.error(
         #     "Mqtt._on_message(%s, %s, %s)",
         #     client,
@@ -1383,6 +1671,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         seconds, except when disable_tx_limits is True (for e.g. user commands).
 
         Protocols call Transport.write_frame(), not Transport.write().
+
+        :param frame: The frame to transmit.
+        :type frame: str
+        :param disable_tx_limits: Whether to disable rate limiting, defaults to False.
+        :type disable_tx_limits: bool, optional
         """
 
         # Check if we're connected before attempting to write
@@ -1416,7 +1709,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         await super().write_frame(frame)
 
     async def _write_frame(self, frame: str) -> None:
-        """Write some data bytes to the underlying transport."""
+        """Write some data bytes to the underlying transport.
+
+        :param frame: The frame to write.
+        :type frame: str
+        """
         # _LOGGER.error("Mqtt._write_frame(%s)", frame)
 
         data = json.dumps({"msg": frame})
@@ -1435,6 +1732,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             return
 
     def _publish(self, payload: str) -> None:
+        """Publish the payload to the MQTT broker.
+
+        :param payload: The data payload to publish.
+        :type payload: str
+        """
         # _LOGGER.error("Mqtt._publish(%s)", message)
 
         if not self._connected:
@@ -1456,7 +1758,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
                     self._schedule_reconnect()
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:
-        """Close the transport (disconnect from the broker and stop its poller)."""
+        """Close the transport (disconnect from the broker and stop its poller).
+
+        :param exc: The exception causing closure.
+        :type exc: exc.RamsesException | None, optional
+        """
         # _LOGGER.error("Mqtt._close(%s)", exc)
 
         super()._close(exc)
@@ -1478,8 +1784,115 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             _LOGGER.debug(f"Error during MQTT cleanup: {err}")
 
 
+class CallbackTransport(_FullTransport, _CallbackTransportAbstractor):
+    """A virtual transport that delegates I/O to external callbacks (Inversion of Control).
+
+    This transport allows ramses_rf to be used with external connection managers
+    (like Home Assistant's MQTT integration) without direct dependencies.
+    """
+
+    def __init__(
+        self,
+        protocol: RamsesProtocolT,
+        io_writer: Callable[[str], Awaitable[None]],
+        disable_sending: bool = False,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the callback transport.
+
+        :param protocol: The protocol instance.
+        :type protocol: RamsesProtocolT
+        :param io_writer: Async callable to handle outbound frames.
+        :type io_writer: Callable[[str], Awaitable[None]]
+        :param disable_sending: Whether to disable sending, defaults to False.
+        :type disable_sending: bool, optional
+        """
+        # Pass kwargs up the chain. _ReadTransport will extract 'loop' if present.
+        # _BaseTransport will pass 'loop' to _CallbackTransportAbstractor, which consumes it.
+        super().__init__(disable_sending=disable_sending, **kwargs)
+
+        self._protocol = protocol
+        self._io_writer = io_writer
+
+        # Section 3.1: "Initial State: Default to a PAUSED state"
+        self._reading = False
+
+        # Section 6.1: Object Lifecycle Logging
+        _LOGGER.info(f"CallbackTransport created with io_writer={io_writer}")
+
+        # NOTE: connection_made is NOT called here. It must be triggered
+        # externally (e.g. by the Bridge) via the protocol methods once
+        # the external connection is ready.
+
+    async def write_frame(self, frame: str, disable_tx_limits: bool = False) -> None:
+        """Process a frame for transmission by passing it to the external writer.
+
+        :param frame: The frame to write.
+        :type frame: str
+        :param disable_tx_limits: Unused for this transport, kept for API compatibility.
+        :type disable_tx_limits: bool, optional
+        :raises exc.TransportError: If sending is disabled or the writer fails.
+        """
+        if self._disable_sending:
+            raise exc.TransportError("Sending has been disabled")
+
+        # Section 6.1: Boundary Logging (Outgoing)
+        _LOGGER.debug(f"Sending frame via external writer: {frame}")
+
+        try:
+            await self._io_writer(frame)
+        except Exception as err:
+            _LOGGER.error(f"External writer failed to send frame: {err}")
+            raise exc.TransportError(f"External writer failed: {err}") from err
+
+    async def _write_frame(self, frame: str) -> None:
+        """Wait for the frame to be written by the external writer.
+
+        :param frame: The frame to write.
+        :type frame: str
+        """
+        # Wrapper to satisfy abstract base class, though logic is in write_frame
+        await self.write_frame(frame)
+
+    def receive_frame(self, frame: str, dtm: str | None = None) -> None:
+        """Ingest a frame from the external source (Read Path).
+
+        This is the public method called by the Bridge to inject data.
+
+        :param frame: The raw frame string to receive.
+        :type frame: str
+        :param dtm: The timestamp of the frame, defaults to current time.
+        :type dtm: str | None, optional
+        """
+        _LOGGER.debug(
+            f"Received frame from external source: frame='{frame}', timestamp={dtm}"
+        )
+
+        # Section 4.2: Circuit Breaker implementation (Packet gating)
+        if not self._reading:
+            _LOGGER.debug(f"Dropping received frame (transport paused): {repr(frame)}")
+            return
+
+        dtm = dtm or dt_now().isoformat()
+
+        # Section 6.1: Boundary Logging (Incoming)
+        _LOGGER.debug(
+            f"Ingesting frame into transport: frame='{frame}', timestamp={dtm}"
+        )
+
+        # Pass to the standard processing pipeline
+        self._frame_read(dtm, frame.rstrip())
+
+
 def validate_topic_path(path: str) -> str:
-    """Test the topic path."""
+    """Test the topic path and normalize it.
+
+    :param path: The candidate topic path.
+    :type path: str
+    :return: The valid, normalized path.
+    :rtype: str
+    :raises ValueError: If the path format is invalid.
+    """
 
     # The user can supply the following paths:
     # - ""
@@ -1504,7 +1917,9 @@ def validate_topic_path(path: str) -> str:
     return new_path
 
 
-RamsesTransportT: TypeAlias = FileTransport | MqttTransport | PortTransport
+RamsesTransportT: TypeAlias = (
+    FileTransport | MqttTransport | PortTransport | CallbackTransport
+)
 
 
 async def transport_factory(
@@ -1515,13 +1930,48 @@ async def transport_factory(
     port_config: PortConfigT | None = None,
     packet_log: str | None = None,
     packet_dict: dict[str, str] | None = None,
-    disable_sending: bool | None = False,
+    transport_constructor: Callable[..., Awaitable[RamsesTransportT]] | None = None,
+    disable_sending: bool = False,
     extra: dict[str, Any] | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     log_all: bool = False,
     **kwargs: Any,  # HACK: odd/misc params
 ) -> RamsesTransportT:
-    """Create and return a Ramses-specific async packet Transport."""
+    """Create and return a Ramses-specific async packet Transport.
+
+    :param protocol: The protocol instance that will use this transport.
+    :type protocol: RamsesProtocolT
+    :param port_name: Serial port name or MQTT URL, defaults to None.
+    :type port_name: SerPortNameT | None, optional
+    :param port_config: Configuration dictionary for serial port, defaults to None.
+    :type port_config: PortConfigT | None, optional
+    :param packet_log: Path to a file containing packet logs for playback, defaults to None.
+    :type packet_log: str | None, optional
+    :param packet_dict: Dictionary of packets for playback, defaults to None.
+    :type packet_dict: dict[str, str] | None, optional
+    :param transport_constructor: Custom async callable to create a transport, defaults to None.
+    :type transport_constructor: Callable[..., Awaitable[RamsesTransportT]] | None, optional
+    :param disable_sending: If True, the transport will not transmit packets, defaults to False.
+    :type disable_sending: bool | None, optional
+    :param extra: Extra configuration options, defaults to None.
+    :type extra: dict[str, Any] | None, optional
+    :param loop: Asyncio event loop, defaults to None.
+    :type loop: asyncio.AbstractEventLoop | None, optional
+    :param log_all: If True, log all MQTT messages including non-protocol ones, defaults to False.
+    :type log_all: bool, optional
+    :param kwargs: Additional keyword arguments for specific transports.
+    :type kwargs: Any
+    :return: An instantiated RamsesTransportT object.
+    :rtype: RamsesTransportT
+    :raises exc.TransportSourceInvalid: If the packet source is invalid or multiple sources are specified.
+    """
+
+    # If a constructor is provided, delegate entirely to it.
+    if transport_constructor:
+        _LOGGER.debug("transport_factory: Delegating to external transport_constructor")
+        return await transport_constructor(
+            protocol, disable_sending=disable_sending, extra=extra, **kwargs
+        )
 
     # kwargs are specific to a transport. The above transports have:
     # evofw3_flag, use_regex
@@ -1532,6 +1982,14 @@ async def transport_factory(
         """Return a Serial instance for the given port name and config.
 
         May: raise TransportSourceInvalid("Unable to open serial port...")
+
+        :param ser_name: Name of the serial port.
+        :type ser_name: SerPortNameT
+        :param ser_config: Configuration for the serial port.
+        :type ser_config: PortConfigT | None
+        :return: Configured Serial object.
+        :rtype: Serial
+        :raises exc.TransportSourceInvalid: If the serial port cannot be opened.
         """
         # For example:
         # - python client.py monitor 'rfc2217://localhost:5001'

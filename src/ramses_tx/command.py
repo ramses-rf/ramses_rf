@@ -1866,7 +1866,7 @@ class Command(Frame):
             The actual number of available zones depends on the controller configuration.
             Requesting a non-existent zone will typically result in no response.
         """
-        return cls.from_attrs(W_, ctl_id, Code._2309, _check_idx(zone_idx))
+        return cls.from_attrs(RQ, ctl_id, Code._2309, _check_idx(zone_idx))
 
     @classmethod  # constructor for W|2309
     def set_zone_setpoint(

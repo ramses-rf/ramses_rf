@@ -294,7 +294,7 @@ def sch_global_traits_dict_factory(
     )
     SCH_TRAITS_HEAT = SCH_TRAITS_HEAT.extend(
         heat_traits,
-        extra=vol.PREVENT_EXTRA if heat_traits else vol.REMOVE_EXTRA,
+        extra=vol.PREVENT_EXTRA,  # Always prevent extra keys
     )
 
     # NOTE: voluptuous doesn't like StrEnums, hence str(s)
@@ -314,7 +314,7 @@ def sch_global_traits_dict_factory(
     )
     SCH_TRAITS_HVAC = SCH_TRAITS_HVAC.extend(
         hvac_traits,
-        extra=vol.PREVENT_EXTRA if hvac_traits else vol.REMOVE_EXTRA,
+        extra=vol.PREVENT_EXTRA,  # Always prevent extra keys
     )
 
     SCH_TRAITS = vol.Any(

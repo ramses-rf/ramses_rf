@@ -251,12 +251,21 @@ class _BaseProtocol(asyncio.Protocol):
 
         # FIX: Patch command with actual HGI ID if it uses the default placeholder
         # NOTE: HGI80s (TI 3410) require the default ID (18:000730), or they will silent-fail
+
         if (
-            self._active_hgi
+            self.hgi_id
             and self._is_evofw3  # Only patch if using evofw3 (not HGI80)
             and cmd._addrs[0].id == HGI_DEV_ADDR.id
-            and self._active_hgi != HGI_DEV_ADDR.id
+            and self.hgi_id != HGI_DEV_ADDR.id
         ):
+            # The command uses the default 18:000730, but we know the real ID.
+            # Reconstruct the command string with the correct address.
+
+            _LOGGER.debug(
+                f"Patching command with active HGI ID: swapped {HGI_DEV_ADDR.id} -> {self.hgi_id} for {cmd._hdr}"
+            )
+
+            # Get current addresses as strings
             # The command uses the default 18:000730, but we know the real ID.
             # Reconstruct the command string with the correct address.
 
@@ -265,7 +274,7 @@ class _BaseProtocol(asyncio.Protocol):
 
             # ONLY patch the Source Address (Index 0).
             # Leave Dest (Index 1/2) alone to avoid breaking tests that expect 18:000730 there.
-            new_addrs[0] = self._active_hgi
+            new_addrs[0] = self.hgi_id
 
             new_frame = f"{cmd.verb} {cmd.seqn} {new_addrs[0]} {new_addrs[1]} {new_addrs[2]} {cmd.code} {int(cmd.len_):03d} {cmd.payload}"
             cmd = Command(new_frame)
@@ -349,6 +358,7 @@ class _BaseProtocol(asyncio.Protocol):
         """
 
         if self._msg_handler:  # type: ignore[truthy-function]
+            _LOGGER.debug(f"Dispatching valid message to handler: {msg}")
             self._loop.call_soon_threadsafe(self._msg_handler, msg)
         for callback in self._msg_handlers:
             # TODO: if handler's filter returns True:
@@ -389,9 +399,10 @@ class _DeviceIdFilterMixin(_BaseProtocol):
     def hgi_id(self) -> DeviceIdT:
         if not self._transport:
             return self._known_hgi or HGI_DEV_ADDR.id
-        return self._transport.get_extra_info(  # type: ignore[no-any-return]
-            SZ_ACTIVE_HGI, self._known_hgi or HGI_DEV_ADDR.id
-        )
+        # CRITICAL FIX: get_extra_info returns None if key exists but val is None
+        # We must ensure we fallback to the known HGI or default if it returns None
+        hgi = self._transport.get_extra_info(SZ_ACTIVE_HGI)
+        return hgi or self._known_hgi or HGI_DEV_ADDR.id
 
     @staticmethod
     def _extract_known_hgi_id(
@@ -434,7 +445,10 @@ class _DeviceIdFilterMixin(_BaseProtocol):
 
         known_hgi = (explicit_hgis if explicit_hgis else implicit_hgis)[0]
 
-        if include_list[known_hgi].get(SZ_CLASS) != DevType.HGI:
+        if include_list[known_hgi].get(SZ_CLASS) not in (
+            DevType.HGI,
+            DEV_TYPE_MAP[DevType.HGI],
+        ):
             logger(
                 f"The {SZ_KNOWN_LIST} SHOULD include exactly one gateway (HGI): "
                 f"{known_hgi} should specify 'class: HGI', as 18: is also used for HVAC"
@@ -866,7 +880,7 @@ async def create_stack(
     )
 
     transport: RamsesTransportT = await (transport_factory_ or transport_factory)(  # type: ignore[operator]
-        protocol, disable_sending=disable_sending, **kwargs
+        protocol, disable_sending=bool(disable_sending), **kwargs
     )
 
     if not kwargs.get(SZ_PORT_NAME):

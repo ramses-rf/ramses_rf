@@ -237,6 +237,7 @@ SCH_GLOBAL_SCHEMAS_DICT = {  # System schemas - can be 0-many Heat/HVAC schemas
     vol.Optional(SCH_DEVICE_ID_ANY): SCH_VCS,  # must be after SCH_DEVICE_ID_CTL
     vol.Optional(SZ_ORPHANS_HEAT): vol.All([SCH_DEVICE_ID_ANY], vol.Unique()),
     vol.Optional(SZ_ORPHANS_HVAC): vol.All([SCH_DEVICE_ID_ANY], vol.Unique()),
+    vol.Optional("transport_constructor"): vol.Any(callable, None),
 }
 SCH_GLOBAL_SCHEMAS = vol.Schema(SCH_GLOBAL_SCHEMAS_DICT, extra=vol.PREVENT_EXTRA)
 
