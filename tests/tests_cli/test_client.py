@@ -34,7 +34,9 @@ CMD = "RQ 01:123456 1F09 00"
 
 
 @pytest.fixture
-def mock_gateway() -> Generator[MagicMock, None, None]:
+def mock_gateway(
+    event_loop: asyncio.AbstractEventLoop,
+) -> Generator[MagicMock, None, None]:
     """Create a mock Gateway instance for testing."""
     gateway = MagicMock(spec=Gateway)
     # Fix: Explicitly assign a MagicMock to __str__ and tell mypy to ignore the method assignment
@@ -50,8 +52,10 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
 
     # Fix: Explicitly mock the private protocol attribute
     gateway._protocol = MagicMock()
-    # Fix: Use a Future for _wait_connection_lost since it is awaited directly
-    future: asyncio.Future[None] = asyncio.Future()  # Added type annotation
+
+    # Fix: Use the provided event_loop to create the future.
+    # This avoids "DeprecationWarning: There is no current event loop".
+    future = event_loop.create_future()
     future.set_result(None)
     gateway._protocol._wait_connection_lost = future
 
