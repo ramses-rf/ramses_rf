@@ -138,7 +138,7 @@ def split_kwargs(
 class DeviceIdParamType(click.ParamType):
     name = "device_id"
 
-    def convert(self, value: str, param: Any, ctx: Any) -> str:
+    def convert(self, value: str, param: Any, ctx: click.Context | None) -> str:
         if is_valid_dev_id(value):
             return value.upper()
         self.fail(f"{value!r} is not a valid device_id", param, ctx)
@@ -194,7 +194,7 @@ class DeviceIdParamType(click.ParamType):
 )
 @click.pass_context
 def cli(
-    ctx: Any,
+    ctx: click.Context,
     /,
     config_file: SupportsRead[str | bytes] | None = None,
     eavesdrop: None | bool = None,
