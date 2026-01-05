@@ -116,8 +116,7 @@ def normalise_config(
 
 
 def split_kwargs(
-    obj: tuple[dict[str, Any], dict[str, str | dict[str, str | None] | None]],
-    kwargs: dict[str, str],
+    obj: tuple[dict[str, Any], dict[str, Any]], kwargs: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Split kwargs into cli/library kwargs."""
     cli_kwargs, lib_kwargs = obj

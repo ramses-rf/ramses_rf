@@ -132,7 +132,6 @@
     "tests"
   ]
   exclude = [
-    "src/ramses_cli/client.py",
     "src/ramses_cli/utils",
     "tests/deprecated",
     "tests/wip",
@@ -209,6 +208,11 @@
 
 
 #
+
+[[tool.mypy.overrides]]
+  module = "debugpy.*"
+  ignore_missing_imports = true
+
 [[tool.mypy.overrides]]
   module = "ramses_tx.parsers"
 
