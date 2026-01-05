@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli client.py class."""
 
+import asyncio
 import io
 import json
 from collections.abc import Generator
@@ -49,7 +50,10 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
 
     # Fix: Explicitly mock the private protocol attribute
     gateway._protocol = MagicMock()
-    gateway._protocol._wait_connection_lost = AsyncMock()
+    # Fix: Use a Future for _wait_connection_lost since it is awaited directly
+    future = asyncio.Future()
+    future.set_result(None)
+    gateway._protocol._wait_connection_lost = future
 
     # Add required attributes
     gateway.config = MagicMock()
