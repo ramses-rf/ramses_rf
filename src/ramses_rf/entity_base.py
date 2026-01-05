@@ -1048,7 +1048,9 @@ class _Discovery(_MessageDB):
                                 f"No msg found for hdr {hdr}, task code {task[_SZ_COMMAND].code}"
                             )
                     else:  # TODO(eb) remove next Q1 2026
-                        msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
+                        # CRITICAL FIX: self.tcs might be None during early discovery
+                        if self.tcs:
+                            msgs += [self.tcs._msgz[task[_SZ_COMMAND].code][I_][True]]
                         # raise NotImplementedError
             except KeyError:
                 pass
