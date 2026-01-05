@@ -90,12 +90,12 @@ async def rf_factory(
 
     for idx, schema in enumerate(schemas):
         if schema is None:  # assume no gateway device
-            rf._create_port(idx)
+            # rf._create_port(idx)  # REMOVED: Redundant and causes race condition
             continue
 
         hgi_id, fw_type = _get_hgi_id_for_schema(schema, idx)
 
-        rf._create_port(idx)
+        # rf._create_port(idx)  # REMOVED: Redundant and causes race condition
         rf.set_gateway(rf.ports[idx], hgi_id, fw_type=HgiFwTypes.__members__[fw_type])
 
         with patch("ramses_tx.transport.comports", rf.comports):
