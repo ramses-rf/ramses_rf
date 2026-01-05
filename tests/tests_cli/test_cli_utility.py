@@ -7,7 +7,7 @@ from collections.abc import Collection
 
 import pytest
 
-sys.path.append("../tests")  # HACK: to access client.py
+sys.path.append("../tests_cli")  # HACK: to access client.py
 
 try:
     import colorama  # noqa: F401
