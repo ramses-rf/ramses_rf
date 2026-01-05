@@ -36,6 +36,9 @@ CMD = "RQ 01:123456 1F09 00"
 def mock_gateway() -> Generator[MagicMock, None, None]:
     """Create a mock Gateway instance for testing."""
     gateway = MagicMock(spec=Gateway)
+    # Fix: Explicitly assign a MagicMock to __str__ and tell mypy to ignore the method assignment
+    gateway.__str__ = MagicMock(return_value="Gateway")  # type: ignore[method-assign]
+
     gateway.send_cmd = AsyncMock()
     gateway.dispatcher = MagicMock()
     gateway.dispatcher.send = MagicMock()
@@ -43,6 +46,10 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     gateway.stop = AsyncMock()
     gateway.get_state = MagicMock(return_value=({}, {}))
     gateway._restore_cached_packets = AsyncMock()
+
+    # Fix: Explicitly mock the private protocol attribute
+    gateway._protocol = MagicMock()
+    gateway._protocol._wait_connection_lost = AsyncMock()
 
     # Add required attributes
     gateway.config = MagicMock()
@@ -174,9 +181,9 @@ def test_print_summary(
     captured = capsys.readouterr()
     output = captured.out
 
-    assert "Schema[global]" in output
-    assert "Params[global]" in output
-    assert "Status[global]" in output
+    assert "Schema[Gateway]" in output
+    assert "Params[Gateway]" in output
+    assert "Status[Gateway]" in output
     assert "allow_list (hints)" in output
     assert '"mock": "traits"' in output
 
@@ -197,9 +204,6 @@ async def test_async_main_parse(mock_gateway: MagicMock) -> None:
         patch("ramses_cli.client.Gateway", return_value=mock_gateway),
         patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
     ):
-        # Patch protocol wait to avoid hanging
-        mock_gateway._protocol._wait_connection_lost = AsyncMock()
-
         await async_main(PARSE, lib_kwargs, **kwargs)
 
         mock_gateway.start.assert_awaited_once()
@@ -229,9 +233,13 @@ async def test_async_main_execute(mock_gateway: MagicMock) -> None:
         # CLI functions like print_results expect these
     }
 
+    # Fix: Define a real awaitable to return, not an AsyncMock object
+    async def mock_task() -> None:
+        pass
+
     with (
         patch("ramses_cli.client.Gateway", return_value=mock_gateway),
-        patch("ramses_cli.client.spawn_scripts", return_value=[AsyncMock()]),
+        patch("ramses_cli.client.spawn_scripts", return_value=[mock_task()]),
         patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
     ):
         await async_main(EXECUTE, lib_kwargs, **kwargs)
@@ -269,9 +277,6 @@ async def test_async_main_restore_schema(mock_gateway: MagicMock) -> None:
         ),
         patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
     ):
-        # Patch wait_connection_lost
-        mock_gateway._protocol._wait_connection_lost = AsyncMock()
-
         await async_main(LISTEN, lib_kwargs, **kwargs)
 
         # Verify gateway initialized (implicit in logic)
