@@ -51,7 +51,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     # Fix: Explicitly mock the private protocol attribute
     gateway._protocol = MagicMock()
     # Fix: Use a Future for _wait_connection_lost since it is awaited directly
-    future = asyncio.Future()
+    future: asyncio.Future[None] = asyncio.Future()  # Added type annotation
     future.set_result(None)
     gateway._protocol._wait_connection_lost = future
 
