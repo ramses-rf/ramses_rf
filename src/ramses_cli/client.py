@@ -126,11 +126,7 @@ def split_kwargs(
         {k: v for k, v in kwargs.items() if k not in LIB_KEYS + LIB_CFG_KEYS}
     )
     lib_kwargs.update({k: v for k, v in kwargs.items() if k in LIB_KEYS})
-    if lib_kwargs[SZ_CONFIG]:
-        assert isinstance(lib_kwargs[SZ_CONFIG], dict)
-        lib_kwargs[SZ_CONFIG].update(
-            {k: v for k, v in kwargs.items() if k in LIB_CFG_KEYS}
-        )
+    lib_kwargs[SZ_CONFIG].update({k: v for k, v in kwargs.items() if k in LIB_CFG_KEYS})
 
     return cli_kwargs, lib_kwargs
 
