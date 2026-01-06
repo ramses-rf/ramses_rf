@@ -12,7 +12,7 @@ _DBG_FORCE_CLI_DEBUGGING: Final[bool] = (
 )
 
 
-if _DBG_FORCE_CLI_DEBUGGING:
+if _DBG_FORCE_CLI_DEBUGGING:  # pragma: no cover
     from .debug import start_debugging
 
     start_debugging(True)
