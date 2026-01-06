@@ -19,6 +19,7 @@ from ramses_cli.discovery import (
     get_schedule,
     script_bind_req,
     script_bind_wait,
+    script_decorator,
     script_poll_device,
     script_scan_disc,
     script_scan_fan,
@@ -176,24 +177,21 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
 
-    # We use a side_effect to consume the coroutine immediately.
-    # This proves the decorator tried to schedule a task, and it cleans up the task
-    # to prevent RuntimeWarnings.
-    async def consume_coro(coro: Any) -> MagicMock:
-        await coro
-        return MagicMock()
+    # We define a dummy script to decorate, so we test the decorator logic itself
+    # rather than patching create_task inside it (which was incorrect)
+    mock_body = AsyncMock()
 
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.side_effect = consume_coro
+    @script_decorator
+    async def dummy_script(gwy: Gateway, dev_id: str) -> None:
+        await mock_body(gwy, dev_id)
 
-        # Run the real decorated script
-        script_scan_disc(mock_gateway, DEV_ID)
+    # Execute the decorated script
+    await dummy_script(mock_gateway, DEV_ID)
 
-        # Verify decorator called create_task
-        mock_create_task.assert_called()
-
-    # Check for puzzle commands (Script begins/done) + actual script logic
-    assert mock_gateway.send_cmd.call_count >= 2
+    # Verify: Puzzle Start -> Body -> Puzzle End
+    # We expect 2 sync send_cmd calls (puzzles) and the body to be awaited
+    assert mock_gateway.send_cmd.call_count == 2
+    mock_body.assert_awaited_once_with(mock_gateway, DEV_ID)
 
 
 @pytest.mark.asyncio
@@ -201,13 +199,7 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
     # Patch range to only loop once to avoid massive execution time
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-        # EXECUTE FULL BODY via __wrapped__ to ensure coverage
-        if hasattr(script_scan_full, "__wrapped__"):
-            await script_scan_full.__wrapped__(mock_gateway, DEV_ID)
-        else:
-            # Fallback if not wrapped (should not happen with standard decorators)
-            script_scan_full(mock_gateway, DEV_ID)
-            await asyncio.sleep(0)
+        await script_scan_full(mock_gateway, DEV_ID)
 
     assert mock_gateway.send_cmd.called
 
@@ -217,11 +209,7 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Patch range to limit execution
     with patch("ramses_cli.discovery.range", return_value=iter([0x4FFF])):
-        if hasattr(script_scan_hard, "__wrapped__"):
-            await script_scan_hard.__wrapped__(mock_gateway, DEV_ID)
-        else:
-            script_scan_hard(mock_gateway, DEV_ID)
-            await asyncio.sleep(0)
+        await script_scan_hard(mock_gateway, DEV_ID)
 
     assert mock_gateway.send_cmd.called or mock_gateway.async_send_cmd.called
 
@@ -229,12 +217,7 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
-    if hasattr(script_scan_fan, "__wrapped__"):
-        await script_scan_fan.__wrapped__(mock_gateway, DEV_ID)
-    else:
-        script_scan_fan(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
-
+    await script_scan_fan(mock_gateway, DEV_ID)
     assert mock_gateway.send_cmd.called
 
 
@@ -243,18 +226,10 @@ async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # Use patched range for the hard scan too if it loops
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-
-        async def run_fully(func: Callable[..., Any]) -> None:
-            if hasattr(func, "__wrapped__"):
-                await func.__wrapped__(mock_gateway, DEV_ID)
-            else:
-                func(mock_gateway, DEV_ID)
-                await asyncio.sleep(0)
-
-        await run_fully(script_scan_otb)
-        await run_fully(script_scan_otb_map)
-        await run_fully(script_scan_otb_ramses)
-        await run_fully(script_scan_otb_hard)
+        await script_scan_otb(mock_gateway, DEV_ID)
+        await script_scan_otb_map(mock_gateway, DEV_ID)
+        await script_scan_otb_ramses(mock_gateway, DEV_ID)
+        await script_scan_otb_hard(mock_gateway, DEV_ID)
 
     assert mock_gateway.send_cmd.call_count > 5
 

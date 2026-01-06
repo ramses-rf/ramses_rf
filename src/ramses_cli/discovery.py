@@ -17,10 +17,6 @@ from ramses_rf.device import Fakeable
 from ramses_tx import CODES_SCHEMA, Command, DeviceIdT, Priority
 from ramses_tx.opentherm import OTB_DATA_IDS
 
-# Beware, none of this is reliable - it is all subject to random change
-# However, these serve as examples how to use the other modules
-
-
 from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
     RP,
@@ -44,30 +40,25 @@ SCAN_FULL: Final = "scan_full"
 SCAN_HARD: Final = "scan_hard"
 SCAN_XXXX: Final = "scan_xxxx"
 
-# DEVICE_ID_REGEX = re.compile(DEVICE_ID_REGEX.ANY)
-
-
 _LOGGER = logging.getLogger(__name__)
 
 
 def script_decorator(fnc: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(fnc)
-    def wrapper(gwy: Gateway, *args: Any, **kwargs: Any) -> None:
+    async def wrapper(gwy: Gateway, *args: Any, **kwargs: Any) -> None:
         gwy.send_cmd(
             Command._puzzle(message="Script begins:"),
             priority=Priority.HIGHEST,
             num_repeats=3,
         )
 
-        fnc(gwy, *args, **kwargs)
+        await fnc(gwy, *args, **kwargs)
 
         gwy.send_cmd(
             Command._puzzle(message="Script done."),
             priority=Priority.LOWEST,
             num_repeats=3,
         )
-
-        return None
 
     return wrapper
 
@@ -93,7 +84,12 @@ def spawn_scripts(gwy: Gateway, **kwargs: Any) -> list[asyncio.Task[None]]:
             _LOGGER.warning(f"Script: {kwargs[EXEC_SCR][0]}() - unknown script")
         else:
             _LOGGER.info(f"Script: {kwargs[EXEC_SCR][0]}().- starts...")
-            tasks += [asyncio.create_task(script(gwy, kwargs[EXEC_SCR][1]))]
+            # script_poll_device returns a list of tasks, others return a coroutine
+            result = script(gwy, kwargs[EXEC_SCR][1])
+            if isinstance(result, list):
+                tasks.extend(result)
+            else:
+                tasks.append(asyncio.create_task(result))
 
     gwy._tasks.extend(tasks)
     return tasks
@@ -102,14 +98,6 @@ def spawn_scripts(gwy: Gateway, **kwargs: Any) -> list[asyncio.Task[None]]:
 async def exec_cmd(gwy: Gateway, **kwargs: Any) -> None:
     cmd = Command.from_cli(kwargs[EXEC_CMD])
     await gwy.async_send_cmd(cmd, priority=Priority.HIGH, wait_for_reply=True)
-
-
-# @script_decorator
-# async def script_scan_001(gwy: Gateway, dev_id: DeviceIdT):
-#     _LOGGER.warning("scan_001() invoked - expect a lot of nonsense")
-#     for idx in range(0x10):
-#         gwy.send_cmd(Command.from_attrs(W_, dev_id, Code._000E, f"{idx:02X}0050"))
-#         gwy.send_cmd(Command.from_attrs(RQ, dev_id, Code._000E, f"{idx:02X}00C8"))
 
 
 async def get_faults(
@@ -199,7 +187,7 @@ def script_poll_device(gwy: Gateway, dev_id: DeviceIdT) -> list[asyncio.Task[Non
 async def script_scan_disc(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("scan_disc() invoked...")
 
-    await gwy.get_device(dev_id).discover()  # discover_flag=Discover.DEFAULT)
+    await gwy.get_device(dev_id).discover()
 
 
 @script_decorator
@@ -340,9 +328,7 @@ async def script_scan_otb_hard(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
 
 @script_decorator
-async def script_scan_otb_map(
-    gwy: Gateway, dev_id: DeviceIdT
-) -> None:  # Tested only upon a R8820A
+async def script_scan_otb_map(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_map invoked - expect a lot of nonsense")
 
     RAMSES_TO_OPENTHERM = {
@@ -364,9 +350,7 @@ async def script_scan_otb_map(
 
 
 @script_decorator
-async def script_scan_otb_ramses(
-    gwy: Gateway, dev_id: DeviceIdT
-) -> None:  # Tested only upon a R8820A
+async def script_scan_otb_ramses(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_ramses invoked - expect a lot of nonsense")
 
     _CODES = (
@@ -394,7 +378,7 @@ async def script_scan_otb_ramses(
         Code._3223,
         Code._3EF0,  # rel. modulation level  / RelativeModulationLevel (also, below)
         Code._3EF1,  # rel. modulation level  / RelativeModulationLevel
-    )  # excl. 3150, 3220
+    )
 
     for c in _CODES:
         gwy.send_cmd(Command.from_attrs(RQ, dev_id, c, "00"), priority=Priority.LOW)
