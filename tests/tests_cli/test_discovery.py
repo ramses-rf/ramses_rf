@@ -2,6 +2,8 @@
 """Unittests for the ramses_cli discovery.py module."""
 
 import asyncio
+from collections.abc import Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -227,8 +229,8 @@ async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # Use patched range for the hard scan too if it loops
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-        # Helper to run wrapped or fallback
-        async def run_fully(func):
+
+        async def run_fully(func: Callable[..., Any]) -> None:
             if hasattr(func, "__wrapped__"):
                 await func.__wrapped__(mock_gateway, DEV_ID)
             else:
