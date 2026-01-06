@@ -114,23 +114,24 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    # We patch create_task to intercept the call validation.
+    # We patch create_task to intercept the call.
+    # We use side_effect to await the coroutine immediately, effectively consuming it.
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.return_value = MagicMock()
+
+        async def consume_coro(coro: Any) -> MagicMock:
+            await coro
+            return MagicMock()
+
+        mock_create_task.side_effect = consume_coro
 
         script_name = "scan_disc"
         kwargs = {EXEC_SCR: (script_name, DEV_ID)}
 
         tasks = spawn_scripts(mock_gateway, **kwargs)
 
+        # Verify create_task was called (dispatch success)
         mock_create_task.assert_called()
         assert len(tasks) == 1
-
-        # Cleanup: Await the coroutine if it exists
-        if mock_create_task.call_count > 0:
-            coro = mock_create_task.call_args[0][0]
-            if coro:
-                await coro
 
 
 @pytest.mark.asyncio
@@ -179,16 +180,21 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
-    # Capture the internal coroutine that create_task would schedule
+    # We patch create_task here as well to prevent the real one from spawning
+    # a task that might outlive the test. We await it immediately.
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
 
-        async def run_coro(coro: Any) -> MagicMock:
+        async def consume_coro(coro: Any) -> MagicMock:
             await coro
             return MagicMock()
 
-        mock_create_task.side_effect = run_coro
+        mock_create_task.side_effect = consume_coro
 
+        # Calling the decorated function will trigger the decorator's logic
         script_scan_disc(mock_gateway, DEV_ID)
+
+        # Verify decorator called create_task
+        mock_create_task.assert_called()
 
     # Check for puzzle commands (Script begins/done) + actual script logic
     assert mock_gateway.send_cmd.call_count >= 2
