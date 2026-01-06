@@ -212,13 +212,13 @@ def test_split_kwargs() -> None:
     kwargs = {
         "debug_mode": 1,
         SZ_SERIAL_PORT: "/dev/ttyUSB0",
-        "some_lib_config": True,  # Pretend this is in LIB_CFG_KEYS for test if possible, or just check generic behavior
+        "some_lib_config": True,
     }
 
     # We need to rely on the actual constants imported in client.py
     # SZ_SERIAL_PORT is in LIB_KEYS.
 
-    obj = ({}, {SZ_CONFIG: {}})
+    obj: tuple[dict[str, Any], dict[str, Any]] = ({}, {SZ_CONFIG: {}})
     cli_args, lib_args = split_kwargs(obj, kwargs)
 
     # Serial port should move to lib_args
@@ -266,7 +266,7 @@ def test_print_results(
     """Test print_results with faults and schedules."""
 
     # Test Faults
-    kwargs = {
+    kwargs: dict[str, Any] = {
         "get_faults": "01:123456",
         "get_schedule": [None, None],
         "set_schedule": [None, None],
@@ -443,7 +443,7 @@ async def test_async_main_msg_handler(
     # We need to capture the callback passed to add_msg_handler
     captured_callback = None
 
-    def capture_cb(cb):
+    def capture_cb(cb: Any) -> None:
         nonlocal captured_callback
         captured_callback = cb
 
@@ -463,7 +463,8 @@ async def test_async_main_msg_handler(
         msg = MagicMock(spec=Message)
         msg.dtm = datetime.now()
         msg.code = Code._PUZZ
-        msg.__repr__ = lambda x: "PUZZLE_MSG"
+        # Mypy dislikes assigning to method slots on mocks without ignore
+        msg.__repr__ = MagicMock(return_value="PUZZLE_MSG")  # type: ignore[method-assign, assignment]
         captured_callback(msg)
         out = capsys.readouterr().out
         assert "PUZZLE_MSG" in out
@@ -471,7 +472,7 @@ async def test_async_main_msg_handler(
         # 2. 1F09 (I) message
         msg.code = Code._1F09
         msg.verb = I_
-        msg.__repr__ = lambda x: "1F09_MSG"
+        msg.__repr__ = MagicMock(return_value="1F09_MSG")  # type: ignore[method-assign, assignment]
         captured_callback(msg)
         out = capsys.readouterr().out
         assert "1F09_MSG" in out
