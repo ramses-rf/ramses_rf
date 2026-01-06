@@ -177,7 +177,7 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
-    script_scan_full(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_full(mock_gateway, DEV_ID)
     # scan_full sends a LOT of commands. Just verify it sent something.
     assert mock_gateway.send_cmd.called
 
@@ -186,7 +186,7 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
 async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Limit the range to run quickly: pass start_code close to the end
-    script_scan_hard(mock_gateway, DEV_ID, start_code=0x4FFF)  # type: ignore[arg-type]
+    script_scan_hard(mock_gateway, DEV_ID, start_code=0x4FFF)
 
     # This might use async_send_cmd internally if awaited?
     # If the script is fire-and-forget, it might just schedule tasks.
@@ -199,7 +199,7 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
-    script_scan_fan(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_fan(mock_gateway, DEV_ID)
     assert mock_gateway.send_cmd.called
 
 
@@ -207,11 +207,11 @@ async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
 async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # Run them all to hit lines. Do NOT await them (None return).
-    script_scan_otb(mock_gateway, DEV_ID)  # type: ignore[arg-type]
-    script_scan_otb_map(mock_gateway, DEV_ID)  # type: ignore[arg-type]
-    script_scan_otb_ramses(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_otb(mock_gateway, DEV_ID)
+    script_scan_otb_map(mock_gateway, DEV_ID)
+    script_scan_otb_ramses(mock_gateway, DEV_ID)
 
-    script_scan_otb_hard(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_otb_hard(mock_gateway, DEV_ID)
 
     assert mock_gateway.send_cmd.call_count > 10
 
@@ -227,9 +227,6 @@ async def test_script_binding(mock_gateway: MagicMock) -> None:
         # Simpler: Patch the whole import in discovery.py so checking isinstance(dev, Fakeable)
         # where dev is a MagicMock and Fakeable is MagicMock returns True? No.
         # Simplest: Modify the mock_dev to have the right __class__ or spec, but patching is cleaner.
-
-        # Let's try side_effect on isinstance? No, hard to patch builtins.
-        # Let's use the `spec` argument in the fixture? No, Fakeable isn't imported there.
 
         # Strategy: Mock the class in the module, and make the device mock an instance of it.
         MockFakeable = MagicMock()
