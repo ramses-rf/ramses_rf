@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
-import asyncio
-from collections.abc import Callable
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -192,6 +189,14 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     # We expect 2 sync send_cmd calls (puzzles) and the body to be awaited
     assert mock_gateway.send_cmd.call_count == 2
     mock_body.assert_awaited_once_with(mock_gateway, DEV_ID)
+
+
+@pytest.mark.asyncio
+async def test_script_scan_disc(mock_gateway: MagicMock) -> None:
+    """Test script_scan_disc."""
+    await script_scan_disc(mock_gateway, DEV_ID)
+    mock_dev = mock_gateway.get_device(DEV_ID)
+    mock_dev.discover.assert_awaited_once()
 
 
 @pytest.mark.asyncio
