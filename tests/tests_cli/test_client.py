@@ -560,3 +560,84 @@ async def test__save_state(mock_gateway: MagicMock) -> None:
         filenames = [c[0][0] for c in calls]
         assert "state_msgs.log" in filenames
         assert "state_schema.json" in filenames
+
+
+def test_cli_debug_mode(mock_gateway: MagicMock) -> None:
+    """Test that the debug flag triggers the debugger."""
+    with patch("ramses_cli.client.start_debugging") as mock_debug:
+        runner = CliRunner()
+        # invoke cli with -z (debug) count 1
+        runner.invoke(cli, ["-z", "parse", "/dev/null"])
+        mock_debug.assert_called_once_with(True)
+
+
+def test_cli_config_file(mock_gateway: MagicMock) -> None:
+    """Test loading a configuration file via the CLI."""
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        # Create a dummy config file
+        with open("test_config.json", "w") as f:
+            json.dump({"config": {"disable_discovery": True}}, f)
+
+        # Run CLI with -c pointing to the file
+        result = runner.invoke(cli, ["-c", "test_config.json", "parse", "/dev/null"])
+
+        assert result.exit_code == 0
+        # Verify the config was actually merged (by checking the internal call)
+        # Note: We rely on normalise_config patching in async_main tests usually,
+        # but here we just want to ensure it runs without error.
+
+
+def test_execute_flags(mock_gateway: MagicMock) -> None:
+    """Test that execute flags (like --get-faults) enforce the known_list."""
+    runner = CliRunner()
+
+    # Running execute with a specific device target should force-enable the known_list
+    result = runner.invoke(cli, ["execute", "/dev/null", "--get-faults", "01:123456"])
+
+    assert result.exit_code == 0
+    # This specific string is printed when execute logic enforces the list
+    assert "known list is force-configured" in result.output
+
+
+@pytest.mark.asyncio
+async def test_async_main_long_format(
+    mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Test the long_format output branch in handle_msg."""
+    lib_kwargs = {SZ_CONFIG: {"reduce_processing": 0}, SZ_PACKET_LOG: {}}
+    kwargs = {
+        "long_format": True,  # ENABLE LONG FORMAT
+        "restore_schema": None,
+        "restore_state": None,
+        "print_state": 0,
+    }
+
+    # Capture the callback
+    captured_callback = None
+
+    def capture_cb(cb: Any) -> None:
+        nonlocal captured_callback
+        captured_callback = cb
+
+    mock_gateway.add_msg_handler.side_effect = capture_cb
+
+    with (
+        patch("ramses_cli.client.Gateway", return_value=mock_gateway),
+        patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
+    ):
+        await async_main(PARSE, lib_kwargs, **kwargs)
+
+        # Trigger callback
+        msg = MagicMock(spec=Message)
+        msg.dtm = datetime.now()
+        msg.__repr__ = MagicMock(return_value="LONG_MSG")
+        msg.payload = "PAYLOAD"
+
+        captured_callback(msg)
+
+        out = capsys.readouterr().out
+        # Verify long format output (timestamp ... repr # payload)
+        assert "LONG_MSG" in out
+        assert "..." in out
+        assert "# PAYLOAD" in out

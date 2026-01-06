@@ -678,7 +678,7 @@ cli.add_command(execute)
 cli.add_command(listen)
 
 
-def main() -> None:
+def main() -> None:  # pragma: no cover
     """Entry point for the CLI.
 
     Parses arguments, sets up the event loop (including Windows-specific policies),
@@ -718,5 +718,5 @@ def main() -> None:
     print(" - finished ramses_rf.\r\n")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
