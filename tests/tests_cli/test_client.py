@@ -4,7 +4,7 @@
 import asyncio
 import io
 import json
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
@@ -43,7 +43,7 @@ CMD = "RQ 01:123456 1F09 00"
 
 
 @pytest.fixture
-def mock_gateway() -> Generator[MagicMock, None, None]:
+async def mock_gateway() -> AsyncGenerator[MagicMock, None]:
     """Create a mock Gateway instance for testing."""
     gateway = MagicMock(spec=Gateway)
     # Fix: Explicitly assign a MagicMock to __str__ and tell mypy to ignore the method assignment
@@ -62,11 +62,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     gateway._protocol = MagicMock()
 
     # Fix: Create a future attached to the running loop.
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    loop = asyncio.get_running_loop()
 
     future: asyncio.Future[None] = loop.create_future()
     future.set_result(None)
