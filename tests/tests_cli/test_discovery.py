@@ -136,7 +136,7 @@ async def test_execution_of_exec_cmd(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_execution_of_get_faults(mock_gateway: MagicMock) -> None:
     """Test execution of get_faults logic."""
-    await get_faults(mock_gateway, DEV_ID)
+    await get_faults(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_dev.tcs.get_faultlog.assert_awaited_once()
@@ -145,7 +145,7 @@ async def test_execution_of_get_faults(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_execution_of_get_schedule(mock_gateway: MagicMock) -> None:
     """Test execution of get_schedule logic."""
-    await get_schedule(mock_gateway, DEV_ID, "01")
+    await get_schedule(mock_gateway, DEV_ID, "01")  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_zone = mock_dev.tcs.get_htg_zone("01")
@@ -156,7 +156,7 @@ async def test_execution_of_get_schedule(mock_gateway: MagicMock) -> None:
 async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
     """Test execution of set_schedule logic."""
     sched_json = f'{{"{SZ_ZONE_IDX}": "01", "{SZ_SCHEDULE}": []}}'
-    await set_schedule(mock_gateway, DEV_ID, sched_json)
+    await set_schedule(mock_gateway, DEV_ID, sched_json)  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_zone = mock_dev.tcs.get_htg_zone("01")
@@ -233,11 +233,11 @@ async def test_script_binding(mock_gateway: MagicMock) -> None:
         mock_gateway.get_device.return_value.__class__ = MockFakeable
 
         with patch("ramses_cli.discovery.Fakeable", MockFakeable):
-            await script_bind_req(mock_gateway, DEV_ID)
+            await script_bind_req(mock_gateway, DEV_ID)  # type: ignore[arg-type]
             mock_dev = mock_gateway.get_device(DEV_ID)
             mock_dev._initiate_binding_process.assert_awaited()
 
-            await script_bind_wait(mock_gateway, DEV_ID)
+            await script_bind_wait(mock_gateway, DEV_ID)  # type: ignore[arg-type]
             mock_dev._wait_for_binding_request.assert_awaited()
 
 
@@ -245,7 +245,7 @@ async def test_script_binding(mock_gateway: MagicMock) -> None:
 async def test_script_poll_device(mock_gateway: MagicMock) -> None:
     """Test script_poll_device task creation."""
     # Must be async test to provide loop for create_task
-    tasks = script_poll_device(mock_gateway, DEV_ID)
+    tasks = script_poll_device(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     assert len(tasks) == 2  # One for each code (0016, 1FC9)
     assert len(mock_gateway._tasks) == 2
