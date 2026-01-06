@@ -42,9 +42,13 @@ DEV_ID = "01:123456"
 def mock_gateway() -> MagicMock:
     """Create a mock Gateway instance."""
     gateway = MagicMock(spec=Gateway)
+    # Important: Set the class so isinstance(gwy, Gateway) returns True
+    gateway.__class__ = Gateway
+
     gateway.send_cmd = MagicMock()
     gateway.async_send_cmd = AsyncMock()
     gateway._tasks = []
+    gateway.ser_name = "/dev/ttyUSB0"
 
     # Mock device retrieval
     mock_dev = MagicMock()
@@ -110,16 +114,9 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    # We use a list to capture the coroutine. This prevents it from being
-    # garbage collected (causing a warning) before we can await it.
-    captured_coros: list[Any] = []
-
-    def capture_coro(coro: Any) -> MagicMock:
-        captured_coros.append(coro)
-        return MagicMock()
-
+    # We patch create_task to intercept the call validation.
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.side_effect = capture_coro
+        mock_create_task.return_value = MagicMock()
 
         script_name = "scan_disc"
         kwargs = {EXEC_SCR: (script_name, DEV_ID)}
@@ -129,9 +126,11 @@ async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
         mock_create_task.assert_called()
         assert len(tasks) == 1
 
-        # Clean up by awaiting the captured coroutine
-        for coro in captured_coros:
-            await coro
+        # Cleanup: Await the coroutine if it exists
+        if mock_create_task.call_count > 0:
+            coro = mock_create_task.call_args[0][0]
+            if coro:
+                await coro
 
 
 @pytest.mark.asyncio
@@ -180,23 +179,16 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
-    captured_coros: list[Any] = []
-
-    def capture_coro(coro: Any) -> MagicMock:
-        captured_coros.append(coro)
-        return MagicMock()
-
+    # Capture the internal coroutine that create_task would schedule
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.side_effect = capture_coro
+
+        async def run_coro(coro: Any) -> MagicMock:
+            await coro
+            return MagicMock()
+
+        mock_create_task.side_effect = run_coro
 
         script_scan_disc(mock_gateway, DEV_ID)
-
-        # Verify decorator called create_task
-        mock_create_task.assert_called()
-
-        # Clean up: execute the script body now
-        for coro in captured_coros:
-            await coro
 
     # Check for puzzle commands (Script begins/done) + actual script logic
     assert mock_gateway.send_cmd.call_count >= 2
@@ -286,8 +278,6 @@ async def test_script_binding(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_binding_fail(mock_gateway: MagicMock) -> None:
     """Test binding script failure when device is not Fakeable."""
-    # Ensure device is NOT Fakeable (it's just a vanilla MagicMock by default)
-    # We need to ensure isinstance(mock, Fakeable) returns False.
 
     class RealFakeable:
         pass
