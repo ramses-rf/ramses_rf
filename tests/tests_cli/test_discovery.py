@@ -43,7 +43,7 @@ def mock_gateway() -> MagicMock:
     """Create a mock Gateway instance."""
     gateway = MagicMock(spec=Gateway)
     # Important: Set the class so isinstance(gwy, Gateway) returns True
-    gateway.__class__ = Gateway
+    gateway.__class__ = Gateway  # type: ignore[assignment]
 
     gateway.send_cmd = MagicMock()
     gateway.async_send_cmd = AsyncMock()
