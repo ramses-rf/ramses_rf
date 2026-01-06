@@ -114,22 +114,17 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    # We patch create_task to intercept the call.
-    # We use side_effect to await the coroutine immediately, effectively consuming it.
+    # We patch create_task to ensure spawn_scripts attempts to schedule.
+    # We do NOT await the argument because the script decorator might return None
+    # or a Task, which would confuse the await logic. We just verify dispatch.
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-
-        async def consume_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = consume_coro
+        mock_create_task.return_value = MagicMock()
 
         script_name = "scan_disc"
         kwargs = {EXEC_SCR: (script_name, DEV_ID)}
 
         tasks = spawn_scripts(mock_gateway, **kwargs)
 
-        # Verify create_task was called (dispatch success)
         mock_create_task.assert_called()
         assert len(tasks) == 1
 
@@ -180,21 +175,10 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
-    # We patch create_task here as well to prevent the real one from spawning
-    # a task that might outlive the test. We await it immediately.
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-
-        async def consume_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = consume_coro
-
-        # Calling the decorated function will trigger the decorator's logic
-        script_scan_disc(mock_gateway, DEV_ID)
-
-        # Verify decorator called create_task
-        mock_create_task.assert_called()
+    # We do NOT patch create_task here. We let the real logic run.
+    # The decorator spawns a task. We use sleep(0) to let it start.
+    script_scan_disc(mock_gateway, DEV_ID)
+    await asyncio.sleep(0)
 
     # Check for puzzle commands (Script begins/done) + actual script logic
     assert mock_gateway.send_cmd.call_count >= 2
@@ -205,11 +189,10 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
     # Patch range to only loop once to avoid massive execution time
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-        # EXECUTE FULL BODY via __wrapped__
+        # Use __wrapped__ to test the logic synchronously and ensure coverage
         if hasattr(script_scan_full, "__wrapped__"):
             await script_scan_full.__wrapped__(mock_gateway, DEV_ID)
         else:
-            # Fallback if not wrapped (should not happen with standard decorators)
             script_scan_full(mock_gateway, DEV_ID)
             await asyncio.sleep(0)
 
