@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -112,6 +113,11 @@ async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
 
         mock_create_task.assert_called()
         assert len(tasks) == 1
+
+        # Cleanup: Await the coroutine that was passed to create_task
+        # to suppress "coroutine was never awaited" warning.
+        coro = mock_create_task.call_args[0][0]
+        await coro
 
 
 @pytest.mark.asyncio
@@ -247,16 +253,15 @@ async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
         patch("ramses_cli.discovery.range", return_value=iter([1])),
     ):
 
-        async def run_coro(coro: Any) -> MagicMock:
+        async def run_script(script_fnc: Callable[..., Any]) -> None:
+            script_fnc(mock_gateway, DEV_ID)
+            coro = mock_create_task.call_args[0][0]
             await coro
-            return MagicMock()
 
-        mock_create_task.side_effect = run_coro
-
-        script_scan_otb(mock_gateway, DEV_ID)
-        script_scan_otb_map(mock_gateway, DEV_ID)
-        script_scan_otb_ramses(mock_gateway, DEV_ID)
-        script_scan_otb_hard(mock_gateway, DEV_ID)
+        await run_script(script_scan_otb)
+        await run_script(script_scan_otb_map)
+        await run_script(script_scan_otb_ramses)
+        await run_script(script_scan_otb_hard)
 
     assert mock_gateway.send_cmd.call_count > 5
 
