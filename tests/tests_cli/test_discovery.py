@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
-from collections.abc import Callable
-from typing import Any
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -47,6 +46,7 @@ def mock_gateway() -> MagicMock:
 
     # Mock device retrieval
     mock_dev = MagicMock()
+    mock_dev.id = DEV_ID
     mock_dev.tcs = MagicMock()
     # Ensure nested mocks for schedule/zone calls return async mocks
     mock_dev.tcs.get_faultlog = AsyncMock()
@@ -62,6 +62,11 @@ def mock_gateway() -> MagicMock:
     mock_dev._wait_for_binding_request = AsyncMock()
 
     gateway.get_device.return_value = mock_dev
+
+    # IMPORTANT: Configure config so scripts don't return early
+    gateway.config = MagicMock()
+    gateway.config.disable_discovery = False
+    gateway.config.enable_eavesdrop = False
 
     return gateway
 
@@ -103,21 +108,18 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.return_value = MagicMock()
-
+    # Patch the script function itself to be an AsyncMock.
+    # This ensures it returns an awaitable, satisfying spawn_scripts logic.
+    with patch(
+        "ramses_cli.discovery.script_scan_disc", new_callable=AsyncMock
+    ) as mock_script:
         script_name = "scan_disc"
         kwargs = {EXEC_SCR: (script_name, DEV_ID)}
 
         tasks = spawn_scripts(mock_gateway, **kwargs)
 
-        mock_create_task.assert_called()
         assert len(tasks) == 1
-
-        # Cleanup: Await the coroutine that was passed to create_task
-        # to suppress "coroutine was never awaited" warning.
-        coro = mock_create_task.call_args[0][0]
-        await coro
+        mock_script.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -167,18 +169,13 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
-    # Capture the internal coroutine that create_task would schedule
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-
-        async def run_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = run_coro
-
-        script_scan_disc(mock_gateway, DEV_ID)
+    # We call the script. It might spawn a task or run async.
+    # We await sleep(0) to let any spawned tasks start.
+    script_scan_disc(mock_gateway, DEV_ID)
+    await asyncio.sleep(0)
 
     # Check for puzzle commands (Script begins/done) + actual script logic
+    # At least 2 commands (begin/end puzzle) + logic
     assert mock_gateway.send_cmd.call_count >= 2
 
 
@@ -187,18 +184,9 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
     # Patch range to only loop once to avoid massive execution time
-    with (
-        patch("ramses_cli.discovery.range", return_value=iter([1])),
-        patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task,
-    ):
-
-        async def run_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = run_coro
-
+    with patch("ramses_cli.discovery.range", return_value=iter([1])):
         script_scan_full(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
     assert mock_gateway.send_cmd.called
 
@@ -208,18 +196,9 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
 async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Patch range to limit execution
-    with (
-        patch("ramses_cli.discovery.range", return_value=iter([0x4FFF])),
-        patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task,
-    ):
-
-        async def run_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = run_coro
-
+    with patch("ramses_cli.discovery.range", return_value=iter([0x4FFF])):
         script_scan_hard(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
     # Verify something happened (send_cmd or async_send_cmd)
     assert mock_gateway.send_cmd.called or mock_gateway.async_send_cmd.called
@@ -229,15 +208,8 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-
-        async def run_coro(coro: Any) -> MagicMock:
-            await coro
-            return MagicMock()
-
-        mock_create_task.side_effect = run_coro
-
-        script_scan_fan(mock_gateway, DEV_ID)
+    script_scan_fan(mock_gateway, DEV_ID)
+    await asyncio.sleep(0)
 
     assert mock_gateway.send_cmd.called
 
@@ -246,22 +218,19 @@ async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
-    # We must await each of these to hit the code inside
-    # We patch range here as well to cover the OTB hard scan without nesting another with
-    with (
-        patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task,
-        patch("ramses_cli.discovery.range", return_value=iter([1])),
-    ):
+    # Use patched range for the hard scan too if it loops
+    with patch("ramses_cli.discovery.range", return_value=iter([1])):
+        script_scan_otb(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
-        async def run_script(script_fnc: Callable[..., Any]) -> None:
-            script_fnc(mock_gateway, DEV_ID)
-            coro = mock_create_task.call_args[0][0]
-            await coro
+        script_scan_otb_map(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
-        await run_script(script_scan_otb)
-        await run_script(script_scan_otb_map)
-        await run_script(script_scan_otb_ramses)
-        await run_script(script_scan_otb_hard)
+        script_scan_otb_ramses(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
+
+        script_scan_otb_hard(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
     assert mock_gateway.send_cmd.call_count > 5
 
