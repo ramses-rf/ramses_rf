@@ -185,7 +185,7 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
-    script_scan_full(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_full(mock_gateway, DEV_ID)
     # scan_full sends a LOT of commands. Just verify it sent something.
     assert mock_gateway.send_cmd.called
 
