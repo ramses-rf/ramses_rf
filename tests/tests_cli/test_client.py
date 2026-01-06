@@ -153,8 +153,6 @@ def test_monitor_no_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["monitor", "nullmodem", "--no-discover"])
     assert result.exit_code == 0
-    # When explicit flag is passed, client.py does not print status, so we assert
-    # it is NOT enabled.
     assert "discovery is enabled" not in result.output
 
 
@@ -461,23 +459,27 @@ async def test_async_main_msg_handler(
 
         # Now test the callback with different message types
         # 1. Puzzle message
-        msg = MagicMock(spec=Message)
-        msg.dtm = datetime.now()
-        msg.code = Code._PUZZ
+        msg1 = MagicMock(spec=Message)
+        msg1.dtm = datetime.now()
+        msg1.code = Code._PUZZ
         # Mypy dislikes assigning to method slots on mocks without ignore
-        msg.__repr__ = MagicMock(return_value="PUZZLE_MSG")  # type: ignore[method-assign]
-        captured_callback(msg)
+        msg1.__repr__ = MagicMock(return_value="PUZZLE_MSG")  # type: ignore[method-assign]
+        captured_callback(msg1)
         out = capsys.readouterr().out
         assert "PUZZLE_MSG" in out
 
         # 2. 1F09 (I) message
-        msg.code = Code._1F09
-        msg.verb = I_
+        # Use a fresh mock object to avoid state pollution
+        msg2 = MagicMock(spec=Message)
+        msg2.dtm = datetime.now()
+        msg2.code = Code._1F09
+        msg2.verb = I_
         # Fix: Ensure src attribute exists for HGI check in handle_msg
-        msg.src = MagicMock()
-        msg.src.type = "01"  # Controller type, definitely not HGI
-        msg.__repr__ = MagicMock(return_value="1F09_MSG")  # type: ignore[method-assign]
-        captured_callback(msg)
+        msg2.src = MagicMock()
+        msg2.src.type = "01"  # Controller type, definitely not HGI
+        msg2.__repr__ = MagicMock(return_value="1F09_MSG")  # type: ignore[method-assign]
+
+        captured_callback(msg2)
         out = capsys.readouterr().out
         assert "1F09_MSG" in out
 
