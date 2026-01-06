@@ -483,11 +483,49 @@ async def test_async_main_msg_handler(
         out = capsys.readouterr().out
         assert "1F09_MSG" in out
 
-        # 3. Long format
-        kwargs["long_format"] = True
-        # We need to re-run or just manually check logic if we could, but kwargs is captured by closure.
-        # Since we can't change the closure kwargs easily without restarting,
-        # let's assume the previous logic works and leave long_format for a separate test run or just accept this coverage.
+
+@pytest.mark.asyncio
+async def test_async_main_long_format(
+    mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Test the long_format output branch in handle_msg."""
+    lib_kwargs = {SZ_CONFIG: {"reduce_processing": 0}, SZ_PACKET_LOG: {}}
+    kwargs = {
+        "long_format": True,  # ENABLE LONG FORMAT
+        "restore_schema": None,
+        "restore_state": None,
+        "print_state": 0,
+    }
+
+    # Capture the callback
+    captured_callback: Any = None
+
+    def capture_cb(cb: Any) -> None:
+        nonlocal captured_callback
+        captured_callback = cb
+
+    mock_gateway.add_msg_handler.side_effect = capture_cb
+
+    with (
+        patch("ramses_cli.client.Gateway", return_value=mock_gateway),
+        patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
+    ):
+        await async_main(PARSE, lib_kwargs, **kwargs)
+
+        # Trigger callback
+        msg = MagicMock(spec=Message)
+        msg.dtm = datetime.now()
+        msg.__repr__ = MagicMock(return_value="LONG_MSG")  # type: ignore[method-assign]
+        msg.payload = "PAYLOAD"
+
+        assert captured_callback is not None
+        captured_callback(msg)
+
+        out = capsys.readouterr().out
+        # Verify long format output (timestamp ... repr # payload)
+        assert "LONG_MSG" in out
+        assert "..." in out
+        assert "# PAYLOAD" in out
 
 
 @pytest.mark.asyncio
@@ -539,29 +577,6 @@ def test_convert() -> None:
         param_type.convert("invalid", None, None)
 
 
-@pytest.mark.asyncio
-async def test__save_state(mock_gateway: MagicMock) -> None:
-    """Test _save_state writes schema and packets to files."""
-    # NOTE: Converted to async to ensure event_loop exists for mock_gateway fixture
-    # Setup mock gateway state
-    mock_gateway.get_state.return_value = (
-        {"schema_key": "schema_data"},
-        {"2023-01-01T00:00:00": "pkt_line"},
-    )
-
-    with patch("builtins.open", new_callable=mock_open) as mock_file:
-        _save_state(mock_gateway)
-
-        # Verify open was called twice (once for log, once for json)
-        assert mock_file.call_count == 2
-
-        # Check that expected files were opened
-        calls = mock_file.call_args_list
-        filenames = [c[0][0] for c in calls]
-        assert "state_msgs.log" in filenames
-        assert "state_schema.json" in filenames
-
-
 def test_cli_debug_mode(mock_gateway: MagicMock) -> None:
     """Test that the debug flag triggers the debugger."""
     with patch("ramses_cli.client.start_debugging") as mock_debug:
@@ -601,43 +616,23 @@ def test_execute_flags(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_async_main_long_format(
-    mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """Test the long_format output branch in handle_msg."""
-    lib_kwargs = {SZ_CONFIG: {"reduce_processing": 0}, SZ_PACKET_LOG: {}}
-    kwargs = {
-        "long_format": True,  # ENABLE LONG FORMAT
-        "restore_schema": None,
-        "restore_state": None,
-        "print_state": 0,
-    }
+async def test__save_state(mock_gateway: MagicMock) -> None:
+    """Test _save_state writes schema and packets to files."""
+    # NOTE: Converted to async to ensure event_loop exists for mock_gateway fixture
+    # Setup mock gateway state
+    mock_gateway.get_state.return_value = (
+        {"schema_key": "schema_data"},
+        {"2023-01-01T00:00:00": "pkt_line"},
+    )
 
-    # Capture the callback
-    captured_callback = None
+    with patch("builtins.open", new_callable=mock_open) as mock_file:
+        _save_state(mock_gateway)
 
-    def capture_cb(cb: Any) -> None:
-        nonlocal captured_callback
-        captured_callback = cb
+        # Verify open was called twice (once for log, once for json)
+        assert mock_file.call_count == 2
 
-    mock_gateway.add_msg_handler.side_effect = capture_cb
-
-    with (
-        patch("ramses_cli.client.Gateway", return_value=mock_gateway),
-        patch("ramses_cli.client.normalise_config", return_value=(None, lib_kwargs)),
-    ):
-        await async_main(PARSE, lib_kwargs, **kwargs)
-
-        # Trigger callback
-        msg = MagicMock(spec=Message)
-        msg.dtm = datetime.now()
-        msg.__repr__ = MagicMock(return_value="LONG_MSG")
-        msg.payload = "PAYLOAD"
-
-        captured_callback(msg)
-
-        out = capsys.readouterr().out
-        # Verify long format output (timestamp ... repr # payload)
-        assert "LONG_MSG" in out
-        assert "..." in out
-        assert "# PAYLOAD" in out
+        # Check that expected files were opened
+        calls = mock_file.call_args_list
+        filenames = [c[0][0] for c in calls]
+        assert "state_msgs.log" in filenames
+        assert "state_schema.json" in filenames
