@@ -174,7 +174,7 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands."""
     # script_scan_disc is decorated. It returns None (fire-and-forget), so no await.
-    script_scan_disc(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    script_scan_disc(mock_gateway, DEV_ID)
 
     # Check for puzzle commands (Script begins/done)
     # The decorator runs synchronously to schedule tasks or send cmds
