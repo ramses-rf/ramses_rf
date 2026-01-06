@@ -108,18 +108,15 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    # We patch create_task to intercept the call.
-    # The script function might return None (due to decoration), so we simply
-    # verify that spawn_scripts *tried* to schedule it.
+    # We patch create_task to intercept the call validation.
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.return_value = MagicMock()  # Return a dummy task
+        mock_create_task.return_value = MagicMock()
 
         script_name = "scan_disc"
         kwargs = {EXEC_SCR: (script_name, DEV_ID)}
 
         tasks = spawn_scripts(mock_gateway, **kwargs)
 
-        # Verify create_task was called (dispatch success)
         mock_create_task.assert_called()
         assert len(tasks) == 1
 
@@ -168,71 +165,80 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
-    """Test that script decorator sends start/end commands and executes body."""
-    # We call the script. It might spawn a task or run async.
-    # We await sleep(0) to let any spawned tasks start.
+    """Test that script decorator logic works, then run inner body."""
+    # 1. Test the Wrapper: Call normal function to ensure it doesn't crash
+    # and (implicitly) triggers the fire-and-forget logic.
     script_scan_disc(mock_gateway, DEV_ID)
+    # We yield once to let the task start (if checking immediate side effects)
     await asyncio.sleep(0)
 
-    # Check for puzzle commands (Script begins/done) + actual script logic
-    # At least 2 commands (begin/end puzzle) + logic
+    # 2. Test the Body (Coverage): Unwrap and await the logic fully
+    if hasattr(script_scan_disc, "__wrapped__"):
+        await script_scan_disc.__wrapped__(mock_gateway, DEV_ID)
+
     assert mock_gateway.send_cmd.call_count >= 2
 
 
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
     # Patch range to only loop once to avoid massive execution time
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-        script_scan_full(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
+        # EXECUTE FULL BODY via __wrapped__
+        if hasattr(script_scan_full, "__wrapped__"):
+            await script_scan_full.__wrapped__(mock_gateway, DEV_ID)
+        else:
+            # Fallback if not wrapped (should not happen with standard decorators)
+            script_scan_full(mock_gateway, DEV_ID)
+            await asyncio.sleep(0)
 
     assert mock_gateway.send_cmd.called
 
 
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Patch range to limit execution
     with patch("ramses_cli.discovery.range", return_value=iter([0x4FFF])):
-        script_scan_hard(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
+        if hasattr(script_scan_hard, "__wrapped__"):
+            await script_scan_hard.__wrapped__(mock_gateway, DEV_ID)
+        else:
+            script_scan_hard(mock_gateway, DEV_ID)
+            await asyncio.sleep(0)
 
-    # Verify something happened (send_cmd or async_send_cmd)
     assert mock_gateway.send_cmd.called or mock_gateway.async_send_cmd.called
 
 
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
-    script_scan_fan(mock_gateway, DEV_ID)
-    await asyncio.sleep(0)
+    if hasattr(script_scan_fan, "__wrapped__"):
+        await script_scan_fan.__wrapped__(mock_gateway, DEV_ID)
+    else:
+        script_scan_fan(mock_gateway, DEV_ID)
+        await asyncio.sleep(0)
 
     assert mock_gateway.send_cmd.called
 
 
 @pytest.mark.asyncio
-@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # Use patched range for the hard scan too if it loops
     with patch("ramses_cli.discovery.range", return_value=iter([1])):
-        script_scan_otb(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
+        # Helper to run wrapped or fallback
+        async def run_fully(func):
+            if hasattr(func, "__wrapped__"):
+                await func.__wrapped__(mock_gateway, DEV_ID)
+            else:
+                func(mock_gateway, DEV_ID)
+                await asyncio.sleep(0)
 
-        script_scan_otb_map(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
-
-        script_scan_otb_ramses(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
-
-        script_scan_otb_hard(mock_gateway, DEV_ID)
-        await asyncio.sleep(0)
+        await run_fully(script_scan_otb)
+        await run_fully(script_scan_otb_map)
+        await run_fully(script_scan_otb_ramses)
+        await run_fully(script_scan_otb_hard)
 
     assert mock_gateway.send_cmd.call_count > 5
 
@@ -258,8 +264,6 @@ async def test_script_binding(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_binding_fail(mock_gateway: MagicMock) -> None:
     """Test binding script failure when device is not Fakeable."""
-    # Ensure device is NOT Fakeable (it's just a vanilla MagicMock by default)
-    # We need to ensure isinstance(mock, Fakeable) returns False.
 
     class RealFakeable:
         pass
