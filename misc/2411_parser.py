@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 # Parameter definitions
 # Add parameters that we know how to parse (or parts of it)
 
-Known_2411_PARAMS = {
+Known_2411_PARAMS: dict[str, Any] = {
     # TODO: add params that were decoded.
     #     "000007": {
     #         "name": "base_vent_enabled",
@@ -461,7 +461,7 @@ def decode_2411_message(raw_message: str, verb: str = "RP") -> dict[str, Any]:
     """
 
     class MockMessage:
-        def __init__(self, verb):
+        def __init__(self, verb: str) -> None:
             self.verb = verb
 
     result = parser_2411(raw_message, MockMessage(verb))
