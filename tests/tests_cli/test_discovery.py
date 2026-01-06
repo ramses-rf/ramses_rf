@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
-import asyncio
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -24,6 +22,7 @@ from ramses_cli.discovery import (
     script_scan_full,
     script_scan_hard,
     script_scan_otb,
+    script_scan_otb_hard,
     script_scan_otb_map,
     script_scan_otb_ramses,
     set_schedule,
@@ -130,7 +129,7 @@ async def test_execution_of_exec_cmd(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_execution_of_get_faults(mock_gateway: MagicMock) -> None:
     """Test execution of get_faults logic."""
-    await get_faults(mock_gateway, DEV_ID)
+    await get_faults(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_dev.tcs.get_faultlog.assert_awaited_once()
@@ -139,7 +138,7 @@ async def test_execution_of_get_faults(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_execution_of_get_schedule(mock_gateway: MagicMock) -> None:
     """Test execution of get_schedule logic."""
-    await get_schedule(mock_gateway, DEV_ID, "01")
+    await get_schedule(mock_gateway, DEV_ID, "01")  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_zone = mock_dev.tcs.get_htg_zone("01")
@@ -150,7 +149,7 @@ async def test_execution_of_get_schedule(mock_gateway: MagicMock) -> None:
 async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
     """Test execution of set_schedule logic."""
     sched_json = f'{{"{SZ_ZONE_IDX}": "01", "{SZ_SCHEDULE}": []}}'
-    await set_schedule(mock_gateway, DEV_ID, sched_json)
+    await set_schedule(mock_gateway, DEV_ID, sched_json)  # type: ignore[arg-type]
 
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_zone = mock_dev.tcs.get_htg_zone("01")
@@ -161,7 +160,7 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands."""
     # script_scan_disc is decorated
-    await script_scan_disc(mock_gateway, DEV_ID)
+    await script_scan_disc(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     # Check for puzzle commands (Script begins/done)
     # This is rough checking, seeing if send_cmd was called at least 2 times for puzzles + 1 for logic
@@ -171,7 +170,7 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
-    await script_scan_full(mock_gateway, DEV_ID)
+    await script_scan_full(mock_gateway, DEV_ID)  # type: ignore[arg-type]
     # scan_full sends a LOT of commands. Just verify it sent something.
     assert mock_gateway.send_cmd.called
 
@@ -180,7 +179,7 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
 async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Limit the range to run quickly: pass start_code close to the end
-    await script_scan_hard(mock_gateway, DEV_ID, start_code=0x4FFF)
+    await script_scan_hard(mock_gateway, DEV_ID, start_code=0x4FFF)  # type: ignore[arg-type]
 
     mock_gateway.async_send_cmd.assert_awaited()
 
@@ -188,7 +187,7 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
-    await script_scan_fan(mock_gateway, DEV_ID)
+    await script_scan_fan(mock_gateway, DEV_ID)  # type: ignore[arg-type]
     assert mock_gateway.send_cmd.called
 
 
@@ -196,13 +195,13 @@ async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
 async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # Run them all to hit lines
-    await script_scan_otb(mock_gateway, DEV_ID)
-    await script_scan_otb_map(mock_gateway, DEV_ID)
-    await script_scan_otb_ramses(mock_gateway, DEV_ID)
+    await script_scan_otb(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    await script_scan_otb_map(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    await script_scan_otb_ramses(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     # scan_otb_hard loops 128 times, might be slightly slower but acceptable for unit tests
     # Mocking send_cmd makes it fast enough (cpu bound only)
-    await script_scan_otb_hard(mock_gateway, DEV_ID)
+    await script_scan_otb_hard(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     assert mock_gateway.send_cmd.call_count > 10
 
@@ -210,18 +209,18 @@ async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_binding(mock_gateway: MagicMock) -> None:
     """Test binding scripts."""
-    await script_bind_req(mock_gateway, DEV_ID)
+    await script_bind_req(mock_gateway, DEV_ID)  # type: ignore[arg-type]
     mock_dev = mock_gateway.get_device(DEV_ID)
     mock_dev._initiate_binding_process.assert_awaited()
 
-    await script_bind_wait(mock_gateway, DEV_ID)
+    await script_bind_wait(mock_gateway, DEV_ID)  # type: ignore[arg-type]
     mock_dev._wait_for_binding_request.assert_awaited()
 
 
 def test_script_poll_device(mock_gateway: MagicMock) -> None:
     """Test script_poll_device task creation."""
     # poll_device returns a list of tasks immediately
-    tasks = script_poll_device(mock_gateway, DEV_ID)
+    tasks = script_poll_device(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
     assert len(tasks) == 2  # One for each code (0016, 1FC9)
     assert len(mock_gateway._tasks) == 2
