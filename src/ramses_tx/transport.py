@@ -772,7 +772,7 @@ class _ReadTransport(_BaseTransport):
         if self._closing is True:  # raise, or warn & return?
             raise exc.TransportError("Transport is closing or has closed")
 
-        # TODO: can we switch to call_soon now QoS has been refactored?
+        # TODO: can we switch to call_soon now that QoS has been refactored?
         # NOTE: No need to use call_soon() here, and they may break Qos/Callbacks
         # NOTE: Thus, excepts need checking
         try:  # below could be a call_soon?
@@ -783,7 +783,7 @@ class _ReadTransport(_BaseTransport):
             _LOGGER.error("%s < exception from msg layer: %s", pkt, err)
 
     async def write_frame(self, frame: str, disable_tx_limits: bool = False) -> None:
-        """ "Transmit a frame via the underlying handler (e.g. serial port, MQTT).
+        """Transmit a frame via the underlying handler (e.g. serial port, MQTT).
 
         :param frame: The frame to write.
         :type frame: str
@@ -811,7 +811,7 @@ class _FullTransport(_ReadTransport):  # asyncio.Transport
         self._transmit_times: deque[dt] = deque(maxlen=_MAX_TRACKED_TRANSMITS)
 
     def _dt_now(self) -> dt:
-        """Return a precise datetime, using the current dtm.
+        """Get a precise datetime, using the current dtm.
 
         :return: Current datetime.
         :rtype: dt

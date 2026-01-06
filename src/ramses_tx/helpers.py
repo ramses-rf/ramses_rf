@@ -149,7 +149,7 @@ def timestamp() -> float:
 
 
 def dt_now() -> dt:
-    """Return the current datetime as a local/naive datetime object.
+    """Get the current datetime as a local/naive datetime object.
 
     This is slower, but potentially more accurate, than dt.now(), and is used mainly for
     packet timestamps.

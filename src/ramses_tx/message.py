@@ -70,22 +70,24 @@ class MessageBase:
         self.verb: VerbT = pkt.verb
         self.seqn: str = (
             pkt.seqn
-        )  # the msg is part of a set for 1 Code, received in order
+        )  # the msg is part of a set for a Code, received in order
         self.code: Code = pkt.code
         self.len: int = pkt._len
 
-        self._payload = self._validate(
-            self._pkt.payload
-        )  # ? may raise InvalidPacketError
+        self._payload = self._validate(self._pkt.payload)  # ? may raise PacketInvalid
 
         self._str: str = None  # type: ignore[assignment]
 
     def __repr__(self) -> str:
-        """Return an unambiguous string representation of this object."""
+        """
+        :return: an unambiguous string representation of this object.
+        """
         return str(self._pkt)  # repr or str?
 
     def __str__(self) -> str:
-        """Return a brief readable string representation of this object."""
+        """
+        :return: a brief readable string representation of this object.
+        """
 
         def ctx(pkt: Packet) -> str:
             ctx = {True: "[..]", False: "", None: "??"}.get(pkt._ctx, pkt._ctx)  # type: ignore[arg-type]
@@ -128,17 +130,22 @@ class MessageBase:
         return self.dtm < other.dtm
 
     def _name(self, addr: Address) -> str:
-        """Return a friendly name for an Address, or a Device."""
+        """
+        :return: a friendly name for an Address, or a Device.
+        """
         return f" {addr.id}"  # can't do 'CTL:123456' instead of ' 01:123456'
 
     @property
     def payload(self):  # type: ignore[no-untyped-def]  # FIXME -> dict | list:
-        """Return the payload."""
+        """
+        :return: the payload.
+        """
         return self._payload
 
     @property
     def _has_payload(self) -> bool:
-        """Return False if there is no payload (may falsely Return True).
+        """
+        :return: False if there is no payload (may falsely return True).
 
         The message (i.e. the raw payload) may still have an idx.
         """
@@ -234,7 +241,7 @@ class MessageBase:
             return {}
 
         # TODO: also 000C (but is a complex idx)
-        # TODO: also 3150 (when not domain, and will be array if so)
+        # TODO: also 3150 (when not domain; will be array in that case)
         if self.code in (Code._000A, Code._2309) and self.src.type == DEV_TYPE_MAP.UFC:
             assert isinstance(self._pkt._idx, str)  # mypy hint
             return {IDX_NAMES[Code._22C9]: self._pkt._idx}
@@ -250,7 +257,7 @@ class MessageBase:
         """Validate a message packet payload, and parse it if valid.
 
         :return: a dict containing key: value pairs, or a list of those created from the payload
-        :raises an InvalidPacketError exception if it is not valid.
+        :raises PacketInvalid exception if it is not valid.
         """
 
         try:  # parse the payload
@@ -292,7 +299,7 @@ class MessageBase:
 
 
 class Message(MessageBase):
-    """Extend the Message class, so is useful to a stateful Gateway.
+    """Extend the Message class, so it is useful to a stateful Gateway.
 
     Adds _expired attr to the Message class.
     """
@@ -318,13 +325,19 @@ class Message(MessageBase):
 
     @property
     def _expired(self) -> bool:
-        """Return True if the message is dated (or False otherwise)."""
+        """
+        :return: True if the message is dated, False otherwise
+        """
         # fraction_expired = (dt_now - self.dtm - _TD_SECONDS_003) / self._pkt._lifespan
         # TODO: keep none >7d, even 10E0, etc.
 
         def fraction_expired(lifespan: td) -> float:
-            """Return the packet's age as fraction of its 'normal' life span."""
-            return (self._gwy._dt_now() - self.dtm - _TD_SECS_003) / lifespan
+            """
+            :return: the packet's age as fraction of its 'normal' life span.
+            """
+            if self._gwy:  # TODO self._gwy is never set !
+                return (self._gwy._dt_now() - self.dtm - _TD_SECS_003) / lifespan
+            return (dt.now() - self.dtm - _TD_SECS_003) / lifespan
 
         # 1. Look for easy win...
         if self._fraction_expired is not None:
