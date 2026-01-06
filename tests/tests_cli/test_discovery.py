@@ -275,10 +275,12 @@ async def test_script_binding_fail(mock_gateway: MagicMock) -> None:
         pass
 
     # Patch Fakeable to be a class that our device definitely IS NOT an instance of
-    with patch("ramses_cli.discovery.Fakeable", RealFakeable):
-        # script_bind_req is a standard async func, so we await it directly
-        with pytest.raises((AssertionError, TypeError)):
-            await script_bind_req(mock_gateway, DEV_ID)  # type: ignore[arg-type]
+    # Merge context manager to satisfy SIM117
+    with (
+        patch("ramses_cli.discovery.Fakeable", RealFakeable),
+        pytest.raises((AssertionError, TypeError)),
+    ):
+        await script_bind_req(mock_gateway, DEV_ID)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
