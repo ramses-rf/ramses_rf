@@ -34,9 +34,7 @@ CMD = "RQ 01:123456 1F09 00"
 
 
 @pytest.fixture
-def mock_gateway(
-    event_loop: asyncio.AbstractEventLoop,
-) -> Generator[MagicMock, None, None]:
+def mock_gateway() -> Generator[MagicMock, None, None]:
     """Create a mock Gateway instance for testing."""
     gateway = MagicMock(spec=Gateway)
     # Fix: Explicitly assign a MagicMock to __str__ and tell mypy to ignore the method assignment
@@ -53,9 +51,16 @@ def mock_gateway(
     # Fix: Explicitly mock the private protocol attribute
     gateway._protocol = MagicMock()
 
-    # Fix: Use the provided event_loop to create the future.
-    # This avoids "DeprecationWarning: There is no current event loop".
-    future = event_loop.create_future()
+    # Fix: Create a future attached to the running loop.
+    # We use get_event_loop() which is safe here because we ensure
+    # all tests using this fixture are async, so a loop is active.
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    future: asyncio.Future[None] = loop.create_future()
     future.set_result(None)
     gateway._protocol._wait_connection_lost = future
 
@@ -171,10 +176,12 @@ def test_normalise_config() -> None:
     assert cfg[SZ_PACKET_LOG]["rotate"] is True
 
 
-def test_print_summary(
+@pytest.mark.asyncio
+async def test_print_summary(
     mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Test the summary printing function with various flags."""
+    # NOTE: Converted to async to ensure event_loop exists for mock_gateway fixture
     kwargs = {
         "show_schema": True,
         "show_params": True,
@@ -303,8 +310,10 @@ def test_convert() -> None:
         param_type.convert("invalid", None, None)
 
 
-def test__save_state(mock_gateway: MagicMock) -> None:
+@pytest.mark.asyncio
+async def test__save_state(mock_gateway: MagicMock) -> None:
     """Test _save_state writes schema and packets to files."""
+    # NOTE: Converted to async to ensure event_loop exists for mock_gateway fixture
     # Setup mock gateway state
     mock_gateway.get_state.return_value = (
         {"schema_key": "schema_data"},
