@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
-from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
