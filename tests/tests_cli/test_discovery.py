@@ -114,28 +114,20 @@ async def test_spawn_scripts_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_scr_valid(mock_gateway: MagicMock) -> None:
     """Test spawning a valid script."""
-    # We use a list to capture the coroutine so we can await it later.
-    captured_coros: list[Any] = []
+    # We rely on real asyncio behavior.
+    # spawn_scripts will call create_task inside. We just verify the side effect.
+    script_name = "scan_disc"
+    kwargs = {EXEC_SCR: (script_name, DEV_ID)}
 
-    def capture_coro(coro: Any) -> MagicMock:
-        captured_coros.append(coro)
-        return MagicMock()
+    tasks = spawn_scripts(mock_gateway, **kwargs)
 
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.side_effect = capture_coro
+    # Yield to let the spawned task run at least once
+    await asyncio.sleep(0)
 
-        script_name = "scan_disc"
-        kwargs = {EXEC_SCR: (script_name, DEV_ID)}
-
-        tasks = spawn_scripts(mock_gateway, **kwargs)
-
-        mock_create_task.assert_called()
-        assert len(tasks) == 1
-
-        # Clean up by awaiting the captured coroutine
-        # This prevents "RuntimeWarning: coroutine was never awaited"
-        for coro in captured_coros:
-            await coro
+    # Verify that the script actually did something (sent a command)
+    # This proves dispatch worked without needing to patch create_task
+    assert mock_gateway.send_cmd.called
+    assert len(tasks) == 1
 
 
 @pytest.mark.asyncio
@@ -184,25 +176,11 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
-    captured_coros: list[Any] = []
+    # We call the script normally. It spawns a background task.
+    script_scan_disc(mock_gateway, DEV_ID)
 
-    def capture_coro(coro: Any) -> MagicMock:
-        captured_coros.append(coro)
-        return MagicMock()
-
-    # We patch create_task to capture the coroutine spawned by the decorator
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
-        mock_create_task.side_effect = capture_coro
-
-        # 1. Trigger the decorator logic
-        script_scan_disc(mock_gateway, DEV_ID)
-
-        # 2. Verify decorator called create_task
-        mock_create_task.assert_called()
-
-        # 3. Clean up: execute the captured script body
-        for coro in captured_coros:
-            await coro
+    # We wait for it to start
+    await asyncio.sleep(0)
 
     # Check for puzzle commands (Script begins/done) + actual script logic
     assert mock_gateway.send_cmd.call_count >= 2
