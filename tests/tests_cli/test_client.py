@@ -30,7 +30,7 @@ from ramses_cli.client import (
     split_kwargs,
 )
 from ramses_rf import GracefulExit
-from ramses_rf.const import Code, I_
+from ramses_rf.const import I_, Code
 from ramses_rf.database import MessageIndex
 from ramses_rf.gateway import Gateway
 from ramses_rf.schemas import SZ_CONFIG, SZ_DISABLE_DISCOVERY
@@ -464,7 +464,7 @@ async def test_async_main_msg_handler(
         msg.dtm = datetime.now()
         msg.code = Code._PUZZ
         # Mypy dislikes assigning to method slots on mocks without ignore
-        msg.__repr__ = MagicMock(return_value="PUZZLE_MSG")  # type: ignore[method-assign, assignment]
+        msg.__repr__ = MagicMock(return_value="PUZZLE_MSG")  # type: ignore[method-assign]
         captured_callback(msg)
         out = capsys.readouterr().out
         assert "PUZZLE_MSG" in out
@@ -472,7 +472,7 @@ async def test_async_main_msg_handler(
         # 2. 1F09 (I) message
         msg.code = Code._1F09
         msg.verb = I_
-        msg.__repr__ = MagicMock(return_value="1F09_MSG")  # type: ignore[method-assign, assignment]
+        msg.__repr__ = MagicMock(return_value="1F09_MSG")  # type: ignore[method-assign]
         captured_callback(msg)
         out = capsys.readouterr().out
         assert "1F09_MSG" in out
