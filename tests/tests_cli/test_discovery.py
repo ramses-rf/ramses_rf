@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Unittests for the ramses_cli discovery.py module."""
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -159,6 +159,7 @@ async def test_execution_of_set_schedule(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
     """Test that script decorator sends start/end commands and executes body."""
     # Capture the internal coroutine that create_task would schedule
@@ -175,6 +176,7 @@ async def test_script_decorator_behavior(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_full(mock_gateway: MagicMock) -> None:
     """Test script_scan_full iterates through codes."""
     # Patch range to only loop once to avoid massive execution time
@@ -192,6 +194,7 @@ async def test_script_scan_full(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
     """Test script_scan_hard."""
     # Patch range to limit execution
@@ -209,6 +212,7 @@ async def test_script_scan_hard(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
     """Test script_scan_fan."""
     with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
@@ -220,10 +224,15 @@ async def test_script_scan_fan(mock_gateway: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
 async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
     """Test various OTB scan scripts."""
     # We must await each of these to hit the code inside
-    with patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task:
+    # We patch range here as well to cover the OTB hard scan without nesting another with
+    with (
+        patch("ramses_cli.discovery.asyncio.create_task") as mock_create_task,
+        patch("ramses_cli.discovery.range", return_value=iter([1])),
+    ):
 
         async def run_script(script_fnc: Callable[..., Any]) -> None:
             script_fnc(mock_gateway, DEV_ID)
@@ -233,10 +242,7 @@ async def test_script_scan_otb_group(mock_gateway: MagicMock) -> None:
         await run_script(script_scan_otb)
         await run_script(script_scan_otb_map)
         await run_script(script_scan_otb_ramses)
-
-        # Use patched range for the hard scan too if it loops
-        with patch("ramses_cli.discovery.range", return_value=iter([1])):
-            await run_script(script_scan_otb_hard)
+        await run_script(script_scan_otb_hard)
 
     assert mock_gateway.send_cmd.call_count > 5
 
