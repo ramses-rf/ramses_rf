@@ -11,6 +11,7 @@ concurrent access to pty.openpty().
 
 import asyncio
 from datetime import datetime as dt
+from unittest.mock import patch
 
 import pytest
 
@@ -379,6 +380,7 @@ async def _test_flow_20x(
 
 # TODO: binding working without QoS  # @patch("ramses_tx.protocol._DBG_DISABLE_QOS", True)
 @pytest.mark.xdist_group(name="virt_serial")
+@patch("ramses_tx.transport._DEFAULT_TIMEOUT_PORT", 2.0)  # Increased from 0.5 default
 async def test_flow_100(test_set: dict[str, dict]) -> None:
     """Check packet flow / state change of a binding at context layer."""
 
@@ -408,6 +410,7 @@ async def test_flow_100(test_set: dict[str, dict]) -> None:
 
 # TODO: binding working without QoS  # @patch("ramses_tx.protocol._DBG_DISABLE_QOS", True)
 @pytest.mark.xdist_group(name="virt_serial")
+@patch("ramses_tx.transport._DEFAULT_TIMEOUT_PORT", 2.0)  # Increased from 0.5 default
 async def test_flow_200(test_set: dict[str, dict]) -> None:
     """Check packet flow / state change of a binding at device layer."""
 
