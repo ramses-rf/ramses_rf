@@ -310,7 +310,7 @@ class Message(MessageBase):
     # .HAS_DIED = 1.0  # fraction_expired >= 1.0 (is expected lifespan)
     IS_EXPIRING = 0.8  # fraction_expired >= 0.8 (and < HAS_EXPIRED)
 
-    _gwy: Gateway
+    _gwy: Gateway | None = None
     _fraction_expired: float | None = None
 
     @classmethod
@@ -335,7 +335,7 @@ class Message(MessageBase):
             """
             :return: the packet's age as fraction of its 'normal' life span.
             """
-            if self._gwy:  # TODO self._gwy is never set !
+            if self._gwy:  # self._gwy is set in ramses_tx.gateway.Engine._msg_handler
                 return (self._gwy._dt_now() - self.dtm - _TD_SECS_003) / lifespan
             return (dt.now() - self.dtm - _TD_SECS_003) / lifespan
 
