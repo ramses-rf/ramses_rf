@@ -276,7 +276,9 @@ class AttrDict(dict):  # type: ignore[type-arg]
             return self._forward[name[1:]]
         elif name.isupper() and name.lower() in self._reverse:  # map.DHW_SENSOR -> "0D"
             return self[name.lower()]
-        return self.__getattribute__(name)
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
 
     def _hex(self, key: str) -> str:
         """Return the key/ID (2-byte hex string) of the two-way dict (e.g. '04').
