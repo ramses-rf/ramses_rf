@@ -2,8 +2,7 @@
 """Test the CLI utility's ability to use the transport factory.
 
 This module ensures that the CLI correctly parses connection strings (including MQTT URLs)
-and injects the `transport_factory` into the Gateway, preserving legacy behavior for
-serial ports.
+and passes them to the Gateway.
 """
 
 import asyncio
@@ -13,15 +12,14 @@ from click.testing import CliRunner
 
 # Import async_main so we can run the logic that creates the Gateway
 from ramses_cli.client import async_main, cli
-from ramses_tx import transport_factory
 
 
 @patch("ramses_cli.client.Gateway")
 def test_cli_uses_transport_factory(mock_gateway: MagicMock) -> None:
-    """Check that client.py passes the transport_factory to Gateway.
+    """Check that client.py passes the connection string to Gateway.
 
     Verifies that when a non-standard port (like an MQTT URL) is passed,
-    the Gateway is initialized with the correct `transport_constructor`.
+    the Gateway is initialized correctly.
     """
 
     runner = CliRunner()
@@ -55,11 +53,9 @@ def test_cli_uses_transport_factory(mock_gateway: MagicMock) -> None:
     args, kwargs = mock_gateway.call_args
     assert args[0] == mqtt_url
 
-    # 5. Assert transport_constructor was passed
-    assert "transport_constructor" in kwargs
-
-    # 6. Verify it is actually the function we expect
-    assert kwargs["transport_constructor"] is transport_factory
+    # FIX: We no longer expect transport_constructor to be passed explicitly
+    # because it causes recursion issues in ramses_tx.transport_factory
+    # assert "transport_constructor" in kwargs
 
 
 @patch("ramses_cli.client.Gateway")
@@ -93,4 +89,3 @@ def test_cli_serial_backward_compatibility(mock_gateway: MagicMock) -> None:
     # 4. Assert Gateway was instantiated
     args, kwargs = mock_gateway.call_args
     assert args[0] == serial_port
-    assert "transport_constructor" in kwargs

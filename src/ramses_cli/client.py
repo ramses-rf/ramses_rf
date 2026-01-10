@@ -23,7 +23,7 @@ from ramses_rf.schemas import (
     SZ_ENABLE_EAVESDROP,
     SZ_REDUCE_PROCESSING,
 )
-from ramses_tx import is_valid_dev_id, transport_factory
+from ramses_tx import is_valid_dev_id
 from ramses_tx.logger import CONSOLE_COLS, DEFAULT_DATEFMT, DEFAULT_FMT
 from ramses_tx.schemas import (
     SZ_DISABLE_QOS,
@@ -607,15 +607,25 @@ async def async_main(command: str, lib_kwargs: dict[str, Any], **kwargs: Any) ->
         ]
         lib_kwargs = lib_kwargs | state["schema"]
 
+    # Explicitly extract input_file if present to ensure it's passed as a named arg
+    input_file = lib_kwargs.pop(SZ_INPUT_FILE, None)
+
     # if serial_port == "/dev/ttyMOCK":
     #     from tests.deprecated.mocked_rf import MockGateway  # FIXME: for test/dev
     #     gwy = MockGateway(serial_port, **lib_kwargs)
     # else:
+
+    # Instantiate Gateway, note: transport_factory is the default, so we don't need to pass it
     gwy = Gateway(
-        serial_port, transport_constructor=transport_factory, **lib_kwargs
+        serial_port,
+        input_file=input_file,
+        **lib_kwargs,
     )  # passes action to gateway
 
-    if int(lib_kwargs[SZ_CONFIG][SZ_REDUCE_PROCESSING]) < DONT_CREATE_MESSAGES:
+    if (
+        int(lib_kwargs.get(SZ_CONFIG, {}).get(SZ_REDUCE_PROCESSING, 0))
+        < DONT_CREATE_MESSAGES
+    ):
         # library will not send MSGs to STDOUT, so we'll send PKTs instead
         colorama_init(autoreset=True)  # WIP: remove strip=True
         gwy.add_msg_handler(handle_msg)

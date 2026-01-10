@@ -632,3 +632,25 @@ async def test__save_state(mock_gateway: MagicMock) -> None:
         filenames = [c[0][0] for c in calls]
         assert "state_msgs.log" in filenames
         assert "state_schema.json" in filenames
+
+
+def test_parse_command_passes_input_file() -> None:
+    """Verify that 'client.py parse' correctly puts input_file into lib_kwargs."""
+
+    runner = CliRunner()
+    fake_log_file = "test_capture.log"
+
+    # standalone_mode=False allows us to see the return value of the command
+    result = runner.invoke(cli, ["parse", fake_log_file], standalone_mode=False)
+
+    assert result.exit_code == 0, f"Command failed: {result.exception}"
+
+    # The 'parse' command returns a tuple: (command_name, lib_kwargs, cli_kwargs)
+    command, lib_kwargs, cli_kwargs = result.return_value
+
+    # VERIFY: Did the CLI put the filename into the correct config key?
+    assert lib_kwargs.get("input_file") == fake_log_file, (
+        f"Expected input_file='{fake_log_file}', got {lib_kwargs.get('input_file')}"
+    )
+
+    print("\nSuccess: CLI parsed the input file argument correctly.")
