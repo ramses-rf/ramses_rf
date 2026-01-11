@@ -1,6 +1,6 @@
 #
 ### project ##########################################################################
-# last checked/updated: 2025-08-16
+# last checked/updated: 2026-01-11
 #
 
 [project]
@@ -38,7 +38,7 @@
     "Topic :: Home Automation",
     "Programming Language :: Python :: 3.13",
   ]
-  requires-python = ">=3.11"        # HA core >=3.13.2
+  requires-python = ">=3.11"        # HA core >=3.13.2, TODO set to >=3.12 Feb. 2026 (issue #384)
   dependencies = [
     "colorlog>=6.9.0",              # latest
     "paho-mqtt>=2.1.0",             # latest

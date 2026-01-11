@@ -1,5 +1,5 @@
 # Requirements to dev/test the source code
-# - last checked/updated: 2025-11-26 (c.f. HA 2025.11.2)
+# - last checked/updated: 2026-01-11 (c.f. HA 2026.1.0)
 # - HA core reqs: https://github.com/home-assistant/core/blob/dev/requirements.txt
 
 # for using the ramses_rf library with CLI
