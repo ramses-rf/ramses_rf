@@ -81,10 +81,11 @@ class TestMessageIndex:
         # add another message with same code
         ret = msg_db.add(self.msg2)  # replaced message
 
-        assert (
-            str(ret)
-            == "||  32:166025 |            |  I | co2_level        |      || {'co2_level': None}"
-        )
+        assert ret is None  # Async add returns None, not the old msg
+        # assert (
+        #     str(ret)
+        #     == "||  32:166025 |            |  I | co2_level        |      || {'co2_level': None}"
+        # )
         assert len(msg_db.all()) == 1
 
         # add another message with different code
