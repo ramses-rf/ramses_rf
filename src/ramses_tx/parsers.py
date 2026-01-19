@@ -3109,7 +3109,9 @@ def parser_31da(payload: str, msg: Message) -> PayDictT._31DA:
     if len(payload) == 58:
         return result  # type: ignore[return-value]
 
-    result.update({"_extra": payload[58:]})  # sporadic [58:60] always 00
+    result.update(
+        {"_extra": payload[58:]}
+    )  # sporadic [58:60] one of {00, 20, 40} version?
     return result  # type: ignore[return-value]
 
     # From an Orcon 15RF Display

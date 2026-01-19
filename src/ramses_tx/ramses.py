@@ -551,7 +551,7 @@ CODES_SCHEMA: dict[Code, dict[str, Any]] = {  # rf_unknown
     },
     Code._31DA: {  # hvac_state (fan_state_extended)
         SZ_NAME: "hvac_state",
-        I_: r"^(00|01|15|16|17|21)[0-9A-F]{56}(00|20)?$",
+        I_: r"^(00|01|15|16|17|21)[0-9A-F]{56}(00|20|40)?$",
         RQ: r"^(00|01|15|16|17|21)$",
         # RQ --- 32:168090 30:082155 --:------ 31DA 001 21
     },
