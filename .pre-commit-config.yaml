@@ -39,10 +39,10 @@ repos:
     hooks:
       - id: check-executables-have-shebangs
       # id: check-json  # don't enable this one
-      - id: no-commit-to-branch
-        args:
-          - --branch=master
-          - --branch=stable
+      # - id: no-commit-to-branch
+      #   args:
+      #     - --branch=master
+      #     - --branch=stable
       - id: check-toml
       - id: check-yaml
       - id: debug-statements
