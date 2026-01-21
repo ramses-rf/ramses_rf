@@ -54,7 +54,7 @@ async def mock_gateway() -> AsyncGenerator[MagicMock, None]:
     gateway.dispatcher.send = MagicMock()
     gateway.start = AsyncMock()
     gateway.stop = AsyncMock()
-    gateway.get_state = MagicMock(return_value=({}, {}))
+    gateway.get_state = AsyncMock(return_value=({}, {}))
     gateway._restore_cached_packets = AsyncMock()
     gateway.add_msg_handler = MagicMock()
 
@@ -293,12 +293,13 @@ def test_print_results(
     assert "Tuesday" in out
 
 
-def test_print_engine_state(
+@pytest.mark.asyncio
+async def test_print_engine_state(
     mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Test _print_engine_state."""
     kwargs = {"print_state": 2}  # 2 implies print packets as well
-    _print_engine_state(mock_gateway, **kwargs)
+    await _print_engine_state(mock_gateway, **kwargs)
 
     out = capsys.readouterr().out
     assert "schema" in out
@@ -622,7 +623,7 @@ async def test__save_state(mock_gateway: MagicMock) -> None:
     )
 
     with patch("builtins.open", new_callable=mock_open) as mock_file:
-        _save_state(mock_gateway)
+        await _save_state(mock_gateway)
 
         # Verify open was called twice (once for log, once for json)
         assert mock_file.call_count == 2

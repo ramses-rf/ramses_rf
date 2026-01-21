@@ -267,12 +267,14 @@ class Gateway(Engine):
         :returns: None
         :rtype: None
         """
+        # Stop the Engine first to ensure no tasks/callbacks try to write
+        # to the DB while we are closing it.
+        await super().stop()
 
         if self.msg_db:
             self.msg_db.stop()
-        await super().stop()
 
-    def _pause(self, *args: Any) -> None:
+    async def _pause(self, *args: Any) -> None:
         """Pause the (unpaused) gateway (disables sending/discovery).
 
         There is the option to save other objects, as `args`.
@@ -288,12 +290,12 @@ class Gateway(Engine):
         self.config.disable_discovery, disc_flag = True, self.config.disable_discovery
 
         try:
-            super()._pause(disc_flag, *args)
+            await super()._pause(disc_flag, *args)
         except RuntimeError:
             self.config.disable_discovery = disc_flag
             raise
 
-    def _resume(self) -> tuple[Any]:
+    async def _resume(self) -> tuple[Any]:
         """Resume the (paused) gateway (enables sending/discovery, if applicable).
 
         Will restore other objects, as `args`.
@@ -305,11 +307,13 @@ class Gateway(Engine):
 
         _LOGGER.debug("Gateway: Resuming engine...")
 
-        self.config.disable_discovery, *args = super()._resume()  # type: ignore[assignment]
+        # args_tuple = await super()._resume()
+        # self.config.disable_discovery, *args = args_tuple  # type: ignore[assignment]
+        self.config.disable_discovery, *args = await super()._resume()  # type: ignore[assignment]
 
         return args
 
-    def get_state(
+    async def get_state(
         self, include_expired: bool = False
     ) -> tuple[dict[str, Any], dict[str, str]]:
         """Return the current schema & state (may include expired packets).
@@ -320,7 +324,7 @@ class Gateway(Engine):
         :rtype: tuple[dict[str, Any], dict[str, str]]
         """
 
-        self._pause()
+        await self._pause()
 
         def wanted_msg(msg: Message, include_expired: bool = False) -> bool:
             if msg.code == Code._313F:
@@ -357,7 +361,7 @@ class Gateway(Engine):
             }
             # _LOGGER.warning("Missing MessageIndex")
 
-        self._resume()
+        await self._resume()
 
         return self.schema, dict(sorted(pkts.items()))
 
@@ -392,7 +396,7 @@ class Gateway(Engine):
         tmp_transport: RamsesTransportT  # mypy hint
 
         _LOGGER.debug("Gateway: Restoring a cached packet log...")
-        self._pause()
+        await self._pause()
 
         if _clear_state:  # only intended for test suite use
             clear_state()
@@ -428,7 +432,7 @@ class Gateway(Engine):
         await tmp_transport.get_extra_info(SZ_READER_TASK)
 
         _LOGGER.debug("Gateway: Restored, resuming")
-        self._resume()
+        await self._resume()
 
     def _add_device(self, dev: Device) -> None:  # TODO: also: _add_system()
         """Add a device to the gateway (called by devices during instantiation).
