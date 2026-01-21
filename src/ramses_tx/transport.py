@@ -49,7 +49,6 @@ import logging
 import os
 import re
 import sys
-import time
 from collections import deque
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime as dt, timedelta as td
@@ -979,18 +978,21 @@ class FileTransport(_ReadTransport, _FileTransportAbstractor):
         if bool(disable_sending) is False:
             raise exc.TransportSourceInvalid("This Transport cannot send packets")
 
+        self._evt_reading = asyncio.Event()
+
         self._extra[SZ_READER_TASK] = self._reader_task = self._loop.create_task(
             self._start_reader(), name="FileTransport._start_reader()"
         )
 
         self._make_connection(None)
 
-    async def _start_reader(self) -> None:  # TODO
+    async def _start_reader(self) -> None:
         """Start the reader task."""
         self._reading = True
+        self._evt_reading.set()  # Start in reading state
+
         try:
-            # await self._reader()
-            await self.loop.run_in_executor(None, self._blocking_reader)
+            await self._producer_loop()
         except Exception as err:
             self.loop.call_soon_threadsafe(
                 functools.partial(self._protocol.connection_lost, err)  # type: ignore[arg-type]
@@ -1000,47 +1002,59 @@ class FileTransport(_ReadTransport, _FileTransportAbstractor):
                 functools.partial(self._protocol.connection_lost, None)
             )
 
-    def _blocking_reader(self) -> None:
+    def pause_reading(self) -> None:
+        """Pause the receiving end (no data to protocol.pkt_received())."""
+        self._reading = False
+        self._evt_reading.clear()  # Puts the loop to sleep efficiently
+
+    def resume_reading(self) -> None:
+        """Resume the receiving end."""
+        self._reading = True
+        self._evt_reading.set()  # Wakes the loop immediately
+
+    async def _producer_loop(self) -> None:
         """Loop through the packet source for Frames and process them."""
+        # NOTE: fileinput interaction remains synchronous-blocking for simplicity,
+        # but the PAUSE mechanism is now async-non-blocking.
 
         if isinstance(self._pkt_source, dict):
             for dtm_str, pkt_line in self._pkt_source.items():  # assume dtm_str is OK
-                self._process_line(dtm_str, pkt_line)
+                await self._process_line(dtm_str, pkt_line)
 
         elif isinstance(self._pkt_source, str):  # file_name, used in client parse
             # open file file_name before reading
             try:
                 with fileinput.input(files=self._pkt_source, encoding="utf-8") as file:
                     for dtm_pkt_line in file:  # self._pkt_source:
-                        self._process_line_from_raw(dtm_pkt_line)
+                        await self._process_line_from_raw(dtm_pkt_line)
             except FileNotFoundError as err:
                 _LOGGER.warning(f"Correct the packet file name; {err}")
 
         elif isinstance(self._pkt_source, TextIOWrapper):  # used by client monitor
             for dtm_pkt_line in self._pkt_source:  # should check dtm_str is OK
-                self._process_line_from_raw(dtm_pkt_line)
+                await self._process_line_from_raw(dtm_pkt_line)
 
         else:
             raise exc.TransportSourceInvalid(
                 f"Packet source is not dict, TextIOWrapper or str: {self._pkt_source:!r}"
             )
 
-    def _process_line_from_raw(self, line: str) -> None:
+    async def _process_line_from_raw(self, line: str) -> None:
         """Helper to process raw lines."""
         # there may be blank lines in annotated log files
         if (line := line.strip()) and line[:1] != "#":
-            self._process_line(line[:26], line[27:])
+            await self._process_line(line[:26], line[27:])
             # this is where the parsing magic happens!
 
-    def _process_line(self, dtm_str: str, frame: str) -> None:
+    async def _process_line(self, dtm_str: str, frame: str) -> None:
         """Push frame to protocol in a thread-safe way."""
-        while not self._reading:
-            time.sleep(0.001)
+        # Efficient wait - 0% CPU usage while paused
+        await self._evt_reading.wait()
 
         self._frame_read(dtm_str, frame)
 
-        # NOTE: instable without, big performance penalty if delay >0
-        time.sleep(0)
+        # Yield control to the event loop to prevent starvation during large file reads
+        await asyncio.sleep(0)
 
     def _close(self, exc: exc.RamsesException | None = None) -> None:
         """Close the transport (cancel any outstanding tasks).

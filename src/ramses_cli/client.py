@@ -471,13 +471,8 @@ def print_results(gwy: Gateway, **kwargs: Any) -> None:
         system_id, _ = kwargs[GET_SCHED]
 
 
-def _save_state(gwy: Gateway) -> None:
-    """Save the gateway state to files.
-
-    :param gwy: The gateway instance.
-    """
-    schema, msgs = gwy.get_state()
-
+def _write_state(schema: dict[str, Any], msgs: dict[str, str]) -> None:
+    """Write the state to the file system (blocking)."""
     with open("state_msgs.log", "w") as f:
         [f.write(f"{dtm} {pkt}\r\n") for dtm, pkt in msgs.items()]  # if not m._expired
 
@@ -485,13 +480,22 @@ def _save_state(gwy: Gateway) -> None:
         f.write(json.dumps(schema, indent=4))
 
 
-def _print_engine_state(gwy: Gateway, **kwargs: Any) -> None:
+async def _save_state(gwy: Gateway) -> None:
+    """Save the gateway state to files.
+
+    :param gwy: The gateway instance.
+    """
+    schema, msgs = await gwy.get_state()
+    await asyncio.to_thread(_write_state, schema, msgs)
+
+
+async def _print_engine_state(gwy: Gateway, **kwargs: Any) -> None:
     """Print the current engine state (schema and packets).
 
     :param gwy: The gateway instance.
     :param kwargs: Command arguments to determine verbosity.
     """
-    (schema, packets) = gwy.get_state(include_expired=True)
+    (schema, packets) = await gwy.get_state(include_expired=True)
 
     if kwargs["print_state"] > 0:
         print(f"schema: {json.dumps(schema, indent=4)}\r\n")
@@ -671,10 +675,10 @@ async def async_main(command: str, lib_kwargs: dict[str, Any], **kwargs: Any) ->
     print(f"\r\nclient.py: Engine stopped: {msg}")
 
     # if kwargs["save_state"]:
-    #    _save_state(gwy)
+    #    await _save_state(gwy)
 
     if kwargs["print_state"]:
-        _print_engine_state(gwy, **kwargs)
+        await _print_engine_state(gwy, **kwargs)
 
     elif command == EXECUTE:
         print_results(gwy, **kwargs)

@@ -25,7 +25,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 async def assert_schemas_equal(gwy: Gateway, expected_schema: dict) -> None:
     """Check the gwy schema, then shuffle and test again."""
 
-    schema, packets = gwy.get_state(include_expired=True)
+    schema, packets = await gwy.get_state(include_expired=True)
     assert_expected(schema, expected_schema)
 
     packets = shuffle_dict(packets)

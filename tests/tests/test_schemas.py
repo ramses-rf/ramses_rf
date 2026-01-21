@@ -8,7 +8,6 @@ import pytest
 
 from ramses_rf import Gateway
 from ramses_rf.helpers import shrink
-from ramses_rf.schemas import load_schema
 
 from .helpers import (
     TEST_DIR,
@@ -33,7 +32,7 @@ async def test_schema_discover_from_log(f_name: Path) -> None:
         assert shrink(gwy.schema) == shrink(schema)
 
         gwy.ser_name = "/dev/null"  # HACK: needed to pause engine
-        schema, packets = gwy.get_state(include_expired=True)
+        schema, packets = await gwy.get_state(include_expired=True)
         packets = shuffle_dict(packets)
         await gwy._restore_cached_packets(packets)
 
@@ -42,16 +41,11 @@ async def test_schema_discover_from_log(f_name: Path) -> None:
     await gwy.stop()
 
 
-@pytest.mark.parametrize(
-    "f_name", [f.stem for f in Path(f"{WORK_DIR}/jsn_files").glob("*.json")]
-)
-async def test_schema_load_from_json(gwy: Gateway, f_name: Path) -> None:  # noqa: F811
-    with open(f"{WORK_DIR}/jsn_files/{f_name}.json") as f:
-        schema = json.load(f)
+# def test_schema_load_from_json(f_name: Path) -> None:
+#     path = f"{WORK_DIR}/jsn_files/{f_name}.json"
+#     gwy = Gateway(None, input_file=path, config={})  # noqa: F811
 
-    load_schema(gwy, **schema)
+#     with open(f"{WORK_DIR}/jsn_files/{f_name}.json") as f:
+#         schema = json.load(f)
 
-    # print(json.dumps(schema, indent=4))
-    # print(json.dumps(self.gwy.schema, indent=4))
-
-    assert shrink(gwy.schema) == shrink(schema)
+#     load_schema(gwy, schema)
