@@ -1,5 +1,5 @@
 # Requirements to dev/test the source code
-# - last checked/updated: 2026-01-21 (c.f. HA 2026.1.2)
+# - last checked/updated: 2026-01-22 (c.f. 0.53.4 / HA 2026.1.2)
 # - HA core reqs: https://github.com/home-assistant/core/blob/dev/requirements.txt
 
 # for using the ramses_rf library with CLI
@@ -11,7 +11,7 @@
 
 # used for development (linting)
   prek == 0.2.28                                 # same as ramses_cc and HA core 2026.1.2
-  # pre-commit >= 4.3.0                          # replaced by prek 2026.1 - 1 test fails without?
+  # pre-commit >= 4.3.0                          # replaced by prek since 2026.1
   ruff >= 0.13.0                                 # HA uses 0.13.0 ! also in: pre-commit-config.yaml
 
 # used for development (typing)
@@ -26,8 +26,8 @@
   pytest-cov >= 7.0.0                            # HA uses 6.2.1, includes coverage.py as dep
   pytest-sugar >= 1.0.0                          # HA uses 1.0.0
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
-# syrupy >= 4.8.1                                # HA uses 4.9.1
   PyYAML                                         # required for tests/tests/test_vol_schema import
+# syrupy >= 4.8.1                                # HA uses 4.9.1
 
 # used for build/deploy
   hatch >= 1.14.1
