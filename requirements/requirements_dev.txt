@@ -27,6 +27,7 @@
   pytest-sugar >= 1.0.0                          # HA uses 1.0.0
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
 # syrupy >= 4.8.1                                # HA uses 4.9.1
+  PyYAML                                         # required for tests/tests/test_vol_schema import
 
 # used for build/deploy
   hatch >= 1.14.1
