@@ -116,7 +116,7 @@
     "raise NotImplementedError",
   ]
   format = "text"
-  fail_under = 75
+  fail_under = 95
   ignore_errors = true
 
 [tool.coverage.html]
