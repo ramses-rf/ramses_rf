@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any, NewType
 
 from ramses_tx import CODES_SCHEMA, RQ, Code, Message, Packet
 
-from .storage import StorageWorker
+from .storage import PacketLogEntry, StorageWorker
 
 if TYPE_CHECKING:
     DtmStrT = NewType("DtmStrT", str)
@@ -241,28 +241,30 @@ class MessageIndex:
             :param dt_now: current timestamp
             :param _cutoff: the oldest timestamp to retain, default is 24 hours ago
             """
-            msgs = None
             dtm = dt_now - _cutoff
 
-            self._cu.execute("SELECT dtm FROM messages WHERE dtm >= ?", (dtm,))
-            rows = self._cu.fetchall()  # fetch dtm of current messages to retain
+            # Submit prune request to worker (Non-blocking I/O)
+            self._worker.submit_prune(dtm)
+
+            # Prune in-memory cache synchronously (Fast CPU-bound op)
+            dtm_iso = dtm.isoformat(timespec="microseconds")
 
             try:  # make this operation atomic, i.e. update self._msgs only on success
                 await self._lock.acquire()
-                self._cu.execute("DELETE FROM messages WHERE dtm < ?", (dtm,))
-                msgs = OrderedDict({row[0]: self._msgs[row[0]] for row in rows})
-                self._cx.commit()
+                # Rebuild dict keeping only newer items
+                self._msgs = OrderedDict(
+                    (k, v) for k, v in self._msgs.items() if k >= dtm_iso
+                )
 
-            except sqlite3.Error:  # need to tighten?
-                self._cx.rollback()
+            except Exception as err:
+                _LOGGER.warning("MessageIndex housekeeping error: %s", err)
             else:
-                self._msgs = msgs
+                _LOGGER.debug(
+                    "MessageIndex housekeeping completed, retained messages >= %s",
+                    dtm_iso,
+                )
             finally:
                 self._lock.release()
-                if msgs:
-                    _LOGGER.debug(
-                        "MessageIndex size was: %d, now: %d", len(rows), len(msgs)
-                    )
 
         while True:
             self._last_housekeeping = dt.now()
@@ -345,15 +347,15 @@ class MessageIndex:
         # Avoid blocking read; worker handles REPLACE on unique constraint collision
 
         # Prepare data tuple for worker
-        data = (
-            _now,
-            verb,
-            src,
-            src,
-            code,
-            None,
-            hdr,
-            "|",
+        data = PacketLogEntry(
+            dtm=_now,
+            verb=verb,
+            src=src,
+            dst=src,
+            code=code,
+            ctx=None,
+            hdr=hdr,
+            plk="|",
         )
 
         self._worker.submit_packet(data)
@@ -390,15 +392,15 @@ class MessageIndex:
         # _old_msgs = self._delete_from(hdr=msg._pkt._hdr)
         # Refactor: Worker uses INSERT OR REPLACE to handle collision
 
-        data = (
-            msg.dtm,
-            str(msg.verb),
-            msg.src.id,
-            msg.dst.id,
-            str(msg.code),
-            msg_pkt_ctx,
-            msg._pkt._hdr,
-            payload_keys(msg.payload),
+        data = PacketLogEntry(
+            dtm=msg.dtm,
+            verb=str(msg.verb),
+            src=msg.src.id,
+            dst=msg.dst.id,
+            code=str(msg.code),
+            ctx=msg_pkt_ctx,
+            hdr=msg._pkt._hdr,
+            plk=payload_keys(msg.payload),
         )
 
         self._worker.submit_packet(data)

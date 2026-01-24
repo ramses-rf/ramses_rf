@@ -102,7 +102,15 @@ async def load_test_gwy(dir_name: Path, **kwargs: Any) -> Gateway:
     gwy._sqlite_index = _sqlite_index  # TODO(eb): remove legacy Q2 2026
     await gwy.start()
 
+    # The Gateway with input_file uses a Transport that processes the file automatically.
+    # We simply need to wait for the transport to finish reading the file.
+    # We pause discovery/sending during replay to avoid side effects.
     await gwy._protocol.wait_for_connection_lost()  # until packet log is EOF
+
+    # Ensure all packets from the log are written to the DB before returning
+    # This is critical for tests using the StorageWorker
+    if gwy.msg_db:
+        gwy.msg_db.flush()
 
     # if hasattr(
     #     gwy.pkt_transport.serial, "mock_devices"

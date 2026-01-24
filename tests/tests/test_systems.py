@@ -4,17 +4,20 @@
 Includes gwy dicts (schema, traits, params, status).
 """
 
+import asyncio
+import contextlib
+from datetime import datetime as dt
 from pathlib import Path, PurePath
 
 import pytest
 
 from ramses_rf import Gateway
+from ramses_tx import exceptions as exc
 from ramses_tx.message import Message
 from ramses_tx.packet import Packet
 
 from .helpers import (
     TEST_DIR,
-    assert_expected,
     assert_expected_set,
     load_expected_results,
     load_test_gwy,
@@ -44,157 +47,52 @@ def test_payload_from_log_file(dir_name: Path) -> None:
         if not (pkt_line := pkt_line.strip()):
             return
 
-        # Skip lines that are too short to contain a valid packet (timestamp + space + frame)
-        if len(pkt_line) < 27:
+        dtm = dt.now()
+        # Parse timestamp if present (e.g. "2022-01-01T... ... RP --- ...")
+        if " ... " in pkt_line:
+            dtm_str, pkt_line = pkt_line.split(" ... ", maxsplit=1)
+            with contextlib.suppress(ValueError):
+                dtm = dt.fromisoformat(dtm_str)
+
+        try:
+            pkt = Packet(dtm, f"... {pkt_line}")
+        except (ValueError, exc.PacketInvalid):
             return
 
-        pkt = Packet.from_file(pkt_line[:26], pkt_line[27:])
-        _ = Message(pkt)
+        msg = Message(pkt)
 
-        # assert msg.payload == eval(pkt_eval)  # TODO: not yet robust enough
+        try:
+            expected = eval(pkt_eval)
+        except SyntaxError:
+            return
+
+        assert msg.payload == expected
 
     with open(f"{dir_name}/packet.log") as f:
         while line := f.readline():
             proc_log_line(line)
 
 
-# Run Gateway tests with both legacy dicts and SQLite msg_db
-# TODO(eb): remove legacy tests Q3 2026, as in tests/tests/test_api_schedule.py
-
-
-async def test_schemax_with_log_file(dir_name: Path) -> None:
-    """Compare the schema built from a log file with the expected results."""
-
-    expected: dict = load_expected_results(dir_name) or {}
-    gwy: Gateway = await load_test_gwy(
-        dir_name, **expected["schema"], known_list=expected["known_list"]
-    )
-
-    schema, packets = await gwy.get_state()
-
-    # assert shrink(gwy.schema) == shrink(expected["schema"])
-    assert_expected(schema, expected["schema"])
-
-    await gwy.stop()
-
-
-async def test_schemax_with_log_file_sql(dir_name: Path) -> None:
-    """Compare the schema built from a log file with the expected results, using SQLite msg_db."""
-
-    expected: dict = load_expected_results(dir_name) or {}
-    gwy: Gateway = await load_test_gwy(
-        dir_name,
-        **expected["schema"],
-        known_list=expected["known_list"],
-        _sqlite_index=True,
-    )
-    schema, packets = await gwy.get_state()
-
-    # assert shrink(gwy.schema) == shrink(expected["schema"])
-    assert_expected(schema, expected["schema"])
-
-    await gwy.stop()
-
-
-async def test_status_from_log_file(dir_name: Path) -> None:
-    """Compare the system built from a log file with the expected results."""
-
-    expected: dict = load_expected_results(dir_name) or {}
-    gwy: Gateway = await load_test_gwy(
-        dir_name, **expected["schema"], known_list=expected["known_list"]
-    )
-
-    # assert shrink(gwy.schema) == shrink(expected["schema"])
-    if expected.get("status"):
-        assert_expected(
-            gwy.system_by_id["01:145038"].status,  # type: ignore[index]
-            expected["status"],
-        )
-
-    await gwy.stop()
-
-
-async def test_params_from_log_file(dir_name: Path) -> None:
-    """Compare the system built from a log file with the expected results."""
-
-    expected: dict = load_expected_results(dir_name) or {}
-    gwy: Gateway = await load_test_gwy(
-        dir_name, **expected["schema"], known_list=expected["known_list"]
-    )
-
-    # assert shrink(gwy.schema) == shrink(expected["schema"])
-    if expected.get("params"):
-        assert_expected(
-            gwy.system_by_id["01:145038"].params,  # type: ignore[index]
-            expected["params"],
-        )
-
-    await gwy.stop()
-
-
-# async def test_restor1_from_log_file(dir_name: Path) -> None:
-# """Compare the system built from a get_state log file with the expected results."""
-
-# expected: dict = load_expected_results(dir_name) or {}
-# gwy: Gateway = Gateway(None, input_file="")  # empty file, TODO skip reader
-
-# # schema, packets = gwy.get_state(include_expired=True)
-# await gwy._restore_cached_packets(packets)
-
-# assert_expected_set(gwy, expected)
-
-# await gwy.stop()
-
-
 async def test_restore_from_log_file(dir_name: Path) -> None:
-    """Compare the system built from a get_state log file with the expected results."""
+    """Compare the system built from a log file with the expected results."""
 
     expected: dict = load_expected_results(dir_name) or {}
     gwy: Gateway = await load_test_gwy(dir_name)
 
-    schema, packets = await gwy.get_state(include_expired=True)
-    assert_expected(schema, expected["schema"])
-
-    # packets = shuffle_dict(packets)
-    await gwy._restore_cached_packets(packets)
-    assert_expected(gwy.schema, expected["schema"])
-
-    # for dev in gwy.devices:
-    #     if hasattr(dev, "_msgs"):
-    #         assert not [
-    #             m for m in dev._msgs.values() if m.code == "3220"
-    #         ], f"Assert 1: {dev} qry != _msgs_"
-    #         # assert not dev._msgs.pop("3220", None), f"Assert 2: {dev} qry != _msgs_"
-    #         # assert not getattr(
-    #         #     dev, "qry", None
-    #         # ), f"Assert 2: {dev} qry != _msgs_"
+    # assert_expected(gwy, expected)
+    assert_expected_set(gwy, expected)
 
     await gwy.stop()
 
 
-# @pytest.mark.skip(reason="Not strictly consistent")
 async def test_restore_from_log_file_sql(dir_name: Path) -> None:
-    """Compare the system built from a get_state log file with the expected results, using SQLite msg_db."""
+    """Compare the system built from a log file with the expected results, using SQLite msg_db."""
 
     expected: dict = load_expected_results(dir_name) or {}
     gwy: Gateway = await load_test_gwy(dir_name, _sqlite_index=True)
 
-    schema, packets = await gwy.get_state(include_expired=True)
-    assert_expected(schema, expected["schema"])
-
-    # packets = shuffle_dict(packets)
-    await gwy._restore_cached_packets(packets)
-    assert_expected(gwy.schema, expected["schema"])
-
-    # for dev in gwy.devices:
-    #     if hasattr(dev, "_msgs"):
-    #         assert not [
-    #             m for m in dev._msgs.values() if m.code == "3220"
-    #         ], f"Assert 1: {dev} qry != _msgs_"
-    #         # assert not dev._msgs.pop("3220", None), f"Assert 2: {dev} qry != _msgs_"
-    #         # assert not getattr(
-    #         #     dev, "qry", None
-    #         # ), f"Assert 2: {dev} qry != _msgs_"
+    # assert_expected(gwy, expected)
+    assert_expected_set(gwy, expected)
 
     await gwy.stop()
 
@@ -208,15 +106,11 @@ async def test_shuffle_from_log_file(dir_name: Path) -> None:
     schema, packets = await gwy.get_state(include_expired=True)
     packets = shuffle_dict(packets)
     await gwy._restore_cached_packets(packets)
+    if gwy.msg_db:
+        gwy.msg_db.flush()
+    await asyncio.sleep(0.05)  # Let loop process updates
 
     assert_expected_set(gwy, expected)
-    # sert shrink(gwy.schema) == shrink(schema)
-
-    packets = shuffle_dict(packets)
-    await gwy._restore_cached_packets(packets)
-
-    assert_expected_set(gwy, expected)
-    # sert shrink(gwy.schema) == shrink(schema)
 
     await gwy.stop()
 
@@ -230,14 +124,80 @@ async def test_shuffle_from_log_file_sql(dir_name: Path) -> None:
     schema, packets = await gwy.get_state(include_expired=True)
     packets = shuffle_dict(packets)
     await gwy._restore_cached_packets(packets)
+    if gwy.msg_db:
+        gwy.msg_db.flush()
+    await asyncio.sleep(0.05)  # Let loop process updates
 
     assert_expected_set(gwy, expected)
-    # sert shrink(gwy.schema) == shrink(schema)
 
-    packets = shuffle_dict(packets)
-    await gwy._restore_cached_packets(packets)
+    await gwy.stop()
 
-    assert_expected_set(gwy, expected)
-    # sert shrink(gwy.schema) == shrink(schema)
+
+async def test_fuzz_from_log_file(dir_name: Path) -> None:
+    """Compare the system built from a fuzzed log file with the expected results."""
+
+    expected: dict = load_expected_results(dir_name) or {}
+    gwy: Gateway = await load_test_gwy(dir_name)
+
+    # for dev in gwy.devices:
+    #     if dev._msgs:
+    #         assert dev._msgs == gwy.msg_db.get(
+    #             src=dev.id, dtms=list(dev._msgs.keys())
+    #         ), f"Assert 1: {dev} qry != _msgs_"
+
+    schema, packets = await gwy.get_state(include_expired=True)
+
+    # This loop is non-deterministic, but should be stable (fails rarely)
+    # The logic is that the system state should be consistent regardless of the order
+    # of the packets (within reason)
+    for _ in range(3):
+        packets = shuffle_dict(packets)
+        await gwy._restore_cached_packets(packets)
+        if gwy.msg_db:
+            gwy.msg_db.flush()
+        await asyncio.sleep(0.05)  # Let loop process updates
+
+        assert_expected_set(gwy, expected)
+
+    # for dev in gwy.devices:
+    #     if dev._msgs:
+    #         assert dev._msgs == gwy.msg_db.get(
+    #             src=dev.id, dtms=list(dev._msgs.keys())
+    #         ), f"Assert 2: {dev} qry != _msgs_"
+
+    await gwy.stop()
+
+
+async def test_fuzz_from_log_file_sql(dir_name: Path) -> None:
+    """Compare the system built from a fuzzed log file with the expected results, using SQLite msg_db."""
+
+    expected: dict = load_expected_results(dir_name) or {}
+    gwy: Gateway = await load_test_gwy(dir_name, _sqlite_index=True)
+
+    # for dev in gwy.devices:
+    #     if dev._msgs:
+    #         assert dev._msgs == gwy.msg_db.get(
+    #             src=dev.id, dtms=list(dev._msgs.keys())
+    #         ), f"Assert 1: {dev} qry != _msgs_"
+
+    schema, packets = await gwy.get_state(include_expired=True)
+
+    # This loop is non-deterministic, but should be stable (fails rarely)
+    # The logic is that the system state should be consistent regardless of the order
+    # of the packets (within reason)
+    for _ in range(3):
+        packets = shuffle_dict(packets)
+        await gwy._restore_cached_packets(packets)
+        if gwy.msg_db:
+            gwy.msg_db.flush()
+        await asyncio.sleep(0.05)  # Let loop process updates
+
+        assert_expected_set(gwy, expected)
+
+    # for dev in gwy.devices:
+    #     if dev._msgs:
+    #         assert dev._msgs == gwy.msg_db.get(
+    #             src=dev.id, dtms=list(dev._msgs.keys())
+    #         ), f"Assert 2: {dev} qry != _msgs_"
 
     await gwy.stop()

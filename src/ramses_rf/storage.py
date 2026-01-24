@@ -7,24 +7,46 @@ import logging
 import queue
 import sqlite3
 import threading
-from typing import Any
+from typing import Any, NamedTuple
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class PacketLogEntry(NamedTuple):
+    """Represents a packet to be written to the database."""
+
+    dtm: Any
+    verb: str
+    src: str
+    dst: str
+    code: str
+    ctx: str | None
+    hdr: str
+    plk: str
+
+
+class PruneRequest(NamedTuple):
+    """Represents a request to prune old records."""
+
+    dtm_limit: Any
+
+
+QueueItem = PacketLogEntry | PruneRequest | tuple[str, Any] | None
 
 
 class StorageWorker:
     """A background worker thread to handle blocking storage I/O asynchronously."""
 
-    def __init__(self, db_path: str = ":memory:"):
+    def __init__(self, db_path: str = ":memory:") -> None:
         """Initialize the storage worker thread."""
         self._db_path = db_path
-        self._queue: queue.SimpleQueue[tuple[str, Any] | None] = queue.SimpleQueue()
+        self._queue: queue.SimpleQueue[QueueItem] = queue.SimpleQueue()
         self._ready_event = threading.Event()
 
         self._thread = threading.Thread(
             target=self._run,
             name="RamsesStorage",
-            daemon=True,  # FIX: Set to True so the process can exit even if stop() is missed
+            daemon=True,  # Allows process exit even if stop() is missed
         )
         self._thread.start()
 
@@ -32,16 +54,16 @@ class StorageWorker:
         """Wait until the database is initialized and ready."""
         return self._ready_event.wait(timeout)
 
-    def submit_packet(self, packet_data: tuple[Any, ...]) -> None:
+    def submit_packet(self, packet: PacketLogEntry) -> None:
         """Submit a packet tuple for SQL insertion (Non-blocking)."""
-        self._queue.put(("SQL", packet_data))
+        self._queue.put(packet)
+
+    def submit_prune(self, dtm_limit: Any) -> None:
+        """Submit a prune request for SQL deletion (Non-blocking)."""
+        self._queue.put(PruneRequest(dtm_limit))
 
     def flush(self, timeout: float = 10.0) -> None:
         """Block until all currently pending tasks are processed."""
-        # REMOVED: if self._queue.empty(): return
-        # This check caused a race condition where flush() returned before
-        # the worker finished committing the last item it just popped.
-
         # We inject a special marker into the queue
         sentinel = threading.Event()
         self._queue.put(("MARKER", sentinel))
@@ -89,7 +111,7 @@ class StorageWorker:
                 detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
                 check_same_thread=False,
                 uri=True,
-                timeout=10.0,  # Increased timeout for locking
+                timeout=10.0,
             )
 
             # Enable Write-Ahead Logging for concurrency
@@ -116,16 +138,9 @@ class StorageWorker:
                 if item is None:  # Shutdown signal
                     break
 
-                task_type, data = item
-
-                if task_type == "MARKER":
-                    # Flush requested
-                    data.set()
-                    continue
-
-                if task_type == "SQL":
+                if isinstance(item, PacketLogEntry):
                     # Optimization: Batch processing
-                    batch = [data]
+                    batch = [item]
                     # Drain queue of pending SQL tasks to bulk insert
                     while not self._queue.empty():
                         try:
@@ -135,22 +150,19 @@ class StorageWorker:
                                 self._queue.put(None)  # Re-queue poison pill
                                 break
 
-                            next_type, next_data = next_item
-                            if next_type == "SQL":
-                                batch.append(next_data)
-                            elif next_type == "MARKER":
-                                # Handle marker after this batch
-                                self._queue.put(next_item)  # Re-queue marker
-                                break
+                            if isinstance(next_item, PacketLogEntry):
+                                batch.append(next_item)
                             else:
-                                pass
+                                # Handle other types after this batch
+                                self._queue.put(next_item)  # Re-queue
+                                break
                         except queue.Empty:
                             break
 
                     try:
                         conn.executemany(
                             """
-                            INSERT OR REPLACE INTO messages 
+                            INSERT OR REPLACE INTO messages
                             (dtm, verb, src, dst, code, ctx, hdr, plk)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """,
@@ -159,6 +171,20 @@ class StorageWorker:
                         conn.commit()
                     except sqlite3.Error as err:
                         _LOGGER.error("SQL Write Failed: %s", err)
+
+                elif isinstance(item, PruneRequest):
+                    try:
+                        conn.execute(
+                            "DELETE FROM messages WHERE dtm < ?", (item.dtm_limit,)
+                        )
+                        conn.commit()
+                        _LOGGER.debug("Pruned records older than %s", item.dtm_limit)
+                    except sqlite3.Error as err:
+                        _LOGGER.error("SQL Prune Failed: %s", err)
+
+                elif isinstance(item, tuple) and item[0] == "MARKER":
+                    # Flush requested
+                    item[1].set()
 
             except Exception as err:
                 _LOGGER.exception("StorageWorker encountered an error: %s", err)
