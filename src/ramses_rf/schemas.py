@@ -245,6 +245,7 @@ SCH_GLOBAL_SCHEMAS = vol.Schema(SCH_GLOBAL_SCHEMAS_DICT, extra=vol.PREVENT_EXTRA
 # 4/7: Gateway (parser/state) configuration
 SZ_DISABLE_DISCOVERY: Final = "disable_discovery"
 SZ_ENABLE_EAVESDROP: Final = "enable_eavesdrop"
+SZ_ENFORCE_STRICT_HANDLING: Final = "enforce_strict_handling"
 SZ_MAX_ZONES: Final = "max_zones"  # TODO: move to TCS-attr from GWY-layer
 SZ_REDUCE_PROCESSING: Final = "reduce_processing"
 SZ_USE_ALIASES: Final = "use_aliases"  # use friendly device names from known_list
@@ -253,6 +254,7 @@ SZ_USE_NATIVE_OT: Final = "use_native_ot"  # favour OT (3220s) over RAMSES
 SCH_GATEWAY_DICT = {
     vol.Optional(SZ_DISABLE_DISCOVERY, default=False): bool,
     vol.Optional(SZ_ENABLE_EAVESDROP, default=False): bool,
+    vol.Optional(SZ_ENFORCE_STRICT_HANDLING, default=False): bool,
     vol.Optional(SZ_MAX_ZONES, default=DEFAULT_MAX_ZONES): vol.All(
         int, vol.Range(min=1, max=16)
     ),  # NOTE: no default

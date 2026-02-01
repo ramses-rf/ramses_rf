@@ -270,7 +270,11 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
         )
 
     except (AttributeError, LookupError, TypeError, ValueError) as err:
-        _LOGGER.exception("%s < %s(%s)", msg._pkt, err.__class__.__name__, err)
+        if getattr(gwy.config, "enforce_strict_handling", False):
+            raise
+        _LOGGER.warning(
+            "%s < %s(%s)", msg._pkt, err.__class__.__name__, err, exc_info=True
+        )
 
     else:
         logger_xxxx(msg)
