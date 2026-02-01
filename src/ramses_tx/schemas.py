@@ -407,6 +407,7 @@ def select_device_filter_mode(
 # 5/5: Gateway (engine) configuration
 
 SZ_DISABLE_SENDING: Final = "disable_sending"
+SZ_AUTOSTART: Final = "autostart"
 SZ_DISABLE_QOS: Final = "disable_qos"
 SZ_ENFORCE_KNOWN_LIST: Final[str] = f"enforce_{SZ_KNOWN_LIST}"
 SZ_EVOFW_FLAG: Final = "evofw_flag"
@@ -418,6 +419,7 @@ SZ_USE_REGEX: Final = "use_regex"
 
 SCH_ENGINE_DICT = {
     vol.Optional(SZ_DISABLE_SENDING, default=False): bool,
+    vol.Optional(SZ_AUTOSTART, default=False): bool,
     vol.Optional(SZ_DISABLE_QOS, default=None): vol.Any(
         None,  # None is selective QoS (e.g. QoS only for bindings, schedule, etc.)
         bool,
