@@ -59,6 +59,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any, Final, TypeAlias
 from urllib.parse import parse_qs, unquote, urlparse
 
+import trio
 from paho.mqtt import MQTTException, client as mqtt
 
 try:
@@ -229,7 +230,7 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
             ) from err
         return None
 
-    if not os.path.exists(serial_port):
+    if not await trio.Path.exists(serial_port):
         raise exc.TransportSerialError(f"Unable to find {serial_port}")
 
     # first, try the easy win...
