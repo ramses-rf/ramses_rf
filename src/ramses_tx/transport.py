@@ -230,7 +230,8 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
             ) from err
         return None
 
-    if not await trio.Path.exists(serial_port):
+    path = trio.Path(serial_port)
+    if not await path.exists():
         raise exc.TransportSerialError(f"Unable to find {serial_port}")
 
     # first, try the easy win...
