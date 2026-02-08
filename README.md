@@ -9,6 +9,8 @@
  - (Heat) **evohome**, **Sundial**, **Hometronic**, **Chronotherm**
  - (HVAC) **Itho**, **Orcon**, **Nuaire**, **Vasco**, **ClimaRad**
 
+Ramses RF can **not** interpret the new Honeywell Ramses-III (R3) messages used after a firmware upgrade since 2025 and (some) new devices.
+
 It requires a USB-to-RF device, either a Honeywell HGI80 (somewhat rare, expensive) or a USB/MQTT dongle running the [ramses_esp](https://github.com/IndaloTech/ramses_esp) or [evofw3](https://github.com/ghoti57/evofw3) firmware, such as the one from [here](https://indalo-tech.onlineweb.shop/) or your own ESP32-S3-WROOM-1 N16R8 with a CC1100 transponder.
 
 It does four things:
