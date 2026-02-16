@@ -239,7 +239,11 @@ def process_msg(gwy: Gateway, msg: Message) -> None:
 
         # TODO: only be for fully-faked (not Fakable) dst (it picks up via RF if not)
 
-        if msg.code == Code._1FC9 and msg.payload[SZ_PHASE] == SZ_OFFER:
+        if (
+            msg.code == Code._1FC9
+            and isinstance(msg.payload, dict)  # 1. Ensure it's a dict (not bytes)
+            and msg.payload.get(SZ_PHASE) == SZ_OFFER  # 2. Safely check for key
+        ):
             devices = [d for d in gwy.devices if d != msg.src and d._is_binding]
 
         elif msg.dst == ALL_DEV_ADDR:  # some offers use dst=63:, so after 1FC9 offer

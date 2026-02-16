@@ -10,7 +10,7 @@ from ramses_tx.exceptions import PacketInvalid
 # Navigate up from tests/tests_tx/test_regression_tx.py to tests/fixtures/
 # .parents[0] = tests/tests_tx/
 # .parents[1] = tests/
-FIXTURE_FILE = Path(__file__).parents[1] / "fixtures" / "regression_packets.txt"
+FIXTURE_FILE = Path(__file__).parents[1] / "fixtures" / "regression_packets_sorted.txt"
 
 
 def test_packet_parsing_regression(snapshot: SnapshotAssertion) -> None:

@@ -568,6 +568,8 @@
           }),
           '03': dict({
           }),
+          '04': dict({
+          }),
         }),
         'tcs_id': None,
         'type': 'UfhController',
@@ -632,7 +634,7 @@
       }),
       dict({
         'battery_low': None,
-        'heat_demand': 0.22,
+        'heat_demand': 0.9,
         'heat_demands': list([
           dict({
             'heat_demand': 0.95,
@@ -894,7 +896,7 @@
         'id': '03:123001',
         'is_alive': None,
         'tcs_id': '01:087939',
-        'temperature': 19.52,
+        'temperature': 21.6,
         'type': 'Thermostat',
         'zone_idx': '00',
       }),
@@ -1211,67 +1213,27 @@
       }),
       dict({
         'battery_low': None,
-        'id': '04:039354',
-        'is_alive': None,
-        'tcs_id': '01:123456',
-        'type': 'TrvActuator',
-        'zone_idx': '06',
-      }),
-      dict({
-        'battery_low': None,
-        'id': '04:039355',
-        'is_alive': None,
-        'tcs_id': '01:123456',
-        'type': 'TrvActuator',
-        'zone_idx': '06',
-      }),
-      dict({
-        'battery_low': None,
-        'id': '04:039356',
-        'is_alive': None,
-        'tcs_id': '01:123456',
-        'type': 'TrvActuator',
-        'zone_idx': '06',
-      }),
-      dict({
-        'battery_low': None,
-        'id': '04:039357',
-        'is_alive': None,
-        'tcs_id': '01:123456',
-        'type': 'TrvActuator',
-        'zone_idx': '06',
-      }),
-      dict({
-        'battery_low': None,
-        'id': '04:039358',
-        'is_alive': None,
-        'tcs_id': '01:123456',
-        'type': 'TrvActuator',
-        'zone_idx': '06',
-      }),
-      dict({
-        'battery_low': None,
         'id': '04:039359',
         'is_alive': None,
-        'tcs_id': '01:123456',
+        'tcs_id': '01:239700',
         'type': 'TrvActuator',
-        'zone_idx': '06',
+        'zone_idx': '07',
       }),
       dict({
         'battery_low': None,
         'id': '04:039363',
         'is_alive': None,
-        'tcs_id': '01:123456',
+        'tcs_id': '01:239700',
         'type': 'TrvActuator',
-        'zone_idx': '06',
+        'zone_idx': '07',
       }),
       dict({
         'battery_low': None,
         'id': '04:039365',
         'is_alive': None,
-        'tcs_id': '01:123456',
+        'tcs_id': '01:239700',
         'type': 'TrvActuator',
-        'zone_idx': '06',
+        'zone_idx': '07',
       }),
       dict({
         'battery_low': None,
@@ -1410,7 +1372,7 @@
       }),
       dict({
         'battery_low': False,
-        'heat_demand': 0.34,
+        'heat_demand': 0.4,
         'id': '04:057586',
         'is_alive': None,
         'setpoint': 19.5,
@@ -1887,9 +1849,9 @@
         'battery_low': None,
         'id': '04:167740',
         'is_alive': None,
-        'tcs_id': '01:145038',
+        'tcs_id': '01:069616',
         'type': 'TrvActuator',
-        'zone_idx': '01',
+        'zone_idx': '00',
       }),
       dict({
         'battery_low': None,
@@ -2127,7 +2089,7 @@
         'id': '07:017494',
         'is_alive': None,
         'tcs_id': '01:078710',
-        'temperature': 21.03,
+        'temperature': 43.82,
         'type': 'DhwSensor',
         'zone_idx': 'HW',
       }),
@@ -2350,13 +2312,13 @@
       }),
       dict({
         'actuator_state': dict({
-          'ch_active': False,
-          'ch_enabled': False,
-          'ch_setpoint': 10,
+          'ch_active': True,
+          'ch_enabled': True,
+          'ch_setpoint': 23,
           'cool_active': False,
           'dhw_active': False,
           'flame_on': False,
-          'max_rel_modulation': 0.5,
+          'max_rel_modulation': 0.0,
           'modulation_level': 0.0,
         }),
         'battery_low': None,
@@ -2364,7 +2326,7 @@
         'heat_demand': 0.0,
         'id': '10:040239',
         'is_alive': None,
-        'max_rel_modulation': 0.5,
+        'max_rel_modulation': 0.0,
         'rel_modulation_level': 0.0,
         'tcs_id': None,
         'type': 'OtbGateway',
@@ -2539,16 +2501,16 @@
       dict({
         'actuator_state': dict({
           'ch_active': True,
-          'cool_active': False,
-          'dhw_active': False,
+          'cool_active': True,
+          'dhw_active': True,
           'flame_on': True,
-          'modulation_level': 0.3,
+          'modulation_level': 0.0,
         }),
         'battery_low': None,
         'flame_active': True,
         'id': '10:067219',
         'is_alive': None,
-        'rel_modulation_level': 0.3,
+        'rel_modulation_level': 0.0,
         'tcs_id': None,
         'type': 'OtbGateway',
         'zone_idx': None,
@@ -2596,8 +2558,8 @@
         }),
         'battery_low': None,
         'boiler_output_temp': 53.69,
-        'boiler_return_temp': 43.0,
-        'boiler_setpoint': 49.0,
+        'boiler_return_temp': 33.0,
+        'boiler_setpoint': 30.0,
         'ch_max_setpoint': 60.0,
         'dhw_setpoint': 60.0,
         'flame_active': True,
@@ -2659,15 +2621,15 @@
         'actuator_state': dict({
           'ch_active': False,
           'cool_active': False,
-          'dhw_active': True,
-          'flame_on': True,
-          'modulation_level': 0.49,
+          'dhw_active': False,
+          'flame_on': False,
+          'modulation_level': 0.0,
         }),
         'battery_low': None,
-        'flame_active': True,
+        'flame_active': False,
         'id': '10:130890',
         'is_alive': None,
-        'rel_modulation_level': 0.49,
+        'rel_modulation_level': 0.0,
         'tcs_id': None,
         'type': 'OtbGateway',
         'zone_idx': None,
@@ -4511,7 +4473,7 @@
         'is_alive': None,
         'setpoint': 13.0,
         'tcs_id': '01:145038',
-        'temperature': 20.64,
+        'temperature': 20.66,
         'type': 'Thermostat',
         'zone_idx': '06',
       }),
@@ -5736,9 +5698,10 @@
           '00': dict({
             '_name': 'CHP Office',
             'actuators': list([
+              '04:167740',
             ]),
             'class': 'radiator_valve',
-            'sensor': None,
+            'sensor': '04:167740',
           }),
           '01': dict({
             '_name': 'Lounge',
@@ -6363,14 +6326,6 @@
           '06': dict({
             '_name': None,
             'actuators': list([
-              '04:039354',
-              '04:039355',
-              '04:039356',
-              '04:039357',
-              '04:039358',
-              '04:039359',
-              '04:039363',
-              '04:039365',
             ]),
             'class': 'radiator_valve',
             'sensor': None,
@@ -6473,7 +6428,6 @@
           '01': dict({
             '_name': 'Main room',
             'actuators': list([
-              '04:167740',
               '04:189078',
             ]),
             'class': 'radiator_valve',
@@ -6945,21 +6899,111 @@
           '07': dict({
             '_name': None,
             'actuators': list([
+              '04:039359',
+              '04:039363',
+              '04:039365',
             ]),
-            'class': None,
+            'class': 'radiator_valve',
             'sensor': None,
           }),
         }),
       }),
-      'main_tcs': '01:062035',
+      'main_tcs': '01:145038',
       'orphans_heat': list([
+        '04:017810',
+        '13:027756',
       ]),
       'orphans_hvac': list([
       ]),
     }),
     'tcs': dict({
-      'id': '01:062035',
+      'id': '01:145038',
       'zones': dict({
+        '00': dict({
+          'actuators': list([
+          ]),
+          'name': None,
+          'sensor': None,
+          'type': 'Zone',
+        }),
+        '01': dict({
+          'actuators': list([
+            '04:189078',
+          ]),
+          'name': 'Main room',
+          'sensor': None,
+          'type': 'RadZone',
+        }),
+        '02': dict({
+          'actuators': list([
+            '04:056057',
+          ]),
+          'name': 'Kitchen',
+          'sensor': '34:092243',
+          'type': 'RadZone',
+        }),
+        '03': dict({
+          'actuators': list([
+            '04:056059',
+          ]),
+          'name': 'Kitchen',
+          'sensor': '12:010740',
+          'type': 'RadZone',
+        }),
+        '04': dict({
+          'actuators': list([
+            '04:056053',
+            '04:189076',
+          ]),
+          'name': 'Bathroom',
+          'sensor': '04:189076',
+          'type': 'RadZone',
+        }),
+        '05': dict({
+          'actuators': list([
+            '04:189082',
+          ]),
+          'name': 'Bedroom',
+          'sensor': '34:136285',
+          'type': 'RadZone',
+        }),
+        '06': dict({
+          'actuators': list([
+            '04:189080',
+          ]),
+          'name': 'Kids room',
+          'sensor': '34:064023',
+          'type': 'RadZone',
+        }),
+        '07': dict({
+          'actuators': list([
+            '04:056061',
+          ]),
+          'name': 'Back room',
+          'sensor': '34:205645',
+          'type': 'RadZone',
+        }),
+        '08': dict({
+          'actuators': list([
+          ]),
+          'name': None,
+          'sensor': None,
+          'type': 'Zone',
+        }),
+        '09': dict({
+          'actuators': list([
+          ]),
+          'name': None,
+          'sensor': None,
+          'type': 'Zone',
+        }),
+        '0A': dict({
+          'actuators': list([
+          ]),
+          'name': 'Office',
+          'sensor': '22:140285',
+          'type': 'Zone',
+        }),
       }),
     }),
   })

@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from syrupy.assertion import SnapshotAssertion
@@ -15,7 +15,7 @@ from ramses_tx.exceptions import TransportError
 from ramses_tx.transport import SZ_READER_TASK
 
 # Navigate up from tests/tests_rf/test_regression_rf.py to tests/fixtures/
-FIXTURE_FILE = Path(__file__).parents[1] / "fixtures" / "regression_packets.txt"
+FIXTURE_FILE = Path(__file__).parents[1] / "fixtures" / "regression_packets_sorted.txt"
 
 
 def serialize_device(dev: Any) -> dict[str, Any]:
@@ -172,9 +172,8 @@ async def test_gateway_replay_regression(snapshot: SnapshotAssertion) -> None:
 
     # 2. Patch sending methods to prevent "Read-Only" errors & background noise.
     # The gateway logic might try to reply to RQs found in the logs.
-    # We use a MagicMock that returns an awaitable (Future) resolving to None.
-    mock_send = MagicMock(return_value=asyncio.Future())
-    mock_send.return_value.set_result(None)
+    # We use AsyncMock to ensure a proper coroutine is returned for asyncio.create_task.
+    mock_send = AsyncMock(return_value=None)
 
     with patch.object(gwy, "async_send_cmd", mock_send):
         # 3. Start the Gateway (spawns the reader task)
