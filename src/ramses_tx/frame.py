@@ -70,7 +70,7 @@ class Frame:
 
         self._frame: str = frame
         if not COMMAND_REGEX.match(self._frame):
-            raise exc.PacketInvalid(f"Bad frame: invalid structure: >>>{frame}<<<")
+            raise exc.PacketInvalid(f"Bad frame: Invalid structure: >>>{frame}<<<")
 
         fields = frame.lstrip().split(" ")
 
@@ -86,11 +86,11 @@ class Frame:
                 " ".join(fields[i] for i in range(2, 5))  # frame[7:36]
             )
         except exc.PacketInvalid as err:  # will be: InvalidAddrSetError
-            raise exc.PacketInvalid("Bad frame: invalid address set") from err
+            raise exc.PacketInvalid("Bad frame: Invalid address set") from err
 
         if len(self.payload) != int(self.len_) * 2:
             raise exc.PacketInvalid(
-                f"Bad frame: invalid payload: "
+                f"Bad frame: Invalid payload: "
                 f"len({self.payload}) is not int('{self.len_}' * 2))"
             )
 
