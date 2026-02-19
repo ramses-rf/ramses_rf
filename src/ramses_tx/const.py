@@ -39,8 +39,14 @@ MAX_RETRY_LIMIT: Final[int] = 3
 #: Minimum gap between writes (seconds)
 MIN_INTER_WRITE_GAP: Final[float] = 0.05
 DEFAULT_GAP_DURATION: Final[float] = MIN_INTER_WRITE_GAP
+MIN_GAP_DURATION: Final[float] = 0.02  # used in ramses_cc Action schema
+MAX_GAP_DURATION: Final[float] = 1.0  # used in ramses_cc Action schema
+
 DEFAULT_MAX_RETRIES: Final[int] = 3
+
 DEFAULT_NUM_REPEATS: Final[int] = 0
+MIN_NUM_REPEATS: Final[int] = 1  # used in ramses_cc Action schema
+MAX_NUM_REPEATS: Final[int] = 5  # used in ramses_cc Action schema
 
 SZ_QOS: Final = "qos"
 
