@@ -14,7 +14,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from logging.handlers import QueueListener
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ramses_tx.const import (
     DEFAULT_GAP_DURATION,
@@ -67,14 +67,16 @@ from ramses_tx.typing import PktLogConfigT, PortConfigT
 from .database import MessageIndex
 from .device import DeviceHeat, DeviceHvac, Fakeable, HgiGateway, device_factory
 from .dispatcher import detect_array_fragment, process_msg
+from .interfaces import GatewayInterface, MessageIndexInterface
 from .schemas import load_schema
 from .system import Evohome
 
 if TYPE_CHECKING:
-    from ramses_tx import DeviceIdT, DeviceListT, RamsesTransportT
+    from ramses_tx import RamsesTransportT
 
     from .device import Device
     from .entity_base import Parent
+    from .typing import DeviceIdT, DeviceListT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -93,7 +95,7 @@ class GatewayConfig:
     use_native_ot: Literal["always", "prefer", "avoid", "never"] | None = None
 
 
-class Gateway(Engine):
+class Gateway(Engine, GatewayInterface):
     """The gateway class.
 
     This class serves as the primary interface for the RAMSES RF network. It manages
@@ -160,15 +162,15 @@ class Gateway(Engine):
         if debug_mode:
             _LOGGER.setLevel(logging.DEBUG)
 
-        self.config = config or GatewayConfig()
+        self._gwy_config = config or GatewayConfig()
 
         super().__init__(
             port_name,
             input_file=input_file,
             port_config=port_config,
             packet_log=packet_log,
-            block_list=block_list,
-            known_list=known_list,
+            block_list=cast("Any", block_list),
+            known_list=cast("Any", known_list),
             loop=loop,
             hgi_id=hgi_id,
             transport_constructor=transport_constructor,
@@ -176,13 +178,13 @@ class Gateway(Engine):
             disable_qos=disable_qos,
             enforce_known_list=enforce_known_list,
             evofw_flag=evofw_flag,
-            use_regex=self.config.use_regex,
+            use_regex=self._gwy_config.use_regex,
         )
 
         if self._disable_sending:
-            self.config.disable_discovery = True
+            self._gwy_config.disable_discovery = True
 
-        if self.config.enable_eavesdrop:
+        if self._gwy_config.enable_eavesdrop:
             _LOGGER.warning(
                 f"{SZ_ENABLE_EAVESDROP}=True: this is strongly discouraged"
                 " for routine use (there be dragons here)"
@@ -195,7 +197,7 @@ class Gateway(Engine):
         self.devices: list[Device] = []
         self.device_by_id: dict[DeviceIdT, Device] = {}
 
-        self.msg_db: MessageIndex | None = None
+        self._msg_db: MessageIndexInterface | None = None
         self._pkt_log_listener: QueueListener | None = None
 
     def __repr__(self) -> str:
@@ -207,6 +209,21 @@ class Gateway(Engine):
         if not self.ser_name:
             return f"Gateway(input_file={self._input_file})"
         return f"Gateway(port_name={self.ser_name}, port_config={self._port_config})"
+
+    @property
+    def config(self) -> GatewayConfig:
+        """Return the gateway configuration."""
+        return self._gwy_config
+
+    @property
+    def msg_db(self) -> MessageIndexInterface | None:
+        """Return the message database if configured."""
+        return self._msg_db
+
+    @msg_db.setter
+    def msg_db(self, value: MessageIndexInterface | None) -> None:
+        """Set the message database."""
+        self._msg_db = value
 
     @property
     def hgi(self) -> HgiGateway | None:
@@ -297,7 +314,7 @@ class Gateway(Engine):
         :returns: None
         :rtype: None
         """
-        self.msg_db = MessageIndex()  # start the index
+        self._msg_db = MessageIndex()  # start the index
 
     async def stop(self) -> None:
         """Stop the Gateway and tidy up.
@@ -318,8 +335,8 @@ class Gateway(Engine):
                 handler.close()
             self._pkt_log_listener = None
 
-        if self.msg_db:
-            self.msg_db.stop()
+        if self._msg_db:
+            self._msg_db.stop()
 
     async def _pause(self, *args: Any) -> None:
         """Pause the (unpaused) gateway (disables sending/discovery).
@@ -647,7 +664,7 @@ class Gateway(Engine):
         :rtype: DeviceListT
         """
 
-        result = self._include  # could be devices here, not (yet) in gwy.devices
+        result = dict(self._include)  # ensure we do not mutate the engine's list
         result.update(
             {
                 d.id: {k: d.traits[k] for k in (SZ_CLASS, SZ_ALIAS, SZ_FAKED)}  # type: ignore[misc]
@@ -655,7 +672,7 @@ class Gateway(Engine):
                 if not self._enforce_known_list or d.id in self._include
             }
         )
-        return result
+        return cast("DeviceListT", result)
 
     @property
     def system_by_id(self) -> dict[DeviceIdT, Evohome]:

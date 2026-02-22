@@ -12,7 +12,7 @@ from datetime import datetime as dt, timedelta as td
 from inspect import getmembers, isclass
 from sys import modules
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from ramses_rf.helpers import schedule_task
 from ramses_tx import Priority, QosParams
@@ -53,14 +53,7 @@ if TYPE_CHECKING:
     from ramses_tx.opentherm import OtDataId
     from ramses_tx.typing import DeviceIdT, DevIndexT, HeaderT
 
-    from .device import (
-        BdrSwitch,
-        Controller,
-        DhwSensor,
-        OtbGateway,
-        TrvActuator,
-        UfhCircuit,
-    )
+    from .device import Controller
     from .gateway import Gateway
     from .system import Evohome
 
@@ -340,8 +333,6 @@ class _MessageDB(_Entity):
     def _delete_msg(self, msg: Message) -> None:  # FIXME: this is a mess
         """Remove the msg from all state databases. Used for expired msgs."""
 
-        from .device import Device
-
         obj: _MessageDB
 
         # delete from the central SQLite MessageIndex
@@ -349,13 +340,15 @@ class _MessageDB(_Entity):
             self._gwy.msg_db.rem(msg)
 
         entities: list[_MessageDB] = []
-        if isinstance(msg.src, Device):
-            entities = [msg.src]
-            if getattr(msg.src, "tcs", None):
-                entities.append(msg.src.tcs)
-                if msg.src.tcs.dhw:
-                    entities.append(msg.src.tcs.dhw)
-                entities.extend(msg.src.tcs.zones)
+        if hasattr(msg.src, "tcs"):
+            entities = [cast("_MessageDB", msg.src)]
+            tcs = getattr(msg.src, "tcs", None)
+            if tcs:
+                entities.append(cast("_MessageDB", tcs))
+                if getattr(tcs, "dhw", None):
+                    entities.append(cast("_MessageDB", tcs.dhw))
+                if getattr(tcs, "zones", None):
+                    entities.extend(cast("list[_MessageDB]", tcs.zones))
 
         # remove the msg from all the state DBs
         # TODO(eb): remove Q1 2026
@@ -1214,15 +1207,15 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
     There is a `set_parent` method, but no `set_child` method.
     """
 
-    actuator_by_id: dict[DeviceIdT, BdrSwitch | UfhCircuit | TrvActuator]
-    actuators: list[BdrSwitch | UfhCircuit | TrvActuator]
+    actuator_by_id: dict[DeviceIdT, Any]
+    actuators: list[Any]
 
     circuit_by_id: dict[str, Any]
 
-    _app_cntrl: BdrSwitch | OtbGateway | None
-    _dhw_sensor: DhwSensor | None
-    _dhw_valve: BdrSwitch | None
-    _htg_valve: BdrSwitch | None
+    _app_cntrl: Any
+    _dhw_sensor: Any
+    _dhw_valve: Any
+    _htg_valve: Any
 
     def __init__(self, *args: Any, child_id: str = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -1257,26 +1250,10 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
         This method should be invoked by the child's corresponding `set_parent` method.
         """
 
-        # NOTE: here to prevent circular references
-        from .device import (
-            BdrSwitch,
-            DhwSensor,
-            OtbGateway,
-            OutSensor,
-            TrvActuator,
-            UfhCircuit,
-            UfhController,
-        )
-        from .system import DhwZone, System, Zone
-
         if hasattr(self, "childs") and child not in self.childs:  # Any parent
-            assert isinstance(
-                self, System | Zone | DhwZone | UfhController
-            )  # TODO: remove me
+            pass
 
         if is_sensor and child_id == FA:  # DHW zone (sensor)
-            assert isinstance(self, DhwZone)  # TODO: remove me
-            assert isinstance(child, DhwSensor)
             if self._dhw_sensor and self._dhw_sensor is not child:
                 raise exc.SystemSchemaInconsistent(
                     f"{self} changed dhw_sensor (from {self._dhw_sensor} to {child})"
@@ -1284,10 +1261,9 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
             self._dhw_sensor = child
 
         elif is_sensor and hasattr(self, SZ_SENSOR):  # HTG zone
-            assert isinstance(self, Zone)  # TODO: remove me
-            if self.sensor and self.sensor is not child:
+            if getattr(self, SZ_SENSOR, None) and getattr(self, SZ_SENSOR) is not child:
                 raise exc.SystemSchemaInconsistent(
-                    f"{self} changed zone sensor (from {self.sensor} to {child})"
+                    f"{self} changed zone sensor (from {getattr(self, SZ_SENSOR)} to {child})"
                 )
             self._sensor = child
 
@@ -1297,20 +1273,15 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
             )
 
         elif hasattr(self, SZ_CIRCUITS):  # UFH circuit
-            assert isinstance(self, UfhController)  # TODO: remove me
             if child not in self.circuit_by_id:
                 self.circuit_by_id[child.id] = child
 
         elif hasattr(self, SZ_ACTUATORS):  # HTG zone
-            assert isinstance(self, Zone)  # TODO: remove me
-            assert isinstance(child, BdrSwitch | UfhCircuit | TrvActuator)
             if child not in self.actuators:
                 self.actuators.append(child)
-                self.actuator_by_id[child.id] = child  # type: ignore[assignment,index]
+                self.actuator_by_id[child.id] = child
 
         elif child_id == F9:  # DHW zone (HTG valve)
-            assert isinstance(self, DhwZone)  # TODO: remove me
-            assert isinstance(child, BdrSwitch)
             if self._htg_valve and self._htg_valve is not child:
                 raise exc.SystemSchemaInconsistent(
                     f"{self} changed htg_valve (from {self._htg_valve} to {child})"
@@ -1318,8 +1289,6 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
             self._htg_valve = child
 
         elif child_id == FA:  # DHW zone (DHW valve)
-            assert isinstance(self, DhwZone)  # TODO: remove me
-            assert isinstance(child, BdrSwitch)
             if self._dhw_valve and self._dhw_valve is not child:
                 raise exc.SystemSchemaInconsistent(
                     f"{self} changed dhw_valve (from {self._dhw_valve} to {child})"
@@ -1327,8 +1296,6 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
             self._dhw_valve = child
 
         elif child_id == FC:  # Appliance Controller
-            assert isinstance(self, System)  # TODO: remove me
-            assert isinstance(child, BdrSwitch | OtbGateway)
             if self._app_cntrl and self._app_cntrl is not child:
                 raise exc.SystemSchemaInconsistent(
                     f"{self} changed app_cntrl (from {self._app_cntrl} to {child})"
@@ -1336,8 +1303,6 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
             self._app_cntrl = child
 
         elif child_id == FF:  # System
-            assert isinstance(self, System)  # TODO: remove me?
-            assert isinstance(child, UfhController | OutSensor)
             pass
 
         else:
@@ -1376,17 +1341,14 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
         self._child_id: str | None = None  # TODO: should be: str?
 
     def _handle_msg(self, msg: Message) -> None:
-        from .device import Controller, Device, UfhController
-
         def eavesdrop_parent_zone() -> None:
-            if isinstance(msg.src, UfhController):
+            if msg.src.__class__.__name__ == "UfhController":
                 return
 
             if SZ_ZONE_IDX not in msg.payload:
                 return
 
-            if isinstance(self, Device):  # FIXME: a mess... see issue ramses_cc #249
-                # the following is a mess - may just be better off deprecating it
+            if hasattr(self, "type") and hasattr(self, "set_parent"):
                 if self.type in DEV_TYPE_MAP.HEAT_ZONE_ACTUATORS:
                     self.set_parent(msg.dst, child_id=msg.payload[SZ_ZONE_IDX])
 
@@ -1398,7 +1360,8 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
         super()._handle_msg(msg)
 
         if not self._gwy.config.enable_eavesdrop or (
-            msg.src is msg.dst or not isinstance(msg.dst, Controller)  # UfhController))
+            msg.src is msg.dst
+            or msg.dst.__class__.__name__ not in ("Controller", "UfhController")
         ):
             return
 
@@ -1410,48 +1373,47 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
     ) -> tuple[Parent, str | None]:
         """Get the device's parent, after validating it."""
 
-        # NOTE: here to prevent circular references
-        from .device import (
-            BdrSwitch,
-            Controller,
-            DhwSensor,
-            OtbGateway,
-            OutSensor,
-            Thermostat,
-            TrvActuator,
-            UfhCircuit,
-            UfhController,
-        )
-        from .system import DhwZone, Evohome, System, Zone
+        parent_class = parent.__class__.__name__
+        self_class = self.__class__.__name__
 
-        if isinstance(self, UfhController):
+        if self_class == "UfhController":
             child_id = FF
 
-        if isinstance(parent, Controller):  # A controller can't be a Parent
-            parent = parent.tcs
+        if parent_class == "Controller":  # A controller can't be a Parent
+            parent = cast(Any, parent).tcs
+            parent_class = parent.__class__.__name__
 
-        if isinstance(parent, Evohome) and child_id:
+        if parent_class in ("Evohome", "System") and child_id:
             if child_id in (F9, FA):
-                parent = parent.get_dhw_zone()
-            # elif child_id == FC:
-            #     pass
-            elif int(child_id, 16) < parent._max_zones:
-                parent = parent.get_htg_zone(child_id)
+                parent = cast(Any, parent).get_dhw_zone()
+                parent_class = parent.__class__.__name__
+            elif (
+                hasattr(parent, "_max_zones")
+                and int(child_id, 16) < cast(Any, parent)._max_zones
+            ):
+                parent = cast(Any, parent).get_htg_zone(child_id)
+                parent_class = parent.__class__.__name__
 
-        elif isinstance(parent, Zone) and not child_id:
-            child_id = child_id or parent.idx
+        elif (
+            parent_class
+            in (
+                "Zone",
+                "DhwZone",
+                "ElecZone",
+                "MixZone",
+                "RadZone",
+                "UfhZone",
+                "ValZone",
+            )
+            and not child_id
+        ):
+            child_id = child_id or getattr(parent, "idx", None)
 
-        # elif isinstance(parent, DhwZone) and child_id:
-        #     child_id = child_id or parent.idx  # ?"HW"
-
-        elif isinstance(parent, UfhController) and not child_id:
+        elif parent_class == "UfhController" and not child_id:
             raise TypeError(
                 f"{self}: can't set child_id to: {child_id} "
                 f"(for Circuits, it must be a circuit_idx)"
             )
-
-        # if child_id is None:
-        #     child_id = parent._child_id  # or, for zones: parent.idx
 
         if self._parent and self._parent != parent:
             raise exc.SystemSchemaInconsistent(
@@ -1459,72 +1421,82 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
                 f"({self._parent}_{self._child_id} to {parent}_{child_id})"
             )
 
-        # if self._child_id is not None and self._child_id != child_id:
-        #     raise CorruptStateError(
-        #         f"{self} can't set domain to: {child_id}, "
-        #         f"({self._parent}_{self._child_id} to {parent}_{child_id})"
-        #     )
-
-        # if self._parent:
-        #     if self._parent.ctl is not parent:
-        #         raise CorruptStateError(f"parent mismatch: {self._parent.ctl} is not {parent}")
-        #     if self._child_id and self._child_id != child_id:
-        #         raise CorruptStateError(f"child_id mismatch: {self._child_id} != {child_id}")
-
-        PARENT_RULES: dict[Any, dict] = {
-            DhwZone: {SZ_ACTUATORS: (BdrSwitch,), SZ_SENSOR: (DhwSensor,)},
-            System: {
-                SZ_ACTUATORS: (BdrSwitch, OtbGateway, UfhController),
-                SZ_SENSOR: (OutSensor,),
+        PARENT_RULES: dict[str, dict] = {
+            "DhwZone": {SZ_ACTUATORS: ("BdrSwitch",), SZ_SENSOR: ("DhwSensor",)},
+            "System": {
+                SZ_ACTUATORS: ("BdrSwitch", "OtbGateway", "UfhController"),
+                SZ_SENSOR: ("OutSensor",),
             },
-            UfhController: {SZ_ACTUATORS: (UfhCircuit,), SZ_SENSOR: ()},
-            Zone: {
-                SZ_ACTUATORS: (BdrSwitch, TrvActuator, UfhCircuit),
-                SZ_SENSOR: (Controller, Thermostat, TrvActuator),
+            "Evohome": {
+                SZ_ACTUATORS: ("BdrSwitch", "OtbGateway", "UfhController"),
+                SZ_SENSOR: ("OutSensor",),
+            },
+            "UfhController": {SZ_ACTUATORS: ("UfhCircuit",), SZ_SENSOR: ()},
+            "Zone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
+            },
+            "ElecZone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
+            },
+            "MixZone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
+            },
+            "RadZone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
+            },
+            "UfhZone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
+            },
+            "ValZone": {
+                SZ_ACTUATORS: ("BdrSwitch", "TrvActuator", "UfhCircuit"),
+                SZ_SENSOR: ("Controller", "Thermostat", "TrvActuator"),
             },
         }
 
-        for k, v in PARENT_RULES.items():
-            if isinstance(parent, k):
-                rules = v
-                break
-        else:
+        rules = PARENT_RULES.get(parent_class)
+        if not rules:
             raise TypeError(
                 f"for Parent {parent}: not a valid parent "
                 f"(it must be {tuple(PARENT_RULES.keys())})"
             )
 
-        if is_sensor and not isinstance(self, rules[SZ_SENSOR]):
+        if is_sensor and self_class not in rules[SZ_SENSOR]:
             raise TypeError(
                 f"for Parent {parent}: Sensor {self} must be {rules[SZ_SENSOR]}"
             )
-        if not is_sensor and not isinstance(self, rules[SZ_ACTUATORS]):
+        if not is_sensor and self_class not in rules[SZ_ACTUATORS]:
             raise TypeError(
                 f"for Parent {parent}: Actuator {self} must be {rules[SZ_ACTUATORS]}"
             )
 
-        if isinstance(parent, Zone):
-            if child_id != parent.idx:
+        if "Zone" in parent_class and parent_class != "DhwZone":
+            parent_idx = getattr(parent, "idx", None)  # noqa: B009
+            if child_id != parent_idx:
                 raise TypeError(
                     f"{self}: can't set child_id to: {child_id} "
-                    f"(it must match its parent's zone idx, {parent.idx})"
+                    f"(it must match its parent's zone idx, {parent_idx})"
                 )
 
-        elif isinstance(parent, DhwZone):  # usu. FA (HW), could be F9
+        elif parent_class == "DhwZone":  # usu. FA (HW), could be F9
             if child_id not in (F9, FA):  # may not be known if eavesdrop'd
                 raise TypeError(
                     f"{self}: can't set child_id to: {child_id} "
                     f"(for DHW, it must be F9 or FA)"
                 )
 
-        elif isinstance(parent, System):  # usu. FC
+        elif parent_class in ("System", "Evohome"):  # usu. FC
             if child_id not in (FC, FF):  # was: not in (F9, FA, FC, "HW"):
                 raise TypeError(
                     f"{self}: can't set child_id to: {child_id} "
                     f"(for TCS, it must be FC)"
                 )
 
-        elif not isinstance(parent, UfhController):  # is like CTL/TCS combined
+        elif parent_class != "UfhController":  # is like CTL/TCS combined
             raise TypeError(
                 f"{self}: can't set Parent to: {parent} "
                 f"(it must be System, DHW, Zone, or UfhController)"
@@ -1548,15 +1520,10 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
         controller, or an UFH controller.
         """
 
-        from .device import (  # NOTE: here to prevent circular references
-            Controller,
-            UfhController,
-        )
-
         parent, child_id = self._get_parent(
             parent, child_id=child_id, is_sensor=is_sensor
         )
-        ctl = parent if isinstance(parent, UfhController) else parent.ctl
+        ctl = parent if parent.__class__.__name__ == "UfhController" else parent.ctl
 
         if self.ctl and self.ctl is not ctl:
             # NOTE: assume a device is bound to only one CTL (usu. best practice)
@@ -1566,15 +1533,11 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
             )
 
         parent._add_child(self, child_id=child_id, is_sensor=is_sensor)
-        # parent.childs.append(self)
-        # parent.child_by_id[self.id] = self
 
         self._child_id = child_id
         self._parent = parent
 
-        assert isinstance(ctl, Controller)  # mypy hint
-
-        self.ctl: Controller = ctl
-        self.tcs: Evohome = ctl.tcs
+        self.ctl = cast("Controller", ctl)
+        self.tcs = cast("Evohome", getattr(ctl, "tcs", None))
 
         return parent
