@@ -101,6 +101,7 @@ from ramses_tx.const import (
 )
 
 if TYPE_CHECKING:
+    from ramses_rf.models import DeviceTraits
     from ramses_rf.system import Evohome, Zone
     from ramses_tx import Address, Message, Packet
     from ramses_tx.opentherm import OtDataId
@@ -323,8 +324,10 @@ class Controller(DeviceHeat):  # CTL (01):
     _SLUG = DevType.CTL
     _STATE_ATTR = HEAT_DEMAND
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, traits=traits, **kwargs)
 
         # self.ctl = None
         self.tcs = None  # TODO: = self?
@@ -393,8 +396,10 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
     # 12:27:24.824 059  I --- 01:191718 --:------ 01:191718 3150 002 FC5C
     # 12:27:24.857 067  I --- 02:000921 --:------ 02:000921 3150 006 0060-015A-025C
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, traits=traits, **kwargs)
 
         self.circuit_by_id = {f"{i:02X}": {} for i in range(8)}
 
@@ -608,8 +613,10 @@ class DhwSensor(DhwTemperature, BatteryState, Fakeable):  # DHW (07): 10A0, 1260
     _SLUG: str = DevType.DHW
     _STATE_ATTR = DhwTemperature.TEMPERATURE
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, traits=traits, **kwargs)
 
         self._child_id = FA  # NOTE: domain_id
 
@@ -685,8 +692,10 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         v: k for k, v in OT_TO_RAMSES.items() if v != Code._3EF0
     }  # also 10A0?
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, traits=traits, **kwargs)
 
         self._child_id = FC  # NOTE: domain_id
 
@@ -1356,8 +1365,8 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
     _SLUG = DevType.BDR
     _STATE_ATTR = "active"
 
-    # def __init__(self, *args: Any, **kwargs: Any) -> None:
-    #     super().__init__(*args, **kwargs)
+    # def __init__(self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any) -> None:
+    #     super().__init__(*args, traits=traits, **kwargs)
 
     #     if kwargs.get(SZ_DOMAIN_ID) == FC:  # TODO: F9/FA/FC, zone_idx
     #         self.ctl._set_app_cntrl(self)
