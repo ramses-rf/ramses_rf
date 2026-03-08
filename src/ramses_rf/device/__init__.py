@@ -4,11 +4,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ramses_rf.const import DEV_TYPE_MAP
+from ramses_rf.models import DeviceTraits
 from ramses_tx.const import DevType
-from ramses_tx.schemas import SZ_CLASS, SZ_FAKED
 
 from .base import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     BASE_CLASS_BY_SLUG as _BASE_CLASS_BY_SLUG,
@@ -100,7 +100,7 @@ def best_dev_role(
     *,
     msg: Message | None = None,
     eavesdrop: bool = False,
-    **schema: Any,
+    traits: DeviceTraits | None = None,
 ) -> type[Device]:
     """Return the best device role (object class) for a given device id/msg/schema.
 
@@ -112,15 +112,17 @@ def best_dev_role(
     """
 
     cls: type[Device]
-    slug: str
+    slug: str | None
+
+    traits = traits or DeviceTraits()
 
     try:  # convert (say) 'dhw_sensor' to DHW
-        slug = DEV_TYPE_MAP.slug(schema.get(SZ_CLASS))  # type: ignore[arg-type]
+        slug = DEV_TYPE_MAP.slug(traits.device_class)  # type: ignore[arg-type]
     except KeyError:
-        slug = schema.get(SZ_CLASS)
+        slug = traits.device_class
 
     # a specified device class always takes precedence (even if it is wrong)...
-    if slug in _CLASS_BY_SLUG:
+    if slug and slug in _CLASS_BY_SLUG:
         cls = _CLASS_BY_SLUG[slug]
         _LOGGER.debug(
             f"Using an explicitly-defined class for: {dev_addr!r} ({cls._SLUG})"
@@ -157,27 +159,33 @@ def best_dev_role(
 
 
 def device_factory(
-    gwy: Gateway, dev_addr: Address, *, msg: Message | None = None, **traits: Any
+    gwy: Gateway,
+    dev_addr: Address,
+    *,
+    msg: Message | None = None,
+    traits: DeviceTraits | None = None,
 ) -> Device:
     """Return the initial device class for a given device id/msg/traits.
 
     Devices of certain classes are promotable to a compatible sub class.
     """
 
+    traits = traits or DeviceTraits()
+
     cls: type[Device] = best_dev_role(
         dev_addr,
         msg=msg,
         eavesdrop=gwy.config.enable_eavesdrop,
-        **traits,
+        traits=traits,
     )
 
     if (
         isinstance(cls, DeviceHvac)
-        and traits.get(SZ_CLASS) in (DEV_TYPE_MAP.HVC, None)
-        and traits.get(SZ_FAKED)
+        and traits.device_class in (DEV_TYPE_MAP.HVC, None)
+        and traits.faked
     ):
         raise TypeError(
-            "Faked devices from the HVAC domain must have an explicit class: {dev_addr}"
+            f"Faked devices from the HVAC domain must have an explicit class: {dev_addr}"
         )
 
-    return cls.create_from_schema(gwy, dev_addr, **traits)
+    return cls.create_from_schema(gwy, dev_addr, **traits.to_dict())

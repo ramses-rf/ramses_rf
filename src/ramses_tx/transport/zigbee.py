@@ -74,14 +74,13 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         protocol: RamsesProtocolT,
         *,
         config: TransportConfig,
-        extra: dict[str, Any] | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
         # _FullTransport and _ReadTransport break the cooperative MRO chain by
         # calling their parent classes directly rather than via super().  We
         # therefore initialise both halves of the diamond explicitly.
         _ZigbeeTransportAbstractor.__init__(self, zigbee_url, protocol, loop=loop)
-        _FullTransport.__init__(self, config=config, extra=extra, loop=loop)
+        _FullTransport.__init__(self, config=config, loop=loop)
 
         self._ieee = self._zigbee_url.netloc
         path_parts = [p for p in self._zigbee_url.path.strip("/").split("/") if p]
@@ -124,7 +123,7 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         self._chunk_body_len = self._CHUNK_BODY_LEN_CMD
 
         self._extra[SZ_IS_EVOFW3] = True
-        self._hass = self._extra.get("_hass")
+        self._hass = config.app_context
         self._device: Any | None = None
         self._zha_gateway: Any | None = None
         self._cluster: Any | None = None

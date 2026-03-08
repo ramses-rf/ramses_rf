@@ -42,7 +42,7 @@ def _mock_create_task() -> MagicMock:
 
 def _make_transport(
     url: str = _VALID_URL,
-    extra: dict[str, Any] | None = None,
+    app_context: Any = "DEFAULT_MOCK",
 ) -> ZigbeeTransport:
     """Create a ZigbeeTransport with *_async_init* suppressed.
 
@@ -51,7 +51,9 @@ def _make_transport(
     "coroutine was never awaited" warning.
     """
     mock_protocol = MagicMock()
-    _extra: dict[str, Any] = extra if extra is not None else {"_hass": MagicMock()}
+
+    if isinstance(app_context, str) and app_context == "DEFAULT_MOCK":
+        app_context = MagicMock()
 
     mock_loop = MagicMock(spec=asyncio.AbstractEventLoop)
 
@@ -68,8 +70,7 @@ def _make_transport(
     transport = ZigbeeTransport(
         url,
         mock_protocol,
-        config=TransportConfig(),
-        extra=_extra,
+        config=TransportConfig(app_context=app_context),
         loop=mock_loop,
     )
     # Re-install the coro-closing mock so that any subsequent create_task calls
@@ -122,13 +123,13 @@ class TestZigbeeTransportUrlParsing(unittest.TestCase):
         with self.assertRaises(exc.TransportSourceInvalid):
             _make_transport("zigbee:///0xFC00/0x0000/1/0xFC00/0x0001/1")
 
-    def test_hass_extracted_from_extra(self) -> None:
+    def test_hass_extracted_from_config(self) -> None:
         mock_hass = MagicMock()
-        t = _make_transport(extra={"_hass": mock_hass})
+        t = _make_transport(app_context=mock_hass)
         self.assertIs(t._hass, mock_hass)
 
-    def test_hass_none_when_missing_from_extra(self) -> None:
-        t = _make_transport(extra={})
+    def test_hass_none_when_missing_from_config(self) -> None:
+        t = _make_transport(app_context=None)
         self.assertIsNone(t._hass)
 
     def test_is_evofw3_set_true(self) -> None:
@@ -1001,7 +1002,7 @@ class TestAsyncInit(unittest.IsolatedAsyncioTestCase):
     async def test_no_hass_calls_close(self) -> None:
         from unittest.mock import patch
 
-        t = _make_transport(extra={})  # no _hass key
+        t = _make_transport(app_context=None)  # no hass
         t._close = MagicMock()
 
         with patch.dict(
