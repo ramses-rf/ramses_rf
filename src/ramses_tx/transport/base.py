@@ -41,6 +41,7 @@ class TransportConfig:
     evofw_flag: str | None = None
     use_regex: dict[str, dict[str, str]] = field(default_factory=dict)
     timeout: float | None = None
+    app_context: Any | None = None
 
 
 class _BaseTransport:

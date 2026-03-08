@@ -160,7 +160,6 @@ async def transport_factory(
             port_name,
             protocol,
             config=config,
-            extra=extra,
             loop=loop,
         )
         try:

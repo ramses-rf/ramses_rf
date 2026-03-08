@@ -1156,7 +1156,7 @@ class _Discovery(_MessageDB):
                 task[_SZ_NEXT_DUE] = dt_now + backoff(hdr, task[_SZ_FAILURES])
 
     def _deprecate_code_ctx(
-        self, pkt: Packet, ctx: str = None, reset: bool = False
+        self, pkt: Packet, ctx: str | None = None, reset: bool = False
     ) -> None:
         """If a code|ctx is deprecated twice, stop polling for it."""
 
@@ -1217,7 +1217,7 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
     _dhw_valve: Any
     _htg_valve: Any
 
-    def __init__(self, *args: Any, child_id: str = None, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, child_id: str | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
 
         self._child_id: str = child_id  # type: ignore[assignment]
@@ -1241,7 +1241,7 @@ class Parent(Entity):  # A System, Zone, DhwZone or a UfhController
         self._child_id = value
 
     def _add_child(
-        self, child: Any, *, child_id: str = None, is_sensor: bool = None
+        self, child: Any, *, child_id: str | None = None, is_sensor: bool | None = None
     ) -> None:
         """Add a child device to this Parent, after validating the association.
 
@@ -1329,7 +1329,7 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
     def __init__(
         self,
         *args: Any,
-        parent: Parent = None,
+        parent: Parent | None = None,
         is_sensor: bool | None = None,
         **kwargs: Any,
     ) -> None:
@@ -1369,9 +1369,15 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
             eavesdrop_parent_zone()
 
     def _get_parent(
-        self, parent: Parent, *, child_id: str = None, is_sensor: bool | None = None
+        self,
+        parent: Parent | None,
+        *,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
     ) -> tuple[Parent, str | None]:
         """Get the device's parent, after validating it."""
+        if parent is None:
+            raise TypeError(f"{self}: parent cannot be None")
 
         parent_class = parent.__class__.__name__
         self_class = self.__class__.__name__
@@ -1506,7 +1512,11 @@ class Child(Entity):  # A Zone, Device or a UfhCircuit
 
     # TODO: should be a private method
     def set_parent(
-        self, parent: Parent | None, *, child_id: str = None, is_sensor: bool = None
+        self,
+        parent: Parent | None,
+        *,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
     ) -> Parent:
         """Set the device's parent, after validating it.
 

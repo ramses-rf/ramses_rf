@@ -80,6 +80,7 @@ class Engine:
         evofw_flag: str | None = None,
         use_regex: dict[str, dict[str, str]] | None = None,
         transport_constructor: Callable[..., Awaitable[RamsesTransportT]] | None = None,
+        app_context: Any | None = None,
     ) -> None:
         if port_name and input_file:
             _LOGGER.warning(
@@ -121,6 +122,7 @@ class Engine:
         )
 
         self._transport_constructor = transport_constructor
+        self._app_context = app_context
 
         self._hgi_id = hgi_id
 
@@ -136,8 +138,6 @@ class Engine:
         self._this_msg: Message | None = None
 
         self._tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
-
-        self._extra: dict[str, Any] = {}  # extra info injected into transport factory
 
         self._set_msg_handler(self._msg_handler)  # sets self._protocol
 
@@ -204,13 +204,12 @@ class Engine:
             log_all=bool(self._log_all_mqtt),
             evofw_flag=self._evofw_flag,
             use_regex=self._use_regex,
+            app_context=self._app_context,
         )
 
         extra_info: dict[str, Any] = {}
         if self._hgi_id:
             extra_info[SZ_ACTIVE_HGI] = self._hgi_id
-        if self._extra:
-            extra_info.update(self._extra)
 
         # incl. await protocol.wait_for_connection_made(timeout=5)
         self._transport = await transport_factory(

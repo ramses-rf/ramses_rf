@@ -69,6 +69,7 @@ from .database import MessageIndex
 from .device import DeviceHeat, DeviceHvac, Fakeable, HgiGateway, device_factory
 from .dispatcher import detect_array_fragment, process_msg
 from .interfaces import GatewayInterface, MessageIndexInterface
+from .models import DeviceTraits
 from .schemas import load_schema
 from .system import Evohome
 
@@ -94,6 +95,7 @@ class GatewayConfig:
     use_aliases: dict[str, str] = field(default_factory=dict)
     enforce_strict_handling: bool = False
     use_native_ot: Literal["always", "prefer", "avoid", "never"] | None = None
+    app_context: Any | None = None
 
 
 class Gateway(Engine, GatewayInterface):
@@ -173,7 +175,6 @@ class Gateway(Engine, GatewayInterface):
         if debug_mode:
             _LOGGER.setLevel(logging.DEBUG)
 
-        hidden_kwargs = {k: v for k, v in kwargs.items() if k.startswith("_")}
         self._gwy_config = config or GatewayConfig()
 
         super().__init__(
@@ -191,12 +192,8 @@ class Gateway(Engine, GatewayInterface):
             enforce_known_list=enforce_known_list,
             evofw_flag=evofw_flag,
             use_regex=self._gwy_config.use_regex,
+            app_context=self._gwy_config.app_context,
         )
-
-        if hidden_kwargs:
-            self._extra.update(
-                hidden_kwargs
-            )  # injected into transport_factory() via Engine.start()
 
         if self._disable_sending:
             self._gwy_config.disable_discovery = True
@@ -540,7 +537,7 @@ class Gateway(Engine, GatewayInterface):
         parent: Parent | None = None,
         child_id: str | None = None,
         is_sensor: bool | None = None,
-    ) -> Device:  # TODO: **schema/traits) -> Device:  # may: LookupError
+    ) -> Device:
         """Return a device, creating it if it does not already exist.
 
         This method uses provided traits to create or update a device and optionally
@@ -595,14 +592,15 @@ class Gateway(Engine, GatewayInterface):
 
         if not dev:
             # voluptuous bug workaround: https://github.com/alecthomas/voluptuous/pull/524
-            _traits: dict[str, Any] = self._include.get(device_id, {})  # type: ignore[assignment]
-            _traits.pop("commands", None)
+            _traits_raw: dict[str, Any] = self._include.get(device_id, {})  # type: ignore[assignment]
+            _traits_raw.pop("commands", None)
 
-            traits: dict[str, Any] = SCH_TRAITS(self._include.get(device_id, {}))
+            traits_dict: dict[str, Any] = SCH_TRAITS(self._include.get(device_id, {}))
+            traits = DeviceTraits.from_dict(traits_dict)
 
-            dev = device_factory(self, Address(device_id), msg=msg, **_traits)
+            dev = device_factory(self, Address(device_id), msg=msg, traits=traits)
 
-            if traits.get(SZ_FAKED):
+            if traits.faked:
                 if isinstance(dev, Fakeable):
                     dev._make_fake()
                 else:
