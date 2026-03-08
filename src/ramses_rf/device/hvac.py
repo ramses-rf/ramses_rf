@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from ramses_rf import exceptions as exc
 from ramses_rf.const import (
@@ -55,6 +55,9 @@ from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused
     W_,
     Code,
 )
+
+if TYPE_CHECKING:
+    from ramses_rf.models import DeviceTraits
 
 # TODO: Switch this module to utilise the (run-time) decorator design pattern...
 # - https://refactoring.guru/design-patterns/decorator/python/example
@@ -260,13 +263,16 @@ class RfsGateway(DeviceHvac):  # RFS: (spIDer gateway)
 
     _SLUG: str = DevType.RFS
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
         """Initialize the RFS gateway.
 
         :param args: Positional arguments passed to the parent class
+        :param traits: Strictly typed traits object for device creation
         :param kwargs: Keyword arguments passed to the parent class
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, traits=traits, **kwargs)
 
         self.ctl = None
         self._child_id = "hv"  # NOTE: domain_id
@@ -441,13 +447,16 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
     _SLUG: str = DevType.FAN
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
         """Initialize the HvacVentilator.
 
         :param args: Positional arguments passed to the parent class
+        :param traits: Strictly typed traits object for device creation
         :param kwargs: Keyword arguments passed to the parent class
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, traits=traits, **kwargs)
         self._supports_2411 = False  # Flag for 2411 parameter support
         self._params_2411: dict[str, float] = {}  # Store 2411 parameters here
         self._initialized_callback = None  # Called when device is fully initialized

@@ -180,12 +180,12 @@ def device_factory(
     )
 
     if (
-        isinstance(cls, DeviceHvac)
-        and traits.device_class in (DEV_TYPE_MAP.HVC, None)
+        issubclass(cls, DeviceHvac)
+        and traits.device_class in (DevType.HVC, None)
         and traits.faked
     ):
         raise TypeError(
             f"Faked devices from the HVAC domain must have an explicit class: {dev_addr}"
         )
 
-    return cls.create_from_schema(gwy, dev_addr, **traits.to_dict())
+    return cls.create_from_schema(gwy, dev_addr, traits=traits)

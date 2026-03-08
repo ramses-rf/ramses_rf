@@ -14,6 +14,7 @@ class DeviceTraits:
     device_class: str | None = None
     alias: str | None = None
     faked: bool | None = None
+    scheme: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DeviceTraits:
@@ -22,6 +23,7 @@ class DeviceTraits:
             device_class=data.get("class"),
             alias=data.get("alias"),
             faked=data.get("faked"),
+            scheme=data.get("scheme"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -36,4 +38,6 @@ class DeviceTraits:
             result["alias"] = self.alias
         if self.faked is not None:
             result["faked"] = self.faked
+        if self.scheme is not None:
+            result["scheme"] = self.scheme
         return result

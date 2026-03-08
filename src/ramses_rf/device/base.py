@@ -13,15 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from ramses_rf.binding_fsm import BindContext, Vendor
 from ramses_rf.const import DEV_TYPE_MAP, SZ_OEM_CODE, DevType
 from ramses_rf.entity_base import Child, Entity, class_by_attr
-from ramses_rf.helpers import shrink
-from ramses_rf.schemas import (
-    SCH_TRAITS,
-    SZ_ALIAS,
-    SZ_CLASS,
-    SZ_FAKED,
-    SZ_KNOWN_LIST,
-    SZ_SCHEME,
-)
+from ramses_rf.schemas import SZ_ALIAS, SZ_CLASS, SZ_FAKED, SZ_KNOWN_LIST
 from ramses_tx import Command, Packet, Priority, QosParams
 from ramses_tx.ramses import CODES_BY_DEV_SLUG, CODES_ONLY_FROM_CTL
 from ramses_tx.typing import PayloadT
@@ -38,6 +30,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from ramses_rf import Gateway
+    from ramses_rf.models import DeviceTraits
     from ramses_rf.system import Zone
     from ramses_tx import Address, DeviceIdT, IndexT, Message
 
@@ -58,8 +51,15 @@ class DeviceBase(Entity):
 
     _bind_context: BindContext | None = None
 
-    def __init__(self, gwy: Gateway, dev_addr: Address, **kwargs: Any) -> None:
-        super().__init__(gwy)
+    def __init__(
+        self,
+        gwy: Gateway,
+        dev_addr: Address,
+        *,
+        traits: DeviceTraits | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(gwy, **kwargs)
 
         # FIXME: gwy.msg_db entities must know their parent device ID and their own idx
         self._z_id = dev_addr.id  # the responsible device is itself
@@ -74,7 +74,7 @@ class DeviceBase(Entity):
         self.addr = dev_addr
         self.type = dev_addr.type  # DEX  # TODO: remove this attr? use SLUG?
 
-        self._scheme: Vendor = None
+        self._scheme: Vendor | None = traits.scheme if traits else None
 
     def __str__(self) -> str:
         if self._STATE_ATTR and hasattr(self, self._STATE_ATTR):
@@ -87,25 +87,23 @@ class DeviceBase(Entity):
             return NotImplemented
         return self.id < other.id  # type: ignore[no-any-return]
 
-    def _update_traits(self, **traits: Any) -> None:
+    def _update_traits(self, traits: DeviceTraits) -> None:
         """Update a device with new schema attributes.
 
         :param traits: The traits to apply (e.g., alias, class, faked)
         :raises TypeError: If the device is not fakeable but 'faked' is set.
         """
 
-        traits = shrink(SCH_TRAITS(traits))
-
-        if traits.get(SZ_FAKED):  # class & alias are done elsewhere
+        if traits.faked:  # class & alias are done elsewhere
             if not isinstance(self, Fakeable):
                 raise TypeError(f"Device is not fakeable: {self} (traits={traits})")
             self._make_fake()
 
-        self._scheme = traits.get(SZ_SCHEME)
+        self._scheme = traits.scheme
 
     @classmethod
     def create_from_schema(
-        cls, gwy: Gateway, dev_addr: Address, **schema: Any
+        cls, gwy: Gateway, dev_addr: Address, *, traits: DeviceTraits | None = None
     ) -> DeviceBase:
         """Create a device (for a GWY) and set its schema attrs (aka traits).
 
@@ -115,8 +113,9 @@ class DeviceBase(Entity):
         Schema attrs include: class (SLUG), alias & faked.
         """
 
-        dev = cls(gwy, dev_addr)
-        dev._update_traits(**schema)  # TODO: split traits/schema
+        dev = cls(gwy, dev_addr, traits=traits)
+        if traits:
+            dev._update_traits(traits)
         return dev
 
     def _setup_discovery_cmds(self) -> None:
@@ -293,8 +292,14 @@ class Fakeable(DeviceBase):
     such packets via RF.
     """
 
-    def __init__(self, gwy: Gateway, *args: Any, **kwargs: Any) -> None:
-        super().__init__(gwy, *args, **kwargs)
+    def __init__(
+        self,
+        gwy: Gateway,
+        *args: Any,
+        traits: DeviceTraits | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(gwy, *args, traits=traits, **kwargs)
 
         self._bind_context: BindContext | None = None
 
@@ -302,7 +307,7 @@ class Fakeable(DeviceBase):
         if self.id in gwy._include and gwy._include[self.id].get(SZ_FAKED):
             self._make_fake()
 
-        if kwargs.get(SZ_FAKED):
+        if traits and traits.faked:
             self._make_fake()
 
     def _make_fake(self) -> None:
@@ -413,9 +418,16 @@ class Fakeable(DeviceBase):
 class Device(Child, DeviceBase):
     """The base class for all devices."""
 
-    def __init__(self, gwy: Gateway, dev_addr: Address, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        gwy: Gateway,
+        dev_addr: Address,
+        *,
+        traits: DeviceTraits | None = None,
+        **kwargs: Any,
+    ) -> None:
         _LOGGER.debug("Creating a Device: %s (%s)", dev_addr.id, self.__class__)
-        super().__init__(gwy, dev_addr)
+        super().__init__(gwy, dev_addr, traits=traits, **kwargs)
 
         gwy._add_device(self)
 
@@ -425,8 +437,10 @@ class HgiGateway(Device):  # HGI (18:)
 
     _SLUG: str = DevType.HGI
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(
+        self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, traits=traits, **kwargs)
 
         self.ctl = None  # FIXME: a mess
         self._child_id = "gw"  # TODO
@@ -445,8 +459,15 @@ class DeviceHeat(Device):  # Heat domain: Honeywell CH/DHW or compatible
 
     _SLUG: str = DevType.HEA  # shouldn't be any of these instantiated
 
-    def __init__(self, gwy: Gateway, dev_addr: Address, **kwargs: Any) -> None:
-        super().__init__(gwy, dev_addr, **kwargs)
+    def __init__(
+        self,
+        gwy: Gateway,
+        dev_addr: Address,
+        *,
+        traits: DeviceTraits | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(gwy, dev_addr, traits=traits, **kwargs)
 
         self.ctl = None
         self.tcs = None
@@ -505,8 +526,15 @@ class DeviceHvac(Device):  # HVAC domain: ventilation, PIV, MV/HR
 
     _SLUG: str = DevType.HVC  # these may be instantiated, and promoted later on
 
-    def __init__(self, gwy: Gateway, dev_addr: Address, **kwargs: Any) -> None:
-        super().__init__(gwy, dev_addr, **kwargs)
+    def __init__(
+        self,
+        gwy: Gateway,
+        dev_addr: Address,
+        *,
+        traits: DeviceTraits | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(gwy, dev_addr, traits=traits, **kwargs)
 
         self._child_id = "hv"  # TODO: domain_id/deprecate
 
