@@ -60,7 +60,7 @@ from ramses_tx import (
 from ramses_tx.transport import TransportConfig
 from ramses_tx.typing import PktLogConfigT, PortConfigT
 
-from .device import HgiGateway
+from .device import Fakeable, HgiGateway
 from .device_filter import DeviceFilter
 from .device_registry import DeviceRegistry
 from .dispatcher import detect_array_fragment, process_msg
@@ -73,7 +73,7 @@ from .interfaces import (
 from .message_store import MessageStore
 from .schemas import load_schema
 from .system import Evohome
-from .typing import DeviceListT
+from .typing import DeviceIdT, DeviceListT
 
 if TYPE_CHECKING:
     from ramses_tx import RamsesTransportT
@@ -619,6 +619,24 @@ class Gateway(GatewayInterface):
 
         _LOGGER.debug("Gateway: Restored, resuming")
         await self._resume()
+
+    async def fake_device(
+        self,
+        device_id: DeviceIdT,
+        create_device: bool = False,
+    ) -> Device | Fakeable:
+        """Create a faked device.
+
+        :param device_id: The unique identifier for the device to fake.
+        :type device_id: DeviceIdT
+        :param create_device: Allow creation if the device does not exist, defaults to False.
+        :type create_device: bool, optional
+        :returns: The instantiated faked device.
+        :rtype: Device | Fakeable
+        """
+        return await self.device_registry.fake_device(  # type: ignore[no-any-return]
+            device_id, create_device=create_device
+        )
 
     @property
     def tcs(self) -> Evohome | None:
