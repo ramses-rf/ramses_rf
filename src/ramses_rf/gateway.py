@@ -13,7 +13,7 @@ import threading
 import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime as dt, timedelta as td
+from datetime import UTC, datetime as dt, timedelta as td
 from logging.handlers import QueueListener
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -644,7 +644,7 @@ class Gateway(GatewayInterface):
         # The actual HGI address will be discovered when the actual
         # transport was/is started up (usually before now)
 
-        cutoff_dtm = dt.now() - td(hours=1)
+        cutoff_dtm = dt.now(tz=UTC) - td(hours=1)
 
         for i, (dtm, state) in enumerate(packets.items()):
             if i > 0 and i % 100 == 0:
@@ -653,6 +653,9 @@ class Gateway(GatewayInterface):
             try:
                 clean_dtm = dtm.replace("Z", "+00:00")
                 pkt_dtm = dt.fromisoformat(clean_dtm)
+                # Ensure timezone awareness for legacy naive dt logs
+                if pkt_dtm.tzinfo is None:
+                    pkt_dtm = pkt_dtm.replace(tzinfo=UTC)
                 is_old = pkt_dtm < cutoff_dtm
             except ValueError:
                 is_old = False
