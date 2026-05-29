@@ -339,8 +339,11 @@ async def test_read_model_baseline_snapshot(
             if reader_task:
                 await reader_task
 
-        # CRITICAL: Give the async queues a moment to drain into the projector!
-        await asyncio.sleep(0.5)
+        # CRITICAL: Deterministically wait for all async queues to drain!
+        # This replaces the flaky `await asyncio.sleep(0.5)` which caused CI
+        # race conditions on slower virtual machines.
+        await pipeline_in_queue.join()
+        await dispatcher.ssot_queue.join()
 
         if gwy.message_store:
             gwy.message_store.flush()
