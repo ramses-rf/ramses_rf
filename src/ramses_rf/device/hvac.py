@@ -8,7 +8,7 @@ import contextlib
 import logging
 from collections.abc import Callable
 from datetime import timedelta as td
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from ramses_rf import exceptions as exc
 from ramses_rf.address import Address
@@ -39,9 +39,7 @@ from ramses_rf.const import (
     SZ_POST_HEAT,
     SZ_PRE_HEAT,
     SZ_PRESENCE_DETECTED,
-    SZ_REMAINING_DAYS,
     SZ_REMAINING_MINS,
-    SZ_REMAINING_PERCENT,
     SZ_REQ_REASON,
     SZ_REQ_SPEED,
     SZ_SPEED_CAPABILITIES,
@@ -170,9 +168,7 @@ class CarbonDioxide(HvacSensorBase):  # 1298
         :return: The CO2 level in parts per million (ppm), or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None, await self.entity_state.get_value(Code._1298, key=SZ_CO2_LEVEL)
-        )
+        return self.hvac_state.co2_level
 
     async def set_co2_level(self, value: int | None) -> Packet:
         """Set a fake CO2 level for the sensor.
@@ -214,10 +210,7 @@ class IndoorHumidity(HvacSensorBase):  # 12A0
         :return: The indoor relative humidity as a percentage (0-100), or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._12A0, key=SZ_INDOOR_HUMIDITY),
-        )
+        return self.hvac_state.indoor_humidity
 
     async def set_indoor_humidity(self, value: float | None) -> Packet:
         """Set a fake indoor humidity value for the sensor.
@@ -263,10 +256,7 @@ class PresenceDetect(HvacSensorBase):  # 2E10
         :return: True if presence is detected, False if not, None if status is unknown
         :rtype: bool | None
         """
-        return cast(
-            bool | None,
-            await self.entity_state.get_value(Code._2E10, key=SZ_PRESENCE_DETECTED),
-        )
+        return self.hvac_state.presence_detected
 
     async def set_presence_detected(self, value: bool | None) -> Packet:
         """Set a fake presence detection state for the sensor.
@@ -374,9 +364,7 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
         :return: Number of days remaining until filter change, or None if not available
         :rtype: int | None
         """
-        _val = await self.entity_state.get_value(Code._10D0, key=SZ_REMAINING_DAYS)
-        assert isinstance(_val, (int | type(None)))
-        return _val
+        return self.hvac_state.filter_remaining_days
 
     async def filter_remaining_percent(self) -> float | None:
         """Return the remaining filter life as a percentage.
@@ -384,9 +372,7 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
         :return: Percentage of filter life remaining (0-100), or None if not available
         :rtype: float | None
         """
-        _val = await self.entity_state.get_value(Code._10D0, key=SZ_REMAINING_PERCENT)
-        assert isinstance(_val, (float | type(None)))
-        return _val
+        return self.hvac_state.filter_remaining_percent
 
     @property
     def heartbeat_timeout(self) -> td:
@@ -440,10 +426,7 @@ class HvacHumiditySensor(BatteryState, IndoorHumidity, Fakeable):  # HUM: I/12A0
         :return: The temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._12A0, key=SZ_TEMPERATURE),
-        )
+        return self.hvac_state.temperature
 
     async def dewpoint_temp(self) -> float | None:
         """Return the dewpoint temperature in Celsius.
@@ -451,10 +434,7 @@ class HvacHumiditySensor(BatteryState, IndoorHumidity, Fakeable):  # HUM: I/12A0
         :return: The dewpoint temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._12A0, key="dewpoint_temp"),
-        )
+        return self.hvac_state.dewpoint_temp
 
     async def status(self) -> dict[str, Any]:
         """Return the status of the humidity sensor.
@@ -518,9 +498,7 @@ class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
         :rtype: str | None
         :note: This is a work in progress - rate can be either int or str
         """
-        return cast(
-            str | None, await self.entity_state.get_value(Code._22F1, key="rate")
-        )
+        return self.hvac_state.fan_rate
 
     async def set_fan_rate(self, value: int) -> Packet:
         """Set a fake fan rate for the remote control.
@@ -550,9 +528,7 @@ class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
         :return: The fan mode as a string, or None if not available
         :rtype: str | None
         """
-        return cast(
-            str | None, await self.entity_state.get_value(Code._22F1, key=SZ_FAN_MODE)
-        )
+        return self.hvac_state.fan_mode
 
     async def boost_timer(self) -> int | None:
         """Return the remaining boost timer in minutes.
@@ -560,10 +536,7 @@ class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
         :return: The remaining boost time in minutes, or None if boost is not active
         :rtype: int | None
         """
-        return cast(
-            int | None,
-            await self.entity_state.get_value(Code._22F3, key=SZ_BOOST_TIMER),
-        )
+        return self.hvac_state.boost_timer_mins
 
     async def status(self) -> dict[str, Any]:
         base_status = await super().status()
@@ -1028,10 +1001,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The air quality measurement as a float, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_AIR_QUALITY),
-        )
+        return self.hvac_state.air_quality
 
     async def air_quality_base(self) -> float | None:
         """Return the base air quality measurement.
@@ -1042,42 +1012,27 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The base air quality measurement, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_AIR_QUALITY_BASIS),
-        )
+        return self.hvac_state.air_quality_basis
 
     async def bypass_mode(self) -> str | None:
         """
         :return: bypass mode as on|off|auto
         """
-        return cast(
-            str | None,
-            await self.entity_state.get_value(Code._22F7, key=SZ_BYPASS_MODE),
-        )
+        return self.hvac_state.bypass_mode
 
     async def bypass_position(self) -> float | str | None:
         """
         Position info is found in 22F7 and in 31DA. The most recent packet is returned.
         :return: bypass position as percentage: 0.0 (closed) or 1.0 (open), on error: "x_faulted"
         """
-        # if both packets exist and both have the key, returns the most recent
-        return cast(
-            float | str | None,
-            await self.entity_state.get_value(
-                (Code._22F7, Code._31DA), key=SZ_BYPASS_POSITION
-            ),
-        )
+        return self.hvac_state.bypass_position
 
     async def bypass_state(self) -> str | None:
         """
         Orcon, others?
         :return: bypass position as on/off
         """
-        return cast(
-            str | None,
-            await self.entity_state.get_value(Code._22F7, key=SZ_BYPASS_STATE),
-        )
+        return self.hvac_state.bypass_state
 
     async def co2_level(self) -> int | None:
         """Return the CO2 level in parts per million (ppm).
@@ -1085,28 +1040,15 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The CO2 level in ppm, or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None, await self.entity_state.get_value(Code._31DA, key=SZ_CO2_LEVEL)
-        )
+        return self.hvac_state.co2_level
 
-    async def exhaust_fan_speed(
-        self,
-    ) -> float | None:
+    async def exhaust_fan_speed(self) -> float | None:
         """
         Some fans (Vasco, Itho) use Code._31D9 for speed + mode,
         Orcon sends SZ_EXHAUST_FAN_SPEED in 31DA. See parser for details.
         :return: speed as percentage
         """
-        speed: float = -1
-        msgs = await self.entity_state.get_message_log_flat()
-        for code in [c for c in (Code._31D9, Code._31DA) if c in msgs]:
-            if v := msgs[code].payload.get(SZ_EXHAUST_FAN_SPEED):
-                # if both packets exist and both have the key, use the highest value
-                if v is not None:
-                    speed = max(v, speed)
-        if speed >= 0:
-            return speed
-        return None
+        return self.hvac_state.exhaust_fan_speed
 
     async def exhaust_flow(self) -> float | None:
         """Return the current exhaust air flow rate.
@@ -1114,10 +1056,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The exhaust air flow rate in m³/h, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_EXHAUST_FLOW),
-        )
+        return self.hvac_state.exhaust_flow
 
     async def exhaust_temp(self) -> float | None:
         """Return the current exhaust air temperature.
@@ -1125,10 +1064,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The exhaust air temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_EXHAUST_TEMP),
-        )
+        return self.hvac_state.exhaust_temp
 
     async def fan_rate(self) -> str | None:
         """
@@ -1137,9 +1073,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: int or str describing rate of fan
         """
-        return cast(
-            str | None, await self.entity_state.get_value(Code._22F4, key=SZ_FAN_RATE)
-        )
+        return self.hvac_state.fan_rate
 
     async def fan_mode(self) -> str | None:
         """
@@ -1148,9 +1082,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: a string describing mode
         """
-        return cast(
-            str | None, await self.entity_state.get_value(Code._22F4, key=SZ_FAN_MODE)
-        )
+        return self.hvac_state.fan_mode
 
     async def fan_info(self) -> str | None:
         """
@@ -1161,43 +1093,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: string describing fan mode, speed
         """
-        # if self._gwy.message_store:
-        # Use SQLite query on MessageStore. res_rate/res_mode not exposed yet
-        # working fine in 0.52.4, no need to specify code, only payload key
-        # sql = f"""
-        #     SELECT code from messages WHERE verb in (' I', 'RP')
-        #     AND (src = ? OR dst = ?)
-        #     AND (plk LIKE '%{SZ_FAN_MODE}%')
-        # """
-        # res_mode: list = self.entity_state._msg_qry(sql)
-        # # SQLite query on MessageStore
-        # _LOGGER.debug(
-        #     f"# Fetched FAN_MODE for {self.id} from MessageStore: {res_mode}"
-        # )
-
-        # sql = f"""
-        #     SELECT code from messages WHERE verb in (' I', 'RP')
-        #     AND (src = ? OR dst = ?)
-        #     AND (plk LIKE '%{SZ_FAN_RATE}%')
-        # """
-        # res_rate: list = self.entity_state._msg_qry(sql)
-        # # SQLite query on MessageStore
-        # _LOGGER.debug(
-        #     f"# Fetched FAN_RATE for {self.id} from MessageStore: {res_rate}"
-        # )
-
-        msgs = await self.entity_state.get_message_log_flat()
-        if Code._31D9 in msgs:
-            # was a dict by Code
-            # Itho, Vasco D60 and ClimaRad MiniBox fan send mode/speed in _31D9
-            v: str
-            for k, v in msgs[Code._31D9].payload.items():
-                if k == SZ_FAN_MODE and len(v) > 2:  # prevent non-lookups to pass
-                    return v
-            # continue to 31DA
-        return str(
-            await self.entity_state.get_value(Code._31DA, key=SZ_FAN_INFO)
-        )  # Itho lookup
+        return self.hvac_state.fan_info
 
     async def indoor_humidity(self) -> float | None:
         """
@@ -1206,19 +1102,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         :return: float RH value from 0.0 to 1.0 = 100%
         """
-        msgs = await self.entity_state.get_message_log_flat()
-        if Code._12A0 in msgs and isinstance(
-            msgs[Code._12A0].payload, list
-        ):  # FAN Ventura sends RH/temps as a list; element [0] contains indoor_hum
-            if v := msgs[Code._12A0].payload[0].get(SZ_INDOOR_HUMIDITY):
-                assert isinstance(v, (float | type(None)))
-                return v
-        return cast(
-            float | None,
-            await self.entity_state.get_value(
-                (Code._12A0, Code._31DA), key=SZ_INDOOR_HUMIDITY
-            ),
-        )
+        return self.hvac_state.indoor_humidity
 
     async def indoor_temp(self) -> float | None:
         """Return the current indoor temperature.
@@ -1226,10 +1110,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The indoor temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_INDOOR_TEMP),
-        )
+        return self.hvac_state.indoor_temp
 
     async def outdoor_humidity(self) -> float | None:
         """Return the outdoor relative humidity.
@@ -1239,17 +1120,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The outdoor relative humidity as a percentage (0-100), or None if not available
         :rtype: float | None
         """
-        msgs = await self.entity_state.get_message_log_flat()
-        if Code._12A0 in msgs and isinstance(
-            msgs[Code._12A0].payload, list
-        ):  # FAN Ventura sends RH/temps as a list; element [1] contains outdoor_hum
-            if v := msgs[Code._12A0].payload[1].get(SZ_OUTDOOR_HUMIDITY):
-                assert isinstance(v, (float | type(None)))
-                return v
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_OUTDOOR_HUMIDITY),
-        )
+        return self.hvac_state.outdoor_humidity
 
     async def outdoor_temp(self) -> float | None:
         """Return the outdoor temperature in Celsius.
@@ -1257,10 +1128,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The outdoor temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_OUTDOOR_TEMP),
-        )
+        return self.hvac_state.outdoor_temp
 
     async def post_heat(self) -> int | None:
         """Return the post-heat status.
@@ -1268,9 +1136,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The post-heat status as an integer, or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None, await self.entity_state.get_value(Code._31DA, key=SZ_POST_HEAT)
-        )
+        return self.hvac_state.post_heat
 
     async def pre_heat(self) -> int | None:
         """Return the pre-heat status.
@@ -1278,9 +1144,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The pre-heat status as an integer, or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None, await self.entity_state.get_value(Code._31DA, key=SZ_PRE_HEAT)
-        )
+        return self.hvac_state.pre_heat
 
     async def remaining_mins(self) -> int | None:
         """Return the remaining minutes for the current operation.
@@ -1288,10 +1152,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The remaining minutes as an integer, or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_REMAINING_MINS),
-        )
+        return self.hvac_state.remaining_mins
 
     async def request_fan_speed(self) -> float | None:
         """Return the requested fan speed.
@@ -1299,20 +1160,14 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The requested fan speed as a percentage, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._2210, key=SZ_REQ_SPEED),
-        )
+        return self.hvac_state.request_fan_speed
 
     async def request_src(self) -> str | None:
         """
         Orcon, others?
         :return: source sensor of auto speed request: IDL, CO2 or HUM
         """
-        return cast(
-            str | None,
-            await self.entity_state.get_value(Code._2210, key=SZ_REQ_REASON),
-        )
+        return self.hvac_state.request_reason
 
     async def speed_cap(self) -> int | None:
         """Return the speed capabilities of the fan.
@@ -1320,10 +1175,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The speed capabilities as an integer, or None if not available
         :rtype: int | None
         """
-        return cast(
-            int | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_SPEED_CAPABILITIES),
-        )
+        return self.hvac_state.speed_capabilities
 
     async def supply_fan_speed(self) -> float | None:
         """Return the supply fan speed.
@@ -1331,10 +1183,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The supply fan speed as a percentage, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_SUPPLY_FAN_SPEED),
-        )
+        return self.hvac_state.supply_fan_speed
 
     async def supply_flow(self) -> float | None:
         """Return the supply air flow rate.
@@ -1342,10 +1191,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The supply air flow rate in m³/h, or None if not available
         :rtype: float | None
         """
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_SUPPLY_FLOW),
-        )
+        return self.hvac_state.supply_flow
 
     async def supply_temp(self) -> float | None:
         """Return the supply air temperature.
@@ -1355,31 +1201,47 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The supply air temperature in Celsius, or None if not available
         :rtype: float | None
         """
-        msgs = await self.entity_state.get_message_log_flat()
-        if Code._12A0 in msgs and isinstance(
-            msgs[Code._12A0].payload, list
-        ):  # FAN Ventura sends RH/temps as a list;
-            # pass element [0] in place of supply_temp, which is always None in VenturaV1x 31DA
-            if v := msgs[Code._12A0].payload[1].get(SZ_TEMPERATURE):
-                assert isinstance(v, (float | type(None)))
-                return v
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._31DA, key=SZ_SUPPLY_TEMP),
-        )
+        return self.hvac_state.supply_temp
 
     async def status(self) -> dict[str, Any]:
-        msgs = await self.entity_state.get_message_log_flat()
+        """Return the status of the ventilation device."""
         base_status = await super().status()
+        cqrs_status = {
+            SZ_AIR_QUALITY: await self.air_quality(),
+            SZ_AIR_QUALITY_BASIS: await self.air_quality_base(),
+            SZ_BYPASS_MODE: await self.bypass_mode(),
+            SZ_BYPASS_POSITION: await self.bypass_position(),
+            SZ_BYPASS_STATE: await self.bypass_state(),
+            SZ_CO2_LEVEL: await self.co2_level(),
+            SZ_EXHAUST_FAN_SPEED: await self.exhaust_fan_speed(),
+            SZ_EXHAUST_FLOW: await self.exhaust_flow(),
+            SZ_EXHAUST_TEMP: await self.exhaust_temp(),
+            SZ_FAN_INFO: await self.fan_info(),
+            SZ_FAN_MODE: await self.fan_mode(),
+            SZ_FAN_RATE: await self.fan_rate(),
+            SZ_FILTER_DIRTY: await self.filter_dirty(),
+            SZ_FROST_CYCLE: await self.frost_cycle(),
+            SZ_HAS_FAULT: await self.has_fault(),
+            SZ_INDOOR_HUMIDITY: await self.indoor_humidity(),
+            SZ_INDOOR_TEMP: await self.indoor_temp(),
+            SZ_OUTDOOR_HUMIDITY: await self.outdoor_humidity(),
+            SZ_OUTDOOR_TEMP: await self.outdoor_temp(),
+            SZ_POST_HEAT: await self.post_heat(),
+            SZ_PRE_HEAT: await self.pre_heat(),
+            SZ_REMAINING_MINS: await self.remaining_mins(),
+            SZ_REQ_REASON: await self.request_src(),
+            SZ_REQ_SPEED: await self.request_fan_speed(),
+            SZ_SPEED_CAPABILITIES: await self.speed_cap(),
+            SZ_SUPPLY_FAN_SPEED: await self.supply_fan_speed(),
+            SZ_SUPPLY_FLOW: await self.supply_flow(),
+            SZ_SUPPLY_TEMP: await self.supply_temp(),
+            SZ_TEMPERATURE: await self.temperature(),
+        }
+
+        # Emulate the legacy behaviour by only exposing populated payload keys
         return {
             **base_status,
-            SZ_EXHAUST_FAN_SPEED: await self.exhaust_fan_speed(),
-            **{
-                k: v
-                for code in [c for c in (Code._31D9, Code._31DA) if c in msgs]
-                for k, v in msgs[code].payload.items()
-                if k != SZ_EXHAUST_FAN_SPEED
-            },
+            **{k: v for k, v in cqrs_status.items() if v is not None},
         }
 
     async def temperature(self) -> float | None:  # Celsius
@@ -1390,18 +1252,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: The temperature in degrees Celsius, or None if not available
         :rtype: float | None
         """
-        msgs = await self.entity_state.get_message_log_flat()
-        if Code._12A0 in msgs and isinstance(
-            msgs[Code._12A0].payload, list
-        ):  # FAN Ventura sends RH/temps as a list; use element [1]
-            if v := msgs[Code._12A0].payload[0].get(SZ_TEMPERATURE):
-                assert isinstance(v, (float | type(None)))
-                return v
-        # ClimaRad minibox FAN sends (indoor) temp in 12A0
-        return cast(
-            float | None,
-            await self.entity_state.get_value(Code._12A0, key=SZ_TEMPERATURE),
-        )
+        return self.hvac_state.temperature
 
     async def filter_dirty(self) -> bool | None:
         """Return the dirty filter diagnostic flag.
@@ -1409,10 +1260,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: True if the filter is dirty, False if clean, or None if unavailable.
         :rtype: bool | None
         """
-        return cast(
-            bool | None,
-            await self.entity_state.get_value(Code._31D9, key=SZ_FILTER_DIRTY),
-        )
+        return self.hvac_state.filter_dirty
 
     async def frost_cycle(self) -> bool | None:
         """Return the frost cycle diagnostic flag.
@@ -1420,10 +1268,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: True if the frost cycle is active, False otherwise, or None if unavailable.
         :rtype: bool | None
         """
-        return cast(
-            bool | None,
-            await self.entity_state.get_value(Code._31D9, key=SZ_FROST_CYCLE),
-        )
+        return self.hvac_state.frost_cycle
 
     async def has_fault(self) -> bool | None:
         """Return the hardware fault diagnostic flag.
@@ -1431,10 +1276,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         :return: True if a fault is active, False otherwise, or None if unavailable.
         :rtype: bool | None
         """
-        return cast(
-            bool | None,
-            await self.entity_state.get_value(Code._31D9, key=SZ_HAS_FAULT),
-        )
+        return self.hvac_state.has_fault
 
 
 # class HvacFanHru(HvacVentilator):
