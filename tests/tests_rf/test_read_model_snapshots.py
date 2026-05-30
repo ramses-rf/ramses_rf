@@ -339,11 +339,15 @@ async def test_read_model_baseline_snapshot(
             if reader_task:
                 await reader_task
 
-        # CRITICAL: Deterministically wait for all async queues to drain!
-        # This replaces the flaky `await asyncio.sleep(0.5)` which caused CI
-        # race conditions on slower virtual machines.
+        # CRITICAL 1: Wait for explicit CQRS queues to drain
         await pipeline_in_queue.join()
         await dispatcher.ssot_queue.join()
+
+        # CRITICAL 2: The legacy monolithic FSM spawns background tasks (like DHW promotion)
+        # using asyncio.create_task(). We must yield control back to the event loop
+        # to guarantee these legacy tasks finish on slow CI runners before snapshotting.
+        for _ in range(20):
+            await asyncio.sleep(0.1)
 
         if gwy.message_store:
             gwy.message_store.flush()
