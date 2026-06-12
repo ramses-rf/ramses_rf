@@ -1,0 +1,72 @@
+# serializer version: 1
+# name: test_read_model_baseline_snapshot[hvac]
+  dict({
+    'devices': list([
+      dict({
+        'battery_low': None,
+        'battery_state': None,
+        'cqrs_hvac_state': dict({
+          'co2_level': 633,
+          'fan_info': 'auto',
+          'fan_mode': 'normal',
+          'indoor_humidity': 0.49,
+          'post_heat': 0.0,
+          'remaining_mins': 0,
+          'speed_capabilities': list([
+            'post_heater',
+          ]),
+        }),
+        'id': '30:079129',
+        'type': 'RfgGateway',
+      }),
+      dict({
+        'battery_low': None,
+        'battery_state': None,
+        'cqrs_hvac_state': dict({
+          'co2_level': 633,
+          'fan_info': 'auto',
+          'indoor_humidity': 0.49,
+          'post_heat': 0.0,
+          'remaining_mins': 0,
+          'speed_capabilities': list([
+            'post_heater',
+          ]),
+        }),
+        'id': '32:166025',
+        'type': 'DeviceHvac',
+      }),
+      dict({
+        'battery_low': None,
+        'battery_state': None,
+        'cqrs_hvac_state': dict({
+          'dewpoint_temp': 14.64,
+          'indoor_humidity': 0.6,
+          'indoor_temp': 22.56,
+          'temperature': 22.56,
+        }),
+        'id': '32:168240',
+        'type': 'DeviceHvac',
+      }),
+      dict({
+        'battery_low': None,
+        'battery_state': None,
+        'cqrs_hvac_state': dict({
+          'fan_mode': 'normal',
+        }),
+        'id': '32:172534',
+        'type': 'DeviceHvac',
+      }),
+    ]),
+    'schema': dict({
+      'main_tcs': None,
+      'orphans_heat': list([
+        '30:079129',
+      ]),
+      'orphans_hvac': list([
+        '32:166025',
+        '32:168240',
+        '32:172534',
+      ]),
+    }),
+  })
+# ---

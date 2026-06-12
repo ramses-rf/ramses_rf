@@ -13,6 +13,7 @@ import logging
 import uuid
 from typing import Any, Final
 
+from ramses_rf import quirks
 from ramses_rf.const import (
     SZ_AIR_QUALITY,
     SZ_AIR_QUALITY_BASIS,
@@ -292,12 +293,19 @@ class StateProjector:
             target.apply_state_update(event)
 
     def _update_hvac_state(self, target: Any, p: dict[str, Any], msg: Message) -> None:
-        """Translate complex multi-opcode ventilation payloads into HvacState."""
+        """Translate complex multi-opcode ventilation payloads into HvacState.
+
+        Applies hardware-specific stateful FSM rules (via the Quirks middleware)
+        prior to hydration.
+        """
         if getattr(target, "_SLUG", "") in ("CTL", "BDR", "TRV", "OTB", "UFC", "DHW"):
             return
 
         if not hasattr(target, "hvac_state"):
             target.hvac_state = HvacState()
+
+        # Execute Quirk Resolution Middleware
+        p = quirks.apply_hvac_quirks(p, target.hvac_state, msg.code)
 
         updates: dict[str, Any] = {}
 
@@ -334,6 +342,7 @@ class StateProjector:
             if f in p:
                 updates[f] = p[f]
 
+        # Handle non-standard names passed by the semantic parsers
         if "remaining_days" in p:
             updates["filter_remaining_days"] = p["remaining_days"]
         if "remaining_percent" in p:

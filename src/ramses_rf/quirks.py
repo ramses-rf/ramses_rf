@@ -25,12 +25,74 @@ KNOWN EXCEPTIONS:
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Any, Final
 
 from ramses_rf.const import DevType
+from ramses_rf.models import HvacState
 from ramses_tx.const import MsgId
 
 # Map of device types to sets of OpenTherm MsgIds that are known to be unreliable
 QUARANTINED_OT_MSG_IDS: Final[dict[str, set[MsgId]]] = {
     DevType.OTB: {MsgId._0E, MsgId._11},
 }
+
+
+def apply_hvac_quirks(
+    payload: dict[str, Any], current_state: HvacState | None, msg_code: str
+) -> dict[str, Any]:
+    """Resolve stateful FSM conflicts and structural anomalies for HVAC packets.
+
+    Stateful quirks cannot be resolved by stateless parsers. They must be
+    intercepted by comparing the incoming packet payload to the existing
+    CQRS state immediately prior to hydration.
+
+    :param payload: The flattened, canonical telemetry dictionary.
+    :type payload: dict[str, Any]
+    :param current_state: The existing Read-Model for the device, if any.
+    :type current_state: HvacState | None
+    :param msg_code: The hex opcode of the incoming message.
+    :type msg_code: str
+    :return: The safely mutated telemetry dictionary.
+    :rtype: dict[str, Any]
+    """
+    mutated = dict(payload)
+
+    # STRUCTURAL QUIRK: Ventura 12A0 Array Elements
+    # The parser returns list elements with an 'hvac_idx'. We must map these
+    # generic keys to their specific domain locations.
+    if msg_code == "12A0":
+        idx = mutated.get("hvac_idx", "00")
+        if idx == "00":
+            if "temperature" in mutated:
+                mutated["indoor_temp"] = mutated["temperature"]
+        elif idx == "01":
+            if "indoor_humidity" in mutated:
+                mutated["outdoor_humidity"] = mutated.pop("indoor_humidity")
+            if "temperature" in mutated:
+                mutated["supply_temp"] = mutated.pop("temperature")
+        return mutated
+
+    if not current_state:
+        return mutated
+
+    # QUIRK: Itho 31DA 'exhaust_fan_speed' Overwrite Prevention
+    # Itho transmits actual fan speed in 31D9, but transmits 31DA with
+    # a default zero byte [38:40]. We drop the zero if valid state exists.
+    if msg_code == "31DA" and "exhaust_fan_speed" in mutated:
+        if mutated["exhaust_fan_speed"] == 0.0:
+            if (
+                current_state.exhaust_fan_speed is not None
+                and current_state.exhaust_fan_speed > 0
+            ):
+                mutated["exhaust_fan_speed"] = current_state.exhaust_fan_speed
+
+    # QUIRK: Vasco/ClimaRad 31D9 vs 31DA 'fan_info' precedence
+    # Vasco passes string mode details in 31D9. Itho uses 31DA. We must not
+    # overwrite a valid, rich string from 31D9 with a blank or 'off' string
+    # from a generic 31DA.
+    if msg_code == "31DA" and "fan_info" in mutated:
+        if mutated["fan_info"] in ("off", ""):
+            if current_state.fan_info and current_state.fan_info not in ("off", ""):
+                mutated["fan_info"] = current_state.fan_info
+
+    return mutated

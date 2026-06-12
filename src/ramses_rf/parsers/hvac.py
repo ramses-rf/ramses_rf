@@ -215,20 +215,14 @@ def parser_1298(payload: str, msg: Message) -> PayDictT._1298:
 
 # HVAC: indoor_humidity, array of 3 sets for HRU
 @register_parser("12A0")
-def parser_12a0(
-    payload: str, msg: Message
-) -> PayDictT.INDOOR_HUMIDITY | list[PayDictT._12A0]:
+def parser_12a0(payload: str, msg: Message) -> dict[str, Any] | list[dict[str, Any]]:
     """Parse the 12a0 (indoor_humidity) packet.
 
-    :param payload: The raw hex payload
-    :type payload: str
-    :param msg: The message object containing context
-    :type msg: Message
-    :return: A single humidity dict or a list of sensor element dicts
-    :rtype: PayDictT.INDOOR_HUMIDITY | list[PayDictT._12A0]
+    Restored to legacy list format to preserve historical log tests.
+    Structural unpacking occurs in the CQRS quirks pipeline.
     """
     if len(payload) <= 14:
-        return parse_indoor_humidity(payload[2:12])
+        return cast("dict[str, Any]", parse_indoor_humidity(payload[2:12]))
 
     return [
         {
