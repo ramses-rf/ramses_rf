@@ -58,6 +58,7 @@ class DeviceRegistry:
         self._device_factory_cb = device_factory_cb
         self.devices: list[Device] = []
         self.device_by_id: dict[DeviceIdT, Device] = {}
+        self._pending_promotions: dict[str, str] = {}
 
         # Temporal Process Manager Cache for Eavesdropping
         self._orphan_telemetry: dict[str, dict[str, Any]] = {}
@@ -242,10 +243,6 @@ class DeviceRegistry:
         if not event.device_id or not event.metadata:
             return
 
-        old_dev = self.device_by_id.get(event.device_id)
-        if not old_dev:
-            return
-
         new_class_slug_raw = str(event.metadata.get("device_class"))
         slug_map = {
             "HUM": "rh_sensor",
@@ -255,6 +252,15 @@ class DeviceRegistry:
         }
         dict_key = new_class_slug_raw.split(".")[-1]
         new_class_slug = slug_map.get(dict_key, new_class_slug_raw)
+
+        old_dev = self.device_by_id.get(event.device_id)
+        if not old_dev:
+            # Device doesn't exist yet — store the pending promotion so
+            # it can be applied when the device is created by instantiate_devices.
+            if not new_class_slug:
+                return
+            self._pending_promotions[event.device_id] = new_class_slug
+            return
 
         if not new_class_slug or getattr(old_dev, "_SLUG", None) == new_class_slug:
             return
@@ -479,9 +485,18 @@ class DeviceRegistry:
             )
             _traits_raw.pop("commands", None)
 
+            # Check for pending promotion from TopologyBuilder (the builder
+            # may emit a PROMOTE_CLASS event before the device is created)
+            pending_slug = self._pending_promotions.pop(device_id, None)
+            if pending_slug:
+                _traits_raw["class"] = pending_slug
+
             traits_dict: dict[str, Any] = SCH_TRAITS(
                 self._config.known_list.get(device_id, {})
             )
+            # Override with pending promotion if any
+            if pending_slug:
+                traits_dict["class"] = pending_slug
             traits = DeviceTraits.from_dict(traits_dict)
 
             try:
