@@ -870,17 +870,6 @@ class Zone(ZoneSchedule):
         if self._name is not None:
             return self._name
 
-        if self._gwy.message_store:
-            msgs = await self._gwy.message_store.get(
-                code=Code._0004, src=self._z_id, ctx=self._z_idx
-            )
-            # DEBUG issue #317
-            _LOGGER.debug(f"Pick Zone.name from: {msgs}[0])")
-            if msgs:
-                self._name = cast(str, msgs[0].payload.get(SZ_NAME))
-                return self._name
-            return None
-
         self._name = cast(
             str | None,
             await self.entity_state.get_value(
