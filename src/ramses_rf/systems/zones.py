@@ -867,12 +867,6 @@ class Zone(ZoneSchedule):
 
     async def name(self) -> str | None:  # 0004
         """Get the name of the zone."""
-        self._name = cast(
-            str | None,
-            await self.entity_state.get_value(
-                Code._0004, key=SZ_NAME, zone_idx=self.idx
-            ),
-        )
         return self._name
 
     async def config(self) -> dict[str, Any] | None:  # 000A
