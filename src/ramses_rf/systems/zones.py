@@ -1005,7 +1005,7 @@ class Zone(ZoneSchedule):
         return await self._gwy.async_send_cmd(cmd, priority=Priority.HIGH)
 
     async def set_name(self, name: str) -> Packet:
-        """Set the zone's name."""
+        """Set the zone's name in the CTL."""
 
         cmd = Command.set_zone_name(self.ctl.id, self.idx, name)
         return await self._gwy.async_send_cmd(cmd, priority=Priority.HIGH)

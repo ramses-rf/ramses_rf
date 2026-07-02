@@ -255,6 +255,15 @@ async def test_ele_zone_inconsistent_messages(mock_tcs: MagicMock) -> None:
         zon._handle_msg(msg_3ef0)
 
 
+async def test_zone_handle_msg_name(mock_tcs: MagicMock) -> None:
+    """Test zone handle 004 msg."""
+    zon = Zone(mock_tcs, "00")
+
+    msg = create_mock_msg(Code._0004, {"name": "my_name"}, mock_tcs.ctl)
+    zon._handle_msg(msg)
+    assert await zon.name() == "my_name"
+
+
 @pytest.mark.asyncio
 async def test_zone_commands(mock_tcs: MagicMock) -> None:
     """Test command generation overrides for general Zones."""
