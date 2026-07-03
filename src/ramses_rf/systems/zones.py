@@ -868,6 +868,8 @@ class Zone(ZoneSchedule):
     async def name(self) -> str | None:  # 0004
         """Get the name of the zone."""
         if self._name is None:
+            # TODO update this getter to pick up zone name properly
+            #  from stored packets
             self._name = cast(
                 str | None,
                 await self.entity_state.get_value(
