@@ -393,7 +393,7 @@ class TestQuirks31DABypassPosition:
         result = _quirk(payload, state, "31DA")
         assert result[SZ_BYPASS_POSITION] == 0.0
 
-    def test_zero_bypass_overwrites_nonzero_existing_with_mode(self) -> None:
+    def test_zero_bypass_preserves_nonzero_existing_with_mode(self) -> None:
         """bypass_position=0.0 from 31DA must not overwrite a non-zero value."""
         state = _make_state(bypass_position=0.5, bypass_mode="auto")
         payload = {SZ_BYPASS_POSITION: 0.0}
@@ -433,6 +433,13 @@ class TestQuirks31DABypassPosition:
         payload = {SZ_BYPASS_POSITION: 0.0}
         result = _quirk(payload, state, "31DA")
         assert result[SZ_BYPASS_POSITION] == 0.0
+
+    def test_zero_bypass_with_none_existing_preserves_with_mode(self) -> None:
+        """If current bypass_position is None, 0.0 passes through."""
+        state = _make_state(bypass_position=None, bypass_mode="auto")
+        payload = {SZ_BYPASS_POSITION: 0.0}
+        result = _quirk(payload, state, "31DA")
+        assert result[SZ_BYPASS_POSITION] is None
 
     def test_bypass_quirk_only_for_31da(self) -> None:
         """The bypass_position quirk should only apply to 31DA."""
