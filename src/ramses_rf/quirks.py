@@ -190,7 +190,14 @@ def apply_hvac_quirks(
     # We identify these devices by checking another 22F7 field, e.g. bypass_mode.
 
     if msg_code == "31DA" and "bypass_position" in mutated:
-        if mutated["bypass_position"] == 0.0 and current_state.bypass_mode is None:
-            mutated["bypass_position"] = current_state.bypass_position
+        if mutated["bypass_position"] == 0.0:
+            if (
+                current_state.bypass_position is not None
+                and (
+                    current_state.bypass_position != 0.0
+                    or current_state.bypass_mode is not None
+                )  # from 22F7
+            ):
+                mutated["bypass_position"] = current_state.bypass_position
 
     return mutated

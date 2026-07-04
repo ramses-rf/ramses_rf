@@ -380,7 +380,7 @@ class TestQuirks31DAFanInfo:
 class TestQuirks31DABypassPosition:
     """31DA bypass_position=0.0 null-marker prevention.
 
-    Devices like the Ventura V1x report bypass_position via 22F7, not 31DA.
+    Devices like Orcon report bypass_position via 22F7, not 31DA.
     Their 31DA snapshot includes 0x00 for bypass_position, which parses as
     0.0 (a seemingly valid value).  This must not overwrite a non-zero
     bypass_position from 22F7.
