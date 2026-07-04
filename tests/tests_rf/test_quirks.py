@@ -537,6 +537,57 @@ class TestQuirks31DAVenturaIntegration:
 
         # Quirks should preserve these values
         assert result[SZ_FAN_INFO] == "auto"  # not '-unknown 0x1F-'
+        assert result[SZ_BYPASS_POSITION] == 0.0  # updated
+        assert result["exhaust_fan_speed"] == 60.0  # not 0.0
+
+        # These pass through (dispatcher will filter the null markers)
+        assert result[SZ_INDOOR_HUMIDITY] is None  # quirks normalise 0.0 → None
+        assert result[SZ_OUTDOOR_HUMIDITY] is None  # dispatcher filters this
+        assert result[SZ_SUPPLY_TEMP] is None  # dispatcher filters this
+
+    def test_orcon_31da_does_not_overwrite_good_state(self) -> None:
+        """Full Orcon 31DA payload must not overwrite good values
+        from 12A0/22F1/22F4/22F7."""
+        # Simulate state established by 12A0 + 22F1 + 22F7
+        state = _make_state(
+            indoor_humidity=0.63,
+            outdoor_humidity=0.69,
+            indoor_temp=28.42,
+            outdoor_temp=27.42,
+            bypass_position=0.5,
+            bypass_mode="auto",
+            fan_info="auto",
+            fan_mode="auto",
+            exhaust_fan_speed=60.0,
+        )
+
+        # Simulate the 31DA payload (post-parser dict)
+        payload = {
+            "hvac_id": "00",
+            "exhaust_fan_speed": 0.0,  # null marker
+            SZ_FAN_INFO: "-unknown 0x1F-",  # unknown code
+            "air_quality": None,
+            "co2_level": 758,
+            SZ_INDOOR_HUMIDITY: 0.0,  # null marker (filtered by dispatcher)
+            SZ_OUTDOOR_HUMIDITY: None,  # EF = not implemented
+            "exhaust_temp": 27.42,
+            SZ_SUPPLY_TEMP: None,  # 7FFF
+            "indoor_temp": 28.42,
+            "outdoor_temp": 28.14,
+            "speed_capabilities": ["off", "timer", "boost"],
+            SZ_BYPASS_POSITION: 0.0,  # null marker
+            "supply_fan_speed": 0.0,
+            "remaining_mins": 0,
+            "post_heat": 0.0,
+            "pre_heat": 0.0,
+            "supply_flow": 133.0,
+            "exhaust_flow": 133.0,
+        }
+
+        result = _quirk(payload, state, "31DA")
+
+        # Quirks should preserve these values
+        assert result[SZ_FAN_INFO] == "auto"  # not '-unknown 0x1F-'
         assert result[SZ_BYPASS_POSITION] == 0.5  # not 0.0
         assert result["exhaust_fan_speed"] == 60.0  # not 0.0
 
