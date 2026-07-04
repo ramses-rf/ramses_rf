@@ -386,16 +386,23 @@ class TestQuirks31DABypassPosition:
     bypass_position from 22F7.
     """
 
-    def test_zero_bypass_preserves_nonzero_existing(self) -> None:
-        """bypass_position=0.0 from 31DA must not overwrite a non-zero value."""
+    def test_zero_bypass_overwrites_nonzero_existing(self) -> None:
+        """bypass_position=0.0 from 31DA can overwrite any value."""
         state = _make_state(bypass_position=0.5)
+        payload = {SZ_BYPASS_POSITION: 0.0}
+        result = _quirk(payload, state, "31DA")
+        assert result[SZ_BYPASS_POSITION] == 0.0
+
+    def test_zero_bypass_overwrites_nonzero_existing_with_mode(self) -> None:
+        """bypass_position=0.0 from 31DA must not overwrite a non-zero value."""
+        state = _make_state(bypass_position=0.5, bypass_mode="auto")
         payload = {SZ_BYPASS_POSITION: 0.0}
         result = _quirk(payload, state, "31DA")
         assert result[SZ_BYPASS_POSITION] == 0.5
 
-    def test_zero_bypass_preserves_string_existing(self) -> None:
+    def test_zero_bypass_preserves_string_existing_with_mode(self) -> None:
         """bypass_position=0.0 must not overwrite a string value (e.g. 'off')."""
-        state = _make_state(bypass_position="off")
+        state = _make_state(bypass_position="off", bypass_mode="auto")
         payload = {SZ_BYPASS_POSITION: 0.0}
         result = _quirk(payload, state, "31DA")
         assert result[SZ_BYPASS_POSITION] == "off"
