@@ -193,10 +193,9 @@ def apply_hvac_quirks(
         if mutated["bypass_position"] == 0.0:
             if (
                 current_state.bypass_position is not None
-                and (
-                    current_state.bypass_position != 0.0
-                    or current_state.bypass_mode is not None
-                )  # from 22F7
+                and current_state.bypass_position != 0.0
+                and current_state.bypass_mode is not None
+                # would be set from 22F7
             ):
                 mutated["bypass_position"] = current_state.bypass_position
 
