@@ -1,5 +1,4 @@
 # Requirements to build the code documentation from the source code
-# - last checked/updated: 2026-07-16
 
 # libraries required to build with sphinx
 # - pip list | grep -E 'sphinx'

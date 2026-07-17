@@ -1,6 +1,4 @@
 # Requirements to use the library via its CLI client.py
-# - last checked/updated: 2026-07-16
-#
 
 # library requirements (dependencies) are in pyproject.toml
 # - pip list | grep -E 'ramses|color|paho-mqtt|pyserial|voluptuous'
