@@ -7,12 +7,11 @@ from ramses_rf.address import Address
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command, Command as Intent
 from ramses_rf.enums import Action
-from ramses_tx.command import Command as LegacyCommand
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import ZON_MODE_MAP
 
 
-def test_build_get_dhw_params() -> None:
-    legacy_cmd = LegacyCommand.get_dhw_params("01:111111", dhw_idx=0)
+def test_build_get_dhw_params(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -20,18 +19,10 @@ def test_build_get_dhw_params() -> None:
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_set_dhw_params() -> None:
-    legacy_cmd = LegacyCommand.set_dhw_params(
-        "01:111111", setpoint=55.0, overrun=8, differential=2, dhw_idx=0
-    )
+def test_build_set_dhw_params(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -44,16 +35,10 @@ def test_build_set_dhw_params() -> None:
         },
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_get_dhw_temp() -> None:
-    legacy_cmd = LegacyCommand.get_dhw_temp("01:111111", dhw_idx=0)
+def test_build_get_dhw_temp(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -61,16 +46,10 @@ def test_build_get_dhw_temp() -> None:
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_put_dhw_temp() -> None:
-    legacy_cmd = LegacyCommand.put_dhw_temp("07:111111", temperature=50.5, dhw_idx=0)
+def test_build_put_dhw_temp(snapshot: Any) -> None:
     intent = Command(
         src=Address("07:111111"),
         dst=Address("07:111111"),
@@ -78,16 +57,10 @@ def test_build_put_dhw_temp() -> None:
         data={"dhw_idx": 0, "temperature": 50.5},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_get_dhw_mode() -> None:
-    legacy_cmd = LegacyCommand.get_dhw_mode("01:111111", dhw_idx=0)
+def test_build_get_dhw_mode(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -95,19 +68,11 @@ def test_build_get_dhw_mode() -> None:
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_set_dhw_mode() -> None:
-    now = dt.now()
-    legacy_cmd = LegacyCommand.set_dhw_mode(
-        "01:111111", mode=4, active=True, until=now, dhw_idx=0
-    )
+def test_build_set_dhw_mode(snapshot: Any) -> None:
+    now = dt(2026, 7, 18, 12, 0)
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -121,16 +86,10 @@ def test_build_set_dhw_mode() -> None:
         },
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_get_schedule_fragment() -> None:
-    legacy_cmd = LegacyCommand.get_schedule_fragment("01:111111", 0, 1, 0)
+def test_build_get_schedule_fragment(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -138,16 +97,10 @@ def test_build_get_schedule_fragment() -> None:
         data={"zone_idx": 0, "frag_number": 1, "total_frags": 0},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_set_schedule_fragment() -> None:
-    legacy_cmd = LegacyCommand.set_schedule_fragment("01:111111", 0, 1, 3, "0011223344")
+def test_build_set_schedule_fragment(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -155,16 +108,10 @@ def test_build_set_schedule_fragment() -> None:
         data={"zone_idx": 0, "frag_num": 1, "frag_cnt": 3, "fragment": "0011223344"},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_get_faultlog_entry() -> None:
-    legacy_cmd = LegacyCommand.get_system_log_entry("01:111111", 5)
+def test_build_get_faultlog_entry(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
@@ -172,16 +119,10 @@ def test_build_get_faultlog_entry() -> None:
         data={"log_idx": 5},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_get_opentherm_data() -> None:
-    legacy_cmd = LegacyCommand.get_opentherm_data("10:111111", 14)
+def test_build_get_opentherm_data(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("10:111111"),
@@ -189,12 +130,7 @@ def test_build_get_opentherm_data() -> None:
         data={"msg_id": 14},
     )
     dto = build_dto(intent)
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
-    assert dto.addr1 == legacy_cmd._addrs[0].id
-    assert dto.addr2 == legacy_cmd._addrs[1].id
-    assert dto.addr3 == legacy_cmd._addrs[2].id
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
 def test_set_fan_mode_orcon_2byte_default() -> None:
@@ -353,7 +289,7 @@ def test_set_fan_mode_invalid_mode_raises() -> None:
         build_dto(intent)
 
 
-def test_build_put_co2_level() -> None:
+def test_build_put_co2_level(snapshot: Any) -> None:
     intent = Intent(
         src=Address("32:111111"),
         dst=Address("32:111111"),
@@ -366,7 +302,7 @@ def test_build_put_co2_level() -> None:
     assert dto.payload == "000190"
 
 
-def test_build_put_indoor_humidity() -> None:
+def test_build_put_indoor_humidity(snapshot: Any) -> None:
     intent = Intent(
         src=Address("32:111111"),
         dst=Address("32:111111"),
@@ -379,7 +315,7 @@ def test_build_put_indoor_humidity() -> None:
     assert dto.payload == "0032"
 
 
-def test_build_set_bypass_position() -> None:
+def test_build_set_bypass_position(snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),
         dst=Address("32:111111"),
@@ -392,7 +328,7 @@ def test_build_set_bypass_position() -> None:
     assert dto.payload == "00FF"
 
 
-def test_build_get_fan_param() -> None:
+def test_build_get_fan_param(snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),
         dst=Address("32:111111"),
@@ -405,7 +341,7 @@ def test_build_get_fan_param() -> None:
     assert dto.payload == "000031"
 
 
-def test_build_set_fan_param() -> None:
+def test_build_set_fan_param(snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),
         dst=Address("32:111111"),
@@ -418,7 +354,7 @@ def test_build_set_fan_param() -> None:
     assert dto.payload == "00003100100000001E0000000000000708000000010001"
 
 
-def test_build_get_hvac_fan_31da() -> None:
+def test_build_get_hvac_fan_31da(snapshot: Any) -> None:
     intent = Intent(
         src=Address("32:111111"),
         dst=Address("32:111111"),
@@ -484,7 +420,7 @@ def test_build_get_hvac_fan_31da() -> None:
     ],
 )
 def test_build_set_fan_mode_exhaustive(
-    data: dict[str, Any], expected_payload: str
+    data: dict[str, Any], expected_payload: str, snapshot: Any
 ) -> None:
     intent = Intent(
         src=Address("18:000730"),
@@ -512,7 +448,7 @@ def test_build_set_fan_mode_exhaustive(
     ],
 )
 def test_build_set_bypass_position_exhaustive(
-    data: dict[str, Any], expected_payload: str
+    data: dict[str, Any], expected_payload: str, snapshot: Any
 ) -> None:
     intent = Intent(
         src=Address("18:000730"),
@@ -534,7 +470,7 @@ def test_build_set_bypass_position_exhaustive(
     ],
 )
 def test_build_put_indoor_humidity_exhaustive(
-    data: dict[str, Any], expected_payload: str
+    data: dict[str, Any], expected_payload: str, snapshot: Any
 ) -> None:
     intent = Intent(
         src=Address("32:111111"),
@@ -555,7 +491,7 @@ def test_build_put_indoor_humidity_exhaustive(
     ],
 )
 def test_build_put_co2_level_exhaustive(
-    data: dict[str, Any], expected_payload: str
+    data: dict[str, Any], expected_payload: str, snapshot: Any
 ) -> None:
     intent = Intent(
         src=Address("32:111111"),
@@ -704,7 +640,7 @@ def test_build_put_co2_level_exhaustive(
     ],
 )
 def test_build_get_hvac_fan_31da_exhaustive(
-    data: dict[str, Any], expected_payload: str
+    data: dict[str, Any], expected_payload: str, snapshot: Any
 ) -> None:
     # Need to add missing fields as None so that get_hvac_fan_31da doesn't complain about missing keys,
     # but build_dto for 31DA actually handles None for missing data fields!
@@ -724,8 +660,7 @@ def test_build_get_hvac_fan_31da_exhaustive(
     "setpoint",
     [5.0, 10.0, 15.5, 21.0, 21.5, 30.0, 35.0],
 )
-def test_build_set_zone_setpoint_parity(setpoint: float) -> None:
-    legacy_cmd = LegacyCommand.set_zone_setpoint("01:111111", "00", setpoint)
+def test_build_set_zone_setpoint_parity(setpoint: float, snapshot: Any) -> None:
 
     intent = Intent(
         src=Address("18:000730"),
@@ -736,9 +671,7 @@ def test_build_set_zone_setpoint_parity(setpoint: float) -> None:
 
     dto = build_dto(intent)
 
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -751,8 +684,7 @@ def test_build_set_zone_setpoint_parity(setpoint: float) -> None:
         "12345678901234567890",
     ],
 )
-def test_build_set_zone_name_parity(name: str) -> None:
-    legacy_cmd = LegacyCommand.set_zone_name("01:111111", "01", name)
+def test_build_set_zone_name_parity(name: str, snapshot: Any) -> None:
 
     intent = Intent(
         src=Address("18:000730"),
@@ -763,9 +695,7 @@ def test_build_set_zone_name_parity(name: str) -> None:
 
     dto = build_dto(intent)
 
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
 @pytest.mark.parametrize("local_override", [True, False])
@@ -781,16 +711,8 @@ def test_build_set_zone_config_parity(
     multiroom_mode: bool,
     min_temp: float,
     max_temp: float,
+    snapshot: Any,
 ) -> None:
-    legacy_cmd = LegacyCommand.set_zone_config(
-        "01:111111",
-        "02",
-        min_temp=min_temp,
-        max_temp=max_temp,
-        local_override=local_override,
-        openwindow_function=openwindow_function,
-        multiroom_mode=multiroom_mode,
-    )
 
     intent = Intent(
         src=Address("18:000730"),
@@ -808,9 +730,7 @@ def test_build_set_zone_config_parity(
 
     dto = build_dto(intent)
 
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -831,16 +751,8 @@ def test_build_set_zone_config_parity(
     ],
 )
 def test_build_set_zone_mode_parity(
-    mode: Any, setpoint: Any, until: Any, duration: Any
+    mode: Any, setpoint: Any, until: Any, duration: Any, snapshot: Any
 ) -> None:
-    legacy_cmd = LegacyCommand.set_zone_mode(
-        "01:111111",
-        "00",
-        mode=mode,
-        setpoint=setpoint,
-        until=until,
-        duration=duration,
-    )
 
     intent = Intent(
         src=Address("18:000730"),
@@ -857,6 +769,4 @@ def test_build_set_zone_mode_parity(
 
     dto = build_dto(intent)
 
-    assert dto.verb == legacy_cmd.verb
-    assert dto.code == legacy_cmd.code
-    assert dto.payload == legacy_cmd.payload
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
