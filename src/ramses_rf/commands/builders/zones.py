@@ -3,7 +3,7 @@
 from ramses_rf.commands.builders.helpers import resolve_addrs
 from ramses_rf.commands.core import Command
 from ramses_tx.command.base import _check_idx, _normalise_mode, _normalise_until
-from ramses_tx.const import DEFAULT_NUM_REPEATS, W_, Code, Priority
+from ramses_tx.const import DEFAULT_NUM_REPEATS, RQ, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.helpers import hex_from_dtm, hex_from_temp
 
@@ -161,6 +161,126 @@ def build_set_config(intent: Command) -> CommandDTO:
         addr2=addr2,
         addr3=addr3,
         code=Code._000A,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_name(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}00"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._0004,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_config(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._000A,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_window_state(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._12B0,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_setpoint(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._2309,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_mode(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._2349,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_get_temp(intent: Command) -> CommandDTO:
+    zone_idx = intent.get("zone_idx")
+    if zone_idx is None:
+        raise ValueError("Missing 'zone_idx' in intent data")
+
+    payload = f"{_check_idx(zone_idx)}"
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._30C9,
         payload=payload,
         priority=Priority.DEFAULT,
         num_repeats=DEFAULT_NUM_REPEATS,
