@@ -20,11 +20,53 @@
 # name: test_build_put_dhw_temp
   ' I --- 07:111111 --:------ 07:111111 1260 003 0013BA'
 # ---
-# name: test_build_set_dhw_mode
+# name: test_build_set_dhw_mode_parity[0-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[00-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[01-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000001FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[02-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000102FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[04-False-until11-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 012 000004FFFFFF000C120707EA'
+# ---
+# name: test_build_set_dhw_mode_parity[1-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000001FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[2-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000102FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[4-True-until3-None]
   ' W --- 18:000730 01:111111 --:------ 1F41 012 000104FFFFFF000C120707EA'
 # ---
-# name: test_build_set_dhw_params
+# name: test_build_set_dhw_mode_parity[advanced_override-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000101FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[follow_schedule-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[permanent_override-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000002FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[temporary_override-True-until7-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 012 000104FFFFFF000C120707EA'
+# ---
+# name: test_build_set_dhw_params_parity[30.0-0-1.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 000BB8000064'
+# ---
+# name: test_build_set_dhw_params_parity[50.0-5-1.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 001388050064'
+# ---
+# name: test_build_set_dhw_params_parity[55.0-8-2.0]
   ' W --- 18:000730 01:111111 --:------ 10A0 006 00157C0800C8'
+# ---
+# name: test_build_set_dhw_params_parity[85.0-10-10.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 0021340A03E8'
 # ---
 # name: test_build_set_schedule_fragment
   ' W --- 18:000730 01:111111 --:------ 0404 012 002000080501030011223344'

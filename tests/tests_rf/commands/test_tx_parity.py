@@ -22,16 +22,27 @@ def test_build_get_dhw_params(snapshot: Any) -> None:
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_set_dhw_params(snapshot: Any) -> None:
+@pytest.mark.parametrize(
+    ("setpoint", "overrun", "differential"),
+    [
+        (55.0, 8, 2.0),
+        (30.0, 0, 1.0),
+        (85.0, 10, 10.0),
+        (50.0, 5, 1.0),
+    ],
+)
+def test_build_set_dhw_params_parity(
+    setpoint: float, overrun: int, differential: float, snapshot: Any
+) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.SET_DHW_PARAMS,
         data={
             "dhw_idx": 0,
-            "setpoint": 55.0,
-            "overrun": 8,
-            "differential": 2,
+            "setpoint": setpoint,
+            "overrun": overrun,
+            "differential": differential,
         },
     )
     dto = build_dto(intent)
@@ -71,18 +82,36 @@ def test_build_get_dhw_mode(snapshot: Any) -> None:
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_set_dhw_mode(snapshot: Any) -> None:
-    now = dt(2026, 7, 18, 12, 0)
+@pytest.mark.parametrize(
+    ("mode", "active", "until", "duration"),
+    [
+        (0, True, None, None),
+        (1, False, None, None),
+        (2, True, None, None),
+        (4, True, dt(2026, 7, 18, 12, 0), None),
+        ("follow_schedule", None, None, None),
+        ("advanced_override", True, None, None),
+        ("permanent_override", False, None, None),
+        ("temporary_override", True, dt(2026, 7, 18, 12, 0), None),
+        (ZON_MODE_MAP.FOLLOW, None, None, None),
+        (ZON_MODE_MAP.ADVANCED, False, None, None),
+        (ZON_MODE_MAP.PERMANENT, True, None, None),
+        (ZON_MODE_MAP.TEMPORARY, False, dt(2026, 7, 18, 12, 0), None),
+    ],
+)
+def test_build_set_dhw_mode_parity(
+    mode: Any, active: Any, until: Any, duration: Any, snapshot: Any
+) -> None:
     intent = Command(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.SET_DHW_MODE,
         data={
             "dhw_idx": 0,
-            "mode": 4,
-            "active": True,
-            "until": now,
-            "duration": None,
+            "mode": mode,
+            "active": active,
+            "until": until,
+            "duration": duration,
         },
     )
     dto = build_dto(intent)
