@@ -45,6 +45,12 @@ BUILDERS: dict[Action, Callable[[Command], CommandDTO]] = {
     Action.SET_MODE: zones.build_set_mode,
     Action.SET_ZONE_NAME: zones.build_set_name,
     Action.SET_ZONE_CONFIG: zones.build_set_config,
+    Action.GET_ZONE_NAME: zones.build_get_name,
+    Action.GET_ZONE_CONFIG: zones.build_get_config,
+    Action.GET_ZONE_WINDOW_STATE: zones.build_get_window_state,
+    Action.GET_ZONE_SETPOINT: zones.build_get_setpoint,
+    Action.GET_MODE: zones.build_get_mode,
+    Action.GET_ZONE_TEMP: zones.build_get_temp,
 }
 
 
