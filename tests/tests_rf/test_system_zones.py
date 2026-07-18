@@ -265,7 +265,7 @@ async def test_zone_get_temp_handles_protocol_timeout(
     async def mock_send_cmd(*args: Any, **kwargs: Any) -> Packet:
         raise ProtocolTimeoutError("Mocked 20-second FSM timeout")
 
-    mock_tcs._gwy.async_send_cmd = AsyncMock(side_effect=mock_send_cmd)
+    mock_tcs._gwy.dispatcher.send = AsyncMock(side_effect=mock_send_cmd)
 
     # Act & Assert: Call _get_temp, it should catch the timeout
     # and return None without crashing the task runner.

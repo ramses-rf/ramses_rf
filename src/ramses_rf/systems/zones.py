@@ -763,8 +763,10 @@ class Zone(ZoneSchedule):
     async def _get_temp(self) -> Packet | None:
         """Get the zone's latest temp from the Controller."""
         try:
-            return await self._gwy.async_send_cmd(
-                Command.get_zone_temp(self.ctl.id, self.idx)
+            return await send_system_intent(
+                self,
+                Action.GET_ZONE_TEMP,
+                {"zone_idx": self.idx},
             )
         except ProtocolTimeoutError as err:
             _LOGGER.warning(f"{self}: _get_temp timed out: {err}")

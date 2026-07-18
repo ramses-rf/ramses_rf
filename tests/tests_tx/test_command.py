@@ -7,7 +7,12 @@ from typing import Final
 
 import pytest
 
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_rf.enums import Action
 from ramses_tx.command import Command
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SYS_MODE_MAP, ZON_MODE_MAP
 from ramses_tx.exceptions import CommandInvalid
 
@@ -163,9 +168,15 @@ async def test_set_zone_mode_noargs() -> None:
 
     # Act & Assert
     with pytest.raises(CommandInvalid):
-        _ = Command.set_zone_mode(
-            ctl_id=ctl_id,
-            zone_idx=4,
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(ctl_id),
+                    action=Action.SET_MODE,
+                    data={"zone_idx": 4},
+                )
+            )
         )
 
 
@@ -175,8 +186,15 @@ async def test_set_zone_mode_follow() -> None:
     expected = TEST_COMMANDS[3]
 
     # Act
-    cmd = Command.set_zone_mode(
-        ctl_id="12:123456", mode=ZON_MODE_MAP["follow_schedule"], zone_idx=2
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_MODE,
+                data={"zone_idx": 2, "mode": ZON_MODE_MAP["follow_schedule"]},
+            )
+        )
     )
     #  cls,
     #  ctl_id: DeviceIdT | str,
@@ -198,11 +216,15 @@ async def test_set_zone_mode_follow_extra() -> None:
 
     # Act & Assert
     with pytest.raises(CommandInvalid):
-        _ = Command.set_zone_mode(
-            ctl_id="12:123456",
-            zone_idx=1,
-            mode=mode,
-            duration=1,  # never passed on by ramses_cc
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address("12:123456"),
+                    action=Action.SET_MODE,
+                    data={"zone_idx": 1, "mode": mode, "duration": 1},
+                )
+            )
         )
 
 
@@ -212,8 +234,15 @@ async def test_set_zone_mode_perm_setp() -> None:
     expected = TEST_COMMANDS[4]
 
     # Act
-    cmd = Command.set_zone_mode(
-        ctl_id="12:123456", zone_idx=1, mode=ZON_MODE_MAP.PERMANENT, setpoint=5
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_MODE,
+                data={"zone_idx": 1, "mode": ZON_MODE_MAP.PERMANENT, "setpoint": 5},
+            )
+        )
     )
 
     # Assert

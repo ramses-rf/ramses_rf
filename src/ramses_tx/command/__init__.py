@@ -7,10 +7,9 @@ from ..const import I_, RP, RQ, W_, Code
 from .base import CommandBase
 from .dhw import DhwMixins
 from .system import SystemMixins
-from .zones import ZoneMixins
 
 
-class Command(DhwMixins, SystemMixins, ZoneMixins, CommandBase):
+class Command(DhwMixins, SystemMixins, CommandBase):
     """The Command class (packets to be transmitted).
 
     They have QoS and/or callbacks (but no RSSI).
@@ -48,14 +47,4 @@ CODE_API_MAP = {
     f"{RQ}|{Code._1100}": Command.get_tpi_params,
     f"{W_}|{Code._1100}": Command.set_tpi_params,
     f"{I_}|{Code._0002}": Command.put_weather_temp,
-    f"{RQ}|{Code._000A}": Command.get_zone_config,
-    f"{W_}|{Code._000A}": Command.set_zone_config,
-    f"{RQ}|{Code._2349}": Command.get_zone_mode,
-    f"{W_}|{Code._2349}": Command.set_zone_mode,
-    f"{RQ}|{Code._0004}": Command.get_zone_name,
-    f"{W_}|{Code._0004}": Command.set_zone_name,
-    f"{RQ}|{Code._2309}": Command.get_zone_setpoint,
-    f"{W_}|{Code._2309}": Command.set_zone_setpoint,
-    f"{RQ}|{Code._30C9}": Command.get_zone_temp,
-    f"{RQ}|{Code._12B0}": Command.get_zone_window_state,
 }
