@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -8,7 +9,7 @@ from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command, Command as Intent
 from ramses_rf.enums import Action
 from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.const import ZON_MODE_MAP
+from ramses_tx.const import ZON_MODE_MAP, FaultDeviceClass, FaultState, FaultType
 
 
 def test_build_get_dhw_params(snapshot: Any) -> None:
@@ -1004,7 +1005,8 @@ def test_build_put_actuator_cycle(snapshot: Any) -> None:
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
-def test_build_send_puzzle(snapshot: Any) -> None:
+@patch("ramses_rf.commands.builders.system.timestamp", return_value=1700000000.0)
+def test_build_send_puzzle(mock_timestamp: Any, snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),
         dst=Address("63:262143"),
@@ -1016,7 +1018,6 @@ def test_build_send_puzzle(snapshot: Any) -> None:
 
 
 def test_build_put_faultlog_entry(snapshot: Any) -> None:
-    from ramses_tx.const import FaultDeviceClass, FaultState, FaultType
 
     intent = Intent(
         src=Address("01:111111"),
