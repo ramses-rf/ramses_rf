@@ -112,6 +112,16 @@ _HVAC_PARENT_INFERENCE_CODES: frozenset[str] = frozenset(
     {"22F1", "31E0", "31DA", "10D0"}  # fan_mode, vent_demand, fan_status, outside_temp
 )
 
+# TPI loop codes broadcast by a BDR (13:) or OTB (10:) acting as the
+# appliance_control (boiler relay).  These are sent as I broadcasts at
+# the TPI cycle rate (usu. 6x/hr).  A DHW valve relay does NOT send
+# 3B00/3EF0 — it uses a separate control path.  This is the same
+# signature ramses_rf's eavesdrop_appliance_control (tcs.py) watches for
+# to identify the system relay.  See issue 834: a BDR sending these
+# codes must be classified as appliance_control (FC domain), not as a
+# hotwater_valve.
+_APPLIANCE_CONTROL_CODES: frozenset[str] = frozenset({"3B00", "3EF0"})
+
 # 32: is unambiguous — always a FAN. A FAN sends 22F1 (which maps to REM in
 # HVAC_KLASS_BY_VC_PAIR) but is still a FAN, so the prefix must win.
 # 18: is unambiguous — always an HGI. The HGI relays packets from all device
@@ -152,6 +162,7 @@ class DiscoveredDevice:
     codes_seen: list[str] = field(default_factory=list)  # sorted, deduplicated
     bound_to: str | None = None  # parent device ID (CTL for TRV, FAN for REM)
     zone_idx: str | None = None  # zone index if known from payload
+    domain_id: str | None = None  # domain ID if known (FC=appliance_control)
     rssi: float | None = None  # running average
     confidence: str = "low"  # high, medium, low
     is_battery: bool = False  # seen sending battery info
@@ -301,6 +312,12 @@ class DiscoveryScan:
             _extract_zone_idx(dto.payload) if code in _ZONE_BINDING_CODES else None
         )
 
+        # Detect appliance_control signal: a BDR/OTB broadcasting 3B00/3EF0
+        # as I is the boiler relay (FC domain).  See issue 834.
+        domain_id = (
+            "FC" if _is_appliance_control_signal(src, code, verb, True) else None
+        )
+
         # Process each address in the packet
         # src: high-confidence (device is actively sending)
         if src and _is_valid_address(src):
@@ -310,6 +327,7 @@ class DiscoveryScan:
                 verb=verb,
                 rssi=rssi,
                 zone_idx=zone_idx,
+                domain_id=domain_id,
                 is_src=True,
                 dst=dst,
             )
@@ -322,6 +340,7 @@ class DiscoveryScan:
                 verb=verb,
                 rssi=None,  # RSSI is for the sender, not the receiver
                 zone_idx=zone_idx,
+                domain_id=None,
                 is_src=False,
                 dst=None,
                 src=src,  # who sent this packet (for HVAC reply inference)
@@ -335,6 +354,7 @@ class DiscoveryScan:
                 verb=verb,
                 rssi=None,
                 zone_idx=None,
+                domain_id=None,
                 is_src=False,
                 dst=None,
             )
@@ -347,6 +367,7 @@ class DiscoveryScan:
         verb: str,
         rssi: float | None,
         zone_idx: str | None,
+        domain_id: str | None = None,
         is_src: bool,
         dst: str | None,
         src: str | None = None,
@@ -427,6 +448,7 @@ class DiscoveryScan:
                     is_battery=code in _BATTERY_CODES,
                     src_count=1 if is_src else 0,
                     dst_count=0 if is_src else 1,
+                    domain_id=domain_id if domain_id and is_src else None,
                 )
                 self._devices[dev_id] = dev
                 self._dirty = True
@@ -471,6 +493,13 @@ class DiscoveryScan:
                             zone_idx,
                             dev.bound_to,
                         )
+                # Appliance_control signal for known devices too (issue 834):
+                # a known BDR may not have been seen broadcasting 3B00/3EF0
+                # before it was accepted, so capture the domain_id now.
+                if domain_id and is_src and dev.domain_id != domain_id:
+                    dev.domain_id = domain_id
+                    dev.confidence = "high"
+                    self._dirty = True
             return
 
         now = dt.now().isoformat(timespec="seconds")
@@ -502,6 +531,11 @@ class DiscoveryScan:
                 if dst and _is_valid_address(dst) and dst != dev_id:
                     dev.bound_to = dst
                 dev.confidence = "high"  # binding telemetry = high confidence
+            # Appliance_control signal: a BDR/OTB broadcasting 3B00/3EF0 as
+            # I is the boiler relay (FC domain).  See issue 834.
+            if domain_id and is_src and not is_hgi:
+                dev.domain_id = domain_id
+                dev.confidence = "high"
             # HVAC topology inference: a FAN (32:) sending a directed packet
             # (I or RP) to this device confirms the binding — the FAN is the
             # controller and it's communicating with its paired remote.
@@ -569,6 +603,13 @@ class DiscoveryScan:
             if bound_changed:
                 dev.confidence = "high"
                 changed = True
+
+        # Update appliance_control domain (BDR/OTB broadcasting 3B00/3EF0).
+        # See issue 834: this distinguishes a boiler relay from a DHW valve.
+        if domain_id and is_src and not is_hgi and dev.domain_id != domain_id:
+            dev.domain_id = domain_id
+            dev.confidence = "high"
+            changed = True
 
         # HVAC topology inference: a FAN (32:) sending a directed packet
         # (I or RP) to this device confirms the binding — the FAN is the
@@ -850,3 +891,27 @@ def _extract_zone_idx(payload: str) -> str | None:
     if val > 0x0B:
         return None
     return idx
+
+
+def _is_appliance_control_signal(
+    dev_id: str, code: str, verb: str, is_src: bool
+) -> bool:
+    """Return True if this packet indicates the src is an appliance_control.
+
+    A BDR (13:) or OTB (10:) broadcasting 3B00 or 3EF0 as I is acting as the
+    boiler relay (TPI loop).  DHW valve relays do not send these codes — they
+    use a separate control path.  This is the same signature ramses_rf's
+    eavesdrop_appliance_control (tcs.py) uses to identify the system relay.
+
+    See issue 834: without this signal, a BDR with no zone_idx is misclassified
+    as a hotwater_valve by ramses_cc's generate_schema_entry.
+    """
+    if not is_src:
+        return False
+    if not dev_id.startswith(("13:", "10:")):
+        return False
+    if code not in _APPLIANCE_CONTROL_CODES:
+        return False
+    # 3B00/3EF0 are broadcast as I by the relay; RQ/RP are directed replies
+    # (e.g. 3EF1 RP from the relay to the HGI) and are not the TPI signature.
+    return verb.strip() == "I"
