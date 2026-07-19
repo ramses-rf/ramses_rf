@@ -1034,3 +1034,25 @@ def test_build_put_faultlog_entry(snapshot: Any) -> None:
     )
     dto = build_dto(intent)
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_sensor_temp(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("04:111111"),
+        dst=Address("04:111111"),
+        action=Action.PUT_SENSOR_TEMP,
+        data={"temperature": 21.5},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_outdoor_temp(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("17:111111"),
+        dst=Address("17:111111"),
+        action=Action.PUT_OUTDOOR_TEMP,
+        data={"temperature": 15.0},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot

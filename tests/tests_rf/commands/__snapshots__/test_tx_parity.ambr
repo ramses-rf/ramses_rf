@@ -56,8 +56,14 @@
 # name: test_build_put_faultlog_entry
   ' I --- 01:111111 18:000730 --:------ 0418 022 000001B0060000000000791A600000FFFF700005B207'
 # ---
+# name: test_build_put_outdoor_temp
+  ' I --- 17:111111 --:------ 17:111111 0002 003 0005DC'
+# ---
 # name: test_build_put_presence_detected
   ' I --- 18:000730 --:------ 18:000730 2E10 002 00C8'
+# ---
+# name: test_build_put_sensor_temp
+  ' I --- 04:111111 --:------ 04:111111 30C9 003 000866'
 # ---
 # name: test_build_put_weather_temp
   ' I --- 17:000730 --:------ 17:000730 0002 004 0004E201'
