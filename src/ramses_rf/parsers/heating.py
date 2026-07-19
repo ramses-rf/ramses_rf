@@ -651,10 +651,14 @@ def parser_22c9(payload: str, msg: Message) -> dict[str, Any] | list[dict[str, A
     # Notes on 008|suffix: only seen as I, only when no array, only as 7FFF(0101|0202)03$
 
     def _parser(seqx: str) -> dict[str, Any]:
-        assert seqx[10:] in ("01", "02"), f"is {seqx[10:]}, expecting 01 or 02"
+        assert seqx[10:] in ("00", "01", "02"), (
+            f"is {seqx[10:]}, expecting 00, 01 or 02"
+        )
 
         return {
-            SZ_MODE: {"01": "heat", "02": "cool"}[seqx[10:]],  # TODO: or action?
+            SZ_MODE: {"00": "off", "01": "heat", "02": "cool"}[
+                seqx[10:]
+            ],  # TODO: or action?
             SZ_SETPOINT_BOUNDS: (hex_to_temp(seqx[2:6]), hex_to_temp(seqx[6:10])),
         }  # lower, upper setpoints
 
@@ -667,7 +671,9 @@ def parser_22c9(payload: str, msg: Message) -> dict[str, Any] | list[dict[str, A
             for i in range(0, len(payload), 12)
         ]
 
-    assert msg.len != 8 or payload[10:] in ("010103", "020203"), _INFORM_DEV_MSG
+    assert msg.len != 8 or payload[10:] in ("000003", "010103", "020203"), (
+        _INFORM_DEV_MSG
+    )
 
     return _parser(payload[:12])
 
