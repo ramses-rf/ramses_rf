@@ -974,7 +974,17 @@ class MixZone(Zone):  # HM80  # TODO: 0008/0009/3150
         super()._setup_discovery_cmds()
 
         self.discovery.add_cmd(
-            Command.get_mix_valve_params(self.ctl.id, self.idx), 60 * 60 * 6
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_MIX_VALVE_PARAMS,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
+            60 * 60 * 6,
         )
 
     async def mix_config(self) -> PayDictT._1030:
