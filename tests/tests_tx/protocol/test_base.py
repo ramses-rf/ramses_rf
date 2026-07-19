@@ -160,6 +160,42 @@ async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
     )
 
 
+async def test_is_wanted_addrs_foreign_hgi_not_blocked(protocol: DummyProtocol) -> None:
+    """Foreign HGIs (18:) must not be blocked even if in the exclude list.
+
+    A foreign HGI communicates with our controller and the controller's
+    responses (e.g. 0004 zone names) are addressed to the foreign HGI.
+    Blocking the foreign HGI would prevent the active gateway from
+    eavesdropping on those responses (issue 822).
+    """
+    protocol._active_hgi = DeviceIdT("18:191664")
+    protocol._exclude = [DeviceIdT("18:072981")]  # foreign HGI in block_list
+
+    # Packet from controller to foreign HGI (e.g. 0004 RP zone name)
+    assert (
+        protocol._is_wanted_addrs(DeviceIdT("01:216136"), DeviceIdT("18:072981"))
+        is True
+    )
+    # Packet from foreign HGI to controller (e.g. 0004 RQ)
+    assert (
+        protocol._is_wanted_addrs(DeviceIdT("18:072981"), DeviceIdT("01:216136"))
+        is True
+    )
+
+
+async def test_is_wanted_addrs_hgi_dev_addr_still_blocked(
+    protocol: DummyProtocol,
+) -> None:
+    """HGI_DEV_ADDR (18:000730) is the generic broadcast, not a specific HGI.
+
+    It must still be subject to the block_list — only specific foreign HGIs
+    (18:XXXXXX where XXXXXX != 000730) are exempt.
+    """
+    protocol._exclude = [HGI_DEV_ADDR.id]
+
+    assert protocol._is_wanted_addrs(DeviceIdT("01:216136"), HGI_DEV_ADDR.id) is False
+
+
 # --- INBOUND PACKET TESTS (_pkt_received) ---
 
 

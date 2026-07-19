@@ -570,27 +570,30 @@ class _DeviceIdFilterMixin(_BaseProtocol):
             self._foreign_gwys_lst.append(dev_id)
 
         for dev_id in dict.fromkeys((src_id, dst_id)):  # removes duplicates
+            # HGI devices (18:) are gateways, not sensors/actuators.
+            # Foreign HGIs communicate with our controller and the controller's
+            # responses (e.g. 0004 zone names, 2349 zone modes) are addressed
+            # to them.  Blocking a foreign HGI would prevent the active gateway
+            # from eavesdropping on those responses (issue 822).
+            #
+            # This check is BEFORE the exclude (block_list) check so that
+            # foreign HGIs are never blocked, even if a caller mistakenly
+            # adds them to the block_list.  HGI_DEV_ADDR (18:000730, the
+            # generic broadcast address) is still subject to the block_list.
+            if dev_id[:2] == "18" and dev_id != HGI_DEV_ADDR.id:
+                if dev_id == self._active_hgi:
+                    continue
+                if self._active_hgi:
+                    warn_foreign_hgi(dev_id)
+                continue
+
             if dev_id in self._exclude:
                 return False
-
-            if dev_id == self._active_hgi:
-                continue
 
             if dev_id in self._include:
                 continue
 
             if sending and dev_id == HGI_DEV_ADDR.id:
-                continue
-
-            # HGI devices (18:) are gateways, not sensors/actuators.
-            # Don't filter out specific foreign HGIs when enforce_include is
-            # True — doing so blocks legitimate traffic to/from foreign HGIs
-            # that appear in captured conversations but haven't been added to
-            # the known_list yet.  HGI_DEV_ADDR (18:000730, the generic
-            # broadcast address) is still filtered.
-            if dev_id[:2] == "18" and dev_id != HGI_DEV_ADDR.id:
-                if self._active_hgi:
-                    warn_foreign_hgi(dev_id)
                 continue
 
             if self.enforce_include:
