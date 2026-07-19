@@ -5,11 +5,10 @@ from __future__ import annotations
 
 from ..const import I_, RP, RQ, W_, Code
 from .base import CommandBase
-from .dhw import DhwMixins
 from .system import SystemMixins
 
 
-class Command(DhwMixins, SystemMixins, CommandBase):
+class Command(SystemMixins, CommandBase):
     """The Command class (packets to be transmitted).
 
     They have QoS and/or callbacks (but no RSSI).
@@ -22,12 +21,6 @@ CODE_API_MAP = {
     f"{I_}|{Code._3EF0}": Command.put_actuator_state,
     f"{I_}|{Code._1FC9}": Command.put_bind,
     f"{W_}|{Code._1FC9}": Command.put_bind,
-    f"{RQ}|{Code._1F41}": Command.get_dhw_mode,
-    f"{W_}|{Code._1F41}": Command.set_dhw_mode,
-    f"{RQ}|{Code._10A0}": Command.get_dhw_params,
-    f"{W_}|{Code._10A0}": Command.set_dhw_params,
-    f"{RQ}|{Code._1260}": Command.get_dhw_temp,
-    f"{I_}|{Code._1260}": Command.put_dhw_temp,
     f"{RQ}|{Code._1030}": Command.get_mix_valve_params,
     f"{W_}|{Code._1030}": Command.set_mix_valve_params,
     f"{RQ}|{Code._3220}": Command.get_opentherm_data,

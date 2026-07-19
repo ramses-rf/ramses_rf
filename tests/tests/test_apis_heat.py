@@ -138,22 +138,6 @@ def test_set_1030() -> None:
 
 
 # NOTE: no W|10A0 seen in the wild
-SET_10A0_GOOD = {
-    "000  W --- 01:123456 07:031785 --:------ 10A0 006 000F6E050064": "{'dhw_idx': '00', 'setpoint': 39.5, 'overrun': 5, 'differential':  1.0}",
-    "000  W --- 01:123456 07:031785 --:------ 10A0 006 000F6E0003E8": "{'dhw_idx': '00', 'setpoint': 39.5, 'overrun': 0, 'differential': 10.0}",
-    "000  W --- 01:123456 07:031785 --:------ 10A0 006 0015180301F4": "{'dhw_idx': '00', 'setpoint': 54.0, 'overrun': 3, 'differential':  5.0}",
-    "000  W --- 01:123456 07:031785 --:------ 10A0 006 0013240003E8": "{'dhw_idx': '00', 'setpoint': 49.0, 'overrun': 0, 'differential': 10.0}",
-    #
-    "001  W --- 01:123456 07:031785 --:------ 10A0 006 010F6E050064": "{'dhw_idx': '01', 'setpoint': 39.5, 'overrun': 5, 'differential':  1.0}",
-    "001  W --- 01:123456 07:031785 --:------ 10A0 006 010F6E0003E8": "{'dhw_idx': '01', 'setpoint': 39.5, 'overrun': 0, 'differential': 10.0}",
-    "001  W --- 01:123456 07:031785 --:------ 10A0 006 0115180301F4": "{'dhw_idx': '01', 'setpoint': 54.0, 'overrun': 3, 'differential':  5.0}",
-    "001  W --- 01:123456 07:031785 --:------ 10A0 006 0113240003E8": "{'dhw_idx': '01', 'setpoint': 49.0, 'overrun': 0, 'differential': 10.0}",
-}
-
-
-def test_set_10a0() -> None:
-    _test_api_good(Command.set_dhw_params, SET_10A0_GOOD)
-
 
 SET_1100_FAIL = (
     "...  W --- 01:145038 13:163733 --:------ 1100 008 000C1400007FFF01",  # no domain_id
@@ -186,49 +170,6 @@ def test_set_1100() -> None:  # NOTE: bespoke: see params
 
         if isinstance(packets, dict) and (payload := packets[pkt_line]):
             assert shrink(msg.payload, keep_falsys=True) == eval(payload)
-
-
-# TODO: RPs being converted to Is
-PUT_1260_GOOD = {
-    "...  I --- 07:017494 --:------ 07:017494 1260 003 00111E": "{'temperature': 43.82}",
-    "...  I --- 07:017494 --:------ 07:017494 1260 003 007FFF": "{'temperature': None}",
-    # "...  I --- 07:123456 --:------ 07:123456 1260 003 010E74": "{'temperature': 37.0, 'dhw_idx': '01'}",  #  contrived
-    # "...  I --- 07:123456 --:------ 07:123456 1260 003 017FFF": "{'temperature': None}",  #                   contrived
-    # "... RP --- 01:123456 18:123456 --:------ 1260 003 00116A": "{'temperature': 44.58}",
-    # "... RP --- 01:078710 18:002563 --:------ 1260 003 00116A": "{'temperature': 44.58, 'dhw_idx': '00'}",
-    # "... RP --- 01:078710 18:002563 --:------ 1260 003 01116A": "{'temperature': 44.58, 'dhw_idx': '01'}",  # contrived
-    # "... RP --- 10:124973 18:132629 --:------ 1260 003 000E74": "{'temperature': 37.0}",
-}
-
-
-def test_set_1260() -> None:
-    _test_api_good(Command.put_dhw_temp, PUT_1260_GOOD)
-
-
-SET_1F41_GOOD = {
-    # 00  W --- 18:000730 01:050858 --:------ 1F41 006 000000FFFFFF            ": "{'dhw_idx': '00', 'mode': 'follow_schedule'}",
-    # 00  W --- 18:000730 01:050858 --:------ 1F41 006 000100FFFFFF            ": "{'dhw_idx': '00', 'mode': 'follow_schedule'}",
-    "000  W --- 18:000730 01:050858 --:------ 1F41 006 00FF00FFFFFF            ": "{'dhw_idx': '00', 'mode': 'follow_schedule'}",
-    "000  W --- 18:000730 01:050858 --:------ 1F41 006 000102FFFFFF            ": "{'dhw_idx': '00', 'mode': 'permanent_override', 'active': 1}",
-    "000  W --- 18:000730 01:050858 --:------ 1F41 012 000004FFFFFF0509160607E5": "{'dhw_idx': '00', 'mode': 'temporary_override', 'active': 0, 'until': '2021-06-22T09:05:00'}",
-    "000  W --- 18:000730 01:050858 --:------ 1F41 012 000104FFFFFF2F0E0D0B07E5": "{'dhw_idx': '00', 'mode': 'temporary_override', 'active': 1, 'until': '2021-11-13T14:47:00'}",
-    #
-    # 01  W --- 18:000730 01:050858 --:------ 1F41 006 010000FFFFFF            ": "{'dhw_idx': '01', 'mode': 'follow_schedule'}",
-    # 01  W --- 18:000730 01:050858 --:------ 1F41 006 010100FFFFFF            ": "{'dhw_idx': '01', 'mode': 'follow_schedule'}",
-    "001  W --- 18:000730 01:050858 --:------ 1F41 006 01FF00FFFFFF            ": "{'dhw_idx': '01', 'mode': 'follow_schedule'}",
-    "001  W --- 18:000730 01:050858 --:------ 1F41 006 010102FFFFFF            ": "{'dhw_idx': '01', 'mode': 'permanent_override', 'active': 1}",
-    "001  W --- 18:000730 01:050858 --:------ 1F41 012 010004FFFFFF0509160607E5": "{'dhw_idx': '01', 'mode': 'temporary_override', 'active': 0, 'until': '2021-06-22T09:05:00'}",
-    "001  W --- 18:000730 01:050858 --:------ 1F41 012 010104FFFFFF2F0E0D0B07E5": "{'dhw_idx': '01', 'mode': 'temporary_override', 'active': 1, 'until': '2021-11-13T14:47:00'}",
-}  # TODO: add other modes
-SET_1F41_FAIL = (
-    "000  W --- 18:000730 01:050858 --:------ 1F41 006 020000FFFFFF",  # dhw_idx = 02
-    "000  W --- 18:000730 01:050858 --:------ 1F41 006 000005FFFFFF",  # zone_mode = 05
-    "000  W --- 18:000730 01:050858 --:------ 1F41 006 000005FFFFFF",  # zone_mode = 05
-)
-
-
-def test_set_1f41() -> None:
-    _test_api_good(Command.set_dhw_mode, SET_1F41_GOOD)
 
 
 SET_2309_FAIL = (
