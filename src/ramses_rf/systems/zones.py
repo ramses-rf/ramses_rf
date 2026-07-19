@@ -233,9 +233,45 @@ class DhwZone(ZoneSchedule):  # CS92A
                 60 * 60 * 24,
             )
 
-        self.discovery.add_cmd(Command.get_dhw_params(self.ctl.id), 60 * 60 * 6)
-        self.discovery.add_cmd(Command.get_dhw_mode(self.ctl.id), 60 * 5)
-        self.discovery.add_cmd(Command.get_dhw_temp(self.ctl.id), 60 * 15)
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_PARAMS,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 60 * 6,
+        )
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_MODE,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 5,
+        )
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_TEMP,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 15,
+        )
 
     def _update_schema(self, **schema: Any) -> None:
         """Update a DHW zone with new schema attrs.

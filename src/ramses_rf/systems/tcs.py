@@ -10,6 +10,9 @@ from threading import Lock
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, NoReturn, TypeVar, cast
 
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent_
 from ramses_rf.const import (
     SYS_MODE_MAP,
     SZ_ACTUATORS,
@@ -67,6 +70,7 @@ from ramses_tx import (
     DeviceIdT,
     Priority,
 )
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.typing import PayDictT, PayloadT
 
 from ..messages import Message
@@ -1083,17 +1087,44 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
         self.discovery.add_cmd(
-            Command.get_dhw_params(self.id),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent_(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_DHW_PARAMS,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
             DHW_POLLING_INTERVAL_SECS,
             delay=5,
         )
         self.discovery.add_cmd(
-            Command.get_dhw_temp(self.id),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent_(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_DHW_TEMP,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
             DHW_POLLING_INTERVAL_SECS,
             delay=10,
         )
         self.discovery.add_cmd(
-            Command.get_dhw_mode(self.id),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent_(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_DHW_MODE,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
             DHW_POLLING_INTERVAL_SECS,
             delay=15,
         )
