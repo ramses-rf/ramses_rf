@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Final, cast
 
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent_
 from ramses_rf.const import (
     DOMAIN_TYPE_MAP,
     F9,
@@ -15,8 +18,10 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
+from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits
 from ramses_tx import Command, Priority
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_PRIORITY
 from ramses_tx.typing import PayDictT, PayloadT
 
@@ -190,7 +195,19 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
         if self.is_faked:
             return
 
-        self.discovery.add_cmd(Command.get_tpi_params(self.id), 6 * 3600)  # params
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent_(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_TPI_PARAMS,
+                        data={},
+                    )
+                )
+            ),
+            6 * 3600,
+        )  # params
         self.discovery.add_cmd(
             Command.from_attrs(RQ, self.id, Code._3EF1, PayloadT("00")),
             60 if getattr(self, "_child_id", None) in (F9, FA, FC) else 300,
