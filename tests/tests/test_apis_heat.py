@@ -4,6 +4,7 @@
 import inspect
 from collections.abc import Callable, Iterable
 from datetime import datetime as dt
+from typing import Any
 
 from ramses_rf.address import Address
 from ramses_rf.commands.builders import build_dto
@@ -18,6 +19,200 @@ from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_TIMESTAMP
 from ramses_tx.helpers import parse_fault_log_entry
 from ramses_tx.packet import Packet
+from ramses_tx.typing import DeviceIdT
+
+
+def _get_schedule_fragment(
+    ctl_id: DeviceIdT | str,
+    zone_idx: int | str,
+    frag_number: int,
+    total_frags: int | None,
+    **kwargs: Any,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.GET_SCHEDULE_FRAGMENT,
+                data={
+                    "zone_idx": zone_idx,
+                    "frag_number": frag_number,
+                    "total_frags": total_frags if total_frags is not None else 0,
+                },
+            )
+        )
+    )
+
+
+def _put_system_log_entry(
+    ctl_id: DeviceIdT | str,
+    fault_state: str,
+    fault_type: str,
+    device_class: str,
+    device_id: DeviceIdT | str | None = None,
+    domain_idx: int | str = "00",
+    _log_idx: int | str | None = None,
+    timestamp: dt | str | None = None,
+    **kwargs: Any,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.PUT_FAULTLOG_ENTRY,
+                data={
+                    "fault_state": fault_state,
+                    "fault_type": fault_type,
+                    "device_class": device_class,
+                    "device_id": device_id,
+                    "domain_idx": domain_idx,
+                    "log_idx": _log_idx,
+                    "timestamp": timestamp,
+                },
+            )
+        )
+    )
+
+
+def _set_mix_valve_params(
+    ctl_id: DeviceIdT | str,
+    zone_idx: int | str,
+    *,
+    max_flow_setpoint: int = 55,
+    min_flow_setpoint: int = 15,
+    valve_run_time: int = 150,
+    pump_run_time: int = 15,
+    **kwargs: Any,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.SET_MIX_VALVE_PARAMS,
+                data={
+                    "zone_idx": zone_idx,
+                    "max_flow_setpoint": max_flow_setpoint,
+                    "min_flow_setpoint": min_flow_setpoint,
+                    "valve_run_time": valve_run_time,
+                    "pump_run_time": pump_run_time,
+                    "boolean_cc": kwargs.pop("boolean_cc", 1),
+                },
+            )
+        )
+    )
+
+
+def _set_tpi_params(
+    ctl_id: DeviceIdT | str,
+    domain_id: int | str | None,
+    *,
+    cycle_rate: int = 3,
+    min_on_time: int = 5,
+    min_off_time: int = 5,
+    proportional_band_width: float | None = None,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.SET_TPI_PARAMS,
+                data={
+                    "domain_id": domain_id or "00",
+                    "cycle_rate": cycle_rate,
+                    "min_on_time": min_on_time,
+                    "min_off_time": min_off_time,
+                    "proportional_band_width": proportional_band_width,
+                },
+            )
+        )
+    )
+
+
+def _set_system_mode(
+    ctl_id: DeviceIdT | str,
+    system_mode: int | str | None,
+    *,
+    until: dt | str | None = None,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.SET_SYSTEM_MODE,
+                data={
+                    "system_mode": system_mode,
+                    "until": until,
+                },
+            )
+        )
+    )
+
+
+def _set_system_time(
+    ctl_id: DeviceIdT | str,
+    datetime: dt | str,
+    is_dst: bool = False,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(ctl_id),
+                action=Action.SET_SYSTEM_TIME,
+                data={
+                    "datetime": datetime,
+                    "is_dst": is_dst,
+                },
+            )
+        )
+    )
+
+
+def _put_actuator_state(
+    dev_id: DeviceIdT | str,
+    modulation_level: float,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=Address(dev_id),
+                dst=Address(dev_id),
+                action=Action.PUT_ACTUATOR_STATE,
+                data={
+                    "modulation_level": modulation_level,
+                },
+            )
+        )
+    )
+
+
+def _put_actuator_cycle(
+    src_id: DeviceIdT | str,
+    dst_id: DeviceIdT | str,
+    modulation_level: float,
+    actuator_countdown: int,
+    *,
+    cycle_countdown: int | None = None,
+) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=Address(src_id),
+                dst=Address(dst_id),
+                action=Action.PUT_ACTUATOR_CYCLE,
+                data={
+                    "modulation_level": modulation_level,
+                    "actuator_countdown": actuator_countdown,
+                    "cycle_countdown": cycle_countdown,
+                },
+            )
+        )
+    )
 
 
 # NOTE: not used for 0418
@@ -100,7 +295,7 @@ GET_0404_GOOD = {
 
 
 def test_get_0404() -> None:
-    _test_api_good(Command.get_schedule_fragment, GET_0404_GOOD)
+    _test_api_good(_get_schedule_fragment, GET_0404_GOOD)
 
 
 GET_0418_GOOD = {  # NOTE: this constructor is used only for testing
@@ -118,7 +313,7 @@ def test_put_0418() -> None:
         if SZ_TIMESTAMP not in log_pkt:  # ignore null log entries
             continue
 
-        cmd = Command._put_system_log_entry(
+        cmd = _put_system_log_entry(
             pkt.src.id,
             **log_pkt,  # type: ignore[call-arg]
         )
@@ -139,7 +334,7 @@ SET_1030_GOOD = {
 
 
 def test_set_1030() -> None:
-    _test_api_good(Command.set_mix_valve_params, SET_1030_GOOD)
+    _test_api_good(_set_mix_valve_params, SET_1030_GOOD)
 
 
 # NOTE: no W|10A0 seen in the wild
@@ -170,7 +365,7 @@ def test_set_1100() -> None:  # NOTE: bespoke: see params
 
         msg.payload[SZ_DOMAIN_ID] = msg.payload.get(SZ_DOMAIN_ID, "00")
 
-        cmd = _test_api_from_msg(Command.set_tpi_params, msg, pkt)
+        cmd = _test_api_from_msg(_set_tpi_params, msg, pkt)
         assert cmd.payload == pkt.payload
 
         if isinstance(packets, dict) and (payload := packets[pkt_line]):
@@ -206,7 +401,7 @@ def test_set_2e04() -> None:  # NOTE: bespoke: payload
         pkt = _create_pkt_from_frame(pkt_line.split("#")[0].rstrip())
         msg = Message._from_pkt(pkt)
 
-        cmd = _test_api_from_msg(Command.set_system_mode, msg, pkt)
+        cmd = _test_api_from_msg(_set_system_mode, msg, pkt)
         assert cmd.payload == pkt.payload
 
         if isinstance(packets, dict) and (payload := packets[pkt_line]):
@@ -262,7 +457,7 @@ def test_set_313f() -> None:  # NOTE: bespoke: payload
 
         msg = Message._from_pkt(pkt)
 
-        cmd = _test_api_from_msg(Command.set_system_time, msg, pkt)
+        cmd = _test_api_from_msg(_set_system_time, msg, pkt)
         assert cmd.payload[:4] == pkt.payload[:4]
         assert cmd.payload[6:] == pkt.payload[6:]
 
@@ -275,7 +470,7 @@ PUT_3EF0_GOOD = (
 
 
 def test_put_3ef0() -> None:
-    _test_api_good(Command.put_actuator_state, PUT_3EF0_GOOD)
+    _test_api_good(_put_actuator_state, PUT_3EF0_GOOD)
 
 
 PUT_3EF1_GOOD = (  # TODO: needs checking
@@ -293,12 +488,12 @@ def test_put_3ef1() -> None:  # NOTE: bespoke: params, ?payload
         modulation_level = kwargs.pop("modulation_level")
         actuator_countdown = kwargs.pop("actuator_countdown")
 
-        sig = inspect.signature(Command.put_actuator_cycle)
+        sig = inspect.signature(_put_actuator_cycle)
         valid_kwargs = {
             k: v for k, v in kwargs.items() if k[:1] != "_" and k in sig.parameters
         }
 
-        cmd = Command.put_actuator_cycle(
+        cmd = _put_actuator_cycle(
             msg.src.id,
             msg.dst.id,
             modulation_level,

@@ -360,27 +360,81 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
 
     # # ### Simple test for an RQ (expects an RP)...
 
-    cmd = Command.get_system_time("01:000111")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000111"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd)
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000222")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000222"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=None)
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000333")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000333"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams())
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000444")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000444"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=None))
     assert pkt == cmd, "Should be echo as there is no wait_for_reply"
 
-    cmd = Command.get_system_time("01:000555")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000555"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
     assert pkt == cmd, "Should be echo as there is no wait_for_reply"
 
-    cmd = Command.get_system_time("01:000666")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000666"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     coro = protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=True, timeout=0.05))
     await _test_flow_qos_helper(coro)
 
