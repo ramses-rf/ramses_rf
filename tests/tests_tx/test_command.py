@@ -7,7 +7,12 @@ from typing import Final
 
 import pytest
 
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_rf.enums import Action
 from ramses_tx.command import Command
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SYS_MODE_MAP, ZON_MODE_MAP
 from ramses_tx.exceptions import CommandInvalid
 
@@ -163,9 +168,15 @@ async def test_set_zone_mode_noargs() -> None:
 
     # Act & Assert
     with pytest.raises(CommandInvalid):
-        _ = Command.set_zone_mode(
-            ctl_id=ctl_id,
-            zone_idx=4,
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(ctl_id),
+                    action=Action.SET_MODE,
+                    data={"zone_idx": 4},
+                )
+            )
         )
 
 
@@ -175,8 +186,15 @@ async def test_set_zone_mode_follow() -> None:
     expected = TEST_COMMANDS[3]
 
     # Act
-    cmd = Command.set_zone_mode(
-        ctl_id="12:123456", mode=ZON_MODE_MAP["follow_schedule"], zone_idx=2
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_MODE,
+                data={"zone_idx": 2, "mode": ZON_MODE_MAP["follow_schedule"]},
+            )
+        )
     )
     #  cls,
     #  ctl_id: DeviceIdT | str,
@@ -198,11 +216,15 @@ async def test_set_zone_mode_follow_extra() -> None:
 
     # Act & Assert
     with pytest.raises(CommandInvalid):
-        _ = Command.set_zone_mode(
-            ctl_id="12:123456",
-            zone_idx=1,
-            mode=mode,
-            duration=1,  # never passed on by ramses_cc
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address("12:123456"),
+                    action=Action.SET_MODE,
+                    data={"zone_idx": 1, "mode": mode, "duration": 1},
+                )
+            )
         )
 
 
@@ -212,8 +234,15 @@ async def test_set_zone_mode_perm_setp() -> None:
     expected = TEST_COMMANDS[4]
 
     # Act
-    cmd = Command.set_zone_mode(
-        ctl_id="12:123456", zone_idx=1, mode=ZON_MODE_MAP.PERMANENT, setpoint=5
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_MODE,
+                data={"zone_idx": 1, "mode": ZON_MODE_MAP.PERMANENT, "setpoint": 5},
+            )
+        )
     )
 
     # Assert
@@ -255,144 +284,3 @@ async def test_rq_missing_target() -> None:
             addr0="--:------",
             addr1="--:------",
         )
-
-
-# --- set_fan_mode (22F1) scheme-aware payload tests (issue #547) ---
-
-
-def test_set_fan_mode_orcon_2byte_default() -> None:
-    """Default scheme (orcon) produces a 3-byte payload with mode_max=07."""
-    # Arrange
-    expected_payload = "000107"
-    expected_code = "22F1"
-
-    # Act
-    cmd = Command.set_fan_mode("37:111111", "low", src_id="18:000730")
-
-    # Assert
-    # ORCON: low=01, mode_max=07 -> payload "000107"
-    assert cmd.payload == expected_payload
-    assert str(cmd.code) == expected_code
-
-
-def test_set_fan_mode_orcon_2byte_explicit() -> None:
-    """Explicit orcon scheme with mode_max='' produces legacy 2-byte payload."""
-    # Arrange
-    expected_payload = "0001"
-
-    # Act
-    cmd = Command.set_fan_mode(
-        "37:111111",
-        "low",
-        scheme="orcon",
-        src_id="18:000730",
-        legacy_format=True,
-    )
-
-    # Assert
-    # 2-byte legacy form: idx + mode only
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_itho_3byte() -> None:
-    """Itho scheme produces 3-byte payload with mode_max=04."""
-    # Arrange
-    expected_payload = "000204"
-
-    # Act
-    cmd = Command.set_fan_mode("37:111111", "low", scheme="itho", src_id="18:000730")
-
-    # Assert
-    # ITHO: low=02, mode_max=04 -> "000204"
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_vasco_3byte() -> None:
-    """Vasco scheme produces 3-byte payload with mode_max=06."""
-    # Arrange
-    expected_payload = "000406"
-
-    # Act
-    cmd = Command.set_fan_mode("37:111111", "high", scheme="vasco", src_id="18:000730")
-
-    # Assert
-    # VASCO: high=04, mode_max=06 -> "000406"
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_siber_3byte_from_issue() -> None:
-    """Siber DF Evo 4 payloads from issue #547 (orcon scheme, mode_max=07)."""
-    # Arrange
-    expected_low = "000107"
-    expected_int = "000207"
-
-    # Act
-    # low:  003 000207
-    cmd_low = Command.set_fan_mode(
-        "37:111111", "low", scheme="orcon", src_id="18:000730"
-    )
-
-    # The issue lists Siber modes as 02=low,03=medium,04=high,07=boost.
-    # With orcon scheme these map to: 02=medium,03=high,04=auto,07=off.
-    # For Siber, the user should use the itho scheme or raw int indices.
-    # Verify int index works: 02 -> "000207"
-    cmd_int = Command.set_fan_mode(
-        "37:111111", 0x02, scheme="orcon", src_id="18:000730"
-    )
-
-    # Assert
-    assert cmd_low.payload == expected_low
-    assert cmd_int.payload == expected_int
-
-
-def test_set_fan_mode_nuaire_3byte() -> None:
-    """Nuaire scheme produces 3-byte payload with mode_max=0A."""
-    # Arrange
-    expected_payload = "00020A"
-
-    # Act
-    cmd = Command.set_fan_mode(
-        "37:111111", "normal", scheme="nuaire", src_id="18:000730"
-    )
-
-    # Assert
-    # NUAIRE: normal=02, mode_max=0A -> "00020A"
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_int_index() -> None:
-    """Integer fan_mode is treated as a hex mode index."""
-    # Arrange
-    expected_payload = "000307"
-
-    # Act
-    cmd = Command.set_fan_mode("37:111111", 3, scheme="orcon", src_id="18:000730")
-
-    # Assert
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_none_is_off() -> None:
-    """None fan_mode maps to mode 00 (off/away)."""
-    # Arrange
-    expected_payload = "000007"
-
-    # Act
-    cmd = Command.set_fan_mode("37:111111", None, scheme="orcon", src_id="18:000730")
-
-    # Assert
-    assert cmd.payload == expected_payload
-
-
-def test_set_fan_mode_invalid_scheme_raises() -> None:
-    """An unknown scheme raises CommandInvalid."""
-    # Arrange & Act & Assert
-    with pytest.raises(CommandInvalid, match="scheme is not valid"):
-        Command.set_fan_mode("37:111111", "low", scheme="bogus", src_id="18:000730")
-
-
-def test_set_fan_mode_invalid_mode_raises() -> None:
-    """A mode not in the scheme's map raises CommandInvalid."""
-    # Arrange & Act & Assert
-    with pytest.raises(CommandInvalid, match="fan_mode is not valid"):
-        Command.set_fan_mode("37:111111", "turbo", scheme="itho", src_id="18:000730")

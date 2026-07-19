@@ -10,7 +10,7 @@ from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from ramses_rf import exceptions as exc
-from ramses_rf.address import Address
+from ramses_rf.address import HGI_DEV_ADDR, Address
 from ramses_rf.const import (
     DEV_ROLE_MAP,
     SZ_HEAT_DEMAND,
@@ -73,6 +73,10 @@ from ramses_rf.const import (  # noqa: F401, isort: skip
     W_,
     Code,
 )
+
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 
 from .helpers import send_system_intent
 
@@ -229,9 +233,45 @@ class DhwZone(ZoneSchedule):  # CS92A
                 60 * 60 * 24,
             )
 
-        self.discovery.add_cmd(Command.get_dhw_params(self.ctl.id), 60 * 60 * 6)
-        self.discovery.add_cmd(Command.get_dhw_mode(self.ctl.id), 60 * 5)
-        self.discovery.add_cmd(Command.get_dhw_temp(self.ctl.id), 60 * 15)
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_PARAMS,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 60 * 6,
+        )
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_MODE,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 5,
+        )
+        self.discovery.add_cmd(
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_DHW_TEMP,
+                        data={"dhw_idx": 0},
+                    )
+                )
+            ),
+            60 * 15,
+        )
 
     def _update_schema(self, **schema: Any) -> None:
         """Update a DHW zone with new schema attrs.
@@ -551,33 +591,78 @@ class Zone(ZoneSchedule):
 
         # td should be > long sync_cycle duration (> 1hr)
         self.discovery.add_cmd(
-            Command.get_zone_config(self.ctl.id, self.idx),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_ZONE_CONFIG,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
             60 * 60 * 6,
             delay=30,
         )
         self.discovery.add_cmd(
-            Command.get_zone_name(self.ctl.id, self.idx),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_ZONE_NAME,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
             60 * 60 * 6,
             delay=30,
         )
 
         # 2349 instead of 2309
         self.discovery.add_cmd(
-            Command.get_zone_mode(self.ctl.id, self.idx),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_MODE,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
             60 * 5,
             delay=30,
         )
         # td should be > sync_cycle duration,?delay in hope of
         # picking up cycle
         self.discovery.add_cmd(  # 30C9
-            Command.get_zone_temp(self.ctl.id, self.idx),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_ZONE_TEMP,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
             60 * 5,
             delay=0,
         )
         # longer dt as low yield (factory duration is 30 min): prefer
         # eavesdropping
         self.discovery.add_cmd(
-            Command.get_zone_window_state(self.ctl.id, self.idx),
+            LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.ctl.id),
+                        action=Action.GET_ZONE_WINDOW_STATE,
+                        data={"zone_idx": self.idx},
+                    )
+                )
+            ),
             60 * 15,
             delay=60 * 5,
         )
@@ -714,8 +799,10 @@ class Zone(ZoneSchedule):
     async def _get_temp(self) -> Packet | None:
         """Get the zone's latest temp from the Controller."""
         try:
-            return await self._gwy.async_send_cmd(
-                Command.get_zone_temp(self.ctl.id, self.idx)
+            return await send_system_intent(
+                self,
+                Action.GET_ZONE_TEMP,
+                {"zone_idx": self.idx},
             )
         except ProtocolTimeoutError as err:
             _LOGGER.warning(f"{self}: _get_temp timed out: {err}")

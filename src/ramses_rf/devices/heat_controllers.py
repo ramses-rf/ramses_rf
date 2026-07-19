@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Final, cast
 
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import (
     DEV_ROLE_MAP,
     FA,
@@ -22,11 +25,13 @@ from ramses_rf.const import (
     DevType,
 )
 from ramses_rf.entity import Entity
+from ramses_rf.enums import Action
 from ramses_rf.helpers import shrink
 from ramses_rf.models import DeviceTraits
 from ramses_rf.schemas import SCH_TCS, SZ_CIRCUITS
 from ramses_rf.topology import Child, Parent
 from ramses_tx import Command
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.typing import DeviceIdT, DevIndexT, PayloadT
 
 from .dev_base import DeviceHeat
@@ -184,10 +189,28 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
         # TODO: this needs work
         # if discover_flag & Discover.PARAMS:  # only 2309 has any potential?
         for ufc_idx in getattr(self, "circuit_by_id", {}):
-            cmd = Command.get_zone_config(self.id, ufc_idx)
+            cmd = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_ZONE_CONFIG,
+                        data={"zone_idx": ufc_idx},
+                    )
+                )
+            )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)
 
-            cmd = Command.get_zone_setpoint(self.id, ufc_idx)
+            cmd = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(self.id),
+                        action=Action.GET_ZONE_SETPOINT,
+                        data={"zone_idx": ufc_idx},
+                    )
+                )
+            )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)
 
         for ufc_idx in range(8):

@@ -14,6 +14,9 @@ import uuid
 from typing import Any, Final
 
 from ramses_rf import quirks
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent_
 from ramses_rf.const import (
     SZ_ACTIVE,
     SZ_ACTUATOR_COUNTDOWN,
@@ -82,6 +85,7 @@ from ramses_rf.const import (
     SZ_ZONE_IDX,
     Code,
 )
+from ramses_rf.enums import Action
 from ramses_rf.messages import Message
 from ramses_rf.models import (
     ActuatorState,
@@ -319,11 +323,16 @@ class StateProjector:
         if msg.code == Code._1260:
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev and getattr(src_dev, "ctl", None):
-                from ramses_tx import Command
-
                 try:
-                    cmd = Command.get_dhw_temp(src_dev.ctl.id)
-                    self._gwy.send_cmd(cmd)
+                    dto = build_dto(
+                        Intent_(
+                            src=HGI_DEV_ADDR,
+                            dst=Address(src_dev.ctl.id),
+                            action=Action.GET_DHW_TEMP,
+                            data={"dhw_idx": 0},
+                        )
+                    )
+                    self._gwy.send_cmd(dto)
                 except Exception as err:
                     _LOGGER.error(
                         "Failed to trigger CQRS 1260 reactor for %s: %s",

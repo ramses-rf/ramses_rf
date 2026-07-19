@@ -16,7 +16,12 @@ import pytest
 import serial
 
 from ramses_rf import Command, Message, Packet
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_rf.enums import Action
 from ramses_tx import exceptions as exc
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import DEFAULT_ECHO_TIMEOUT, DEFAULT_RPLY_TIMEOUT
 from ramses_tx.protocol import PortProtocol, ReadProtocol, protocol_factory
 from ramses_tx.protocol.fsm import (
@@ -289,7 +294,16 @@ async def _test_flow_60x(protocol: PortProtocol, num_cmds: int = 1) -> None:
     # Setup...
     tasks = list()
     for idx in range(num_cmds):
-        cmd = Command.get_zone_temp("01:123456", f"{idx:02X}")
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address("01:123456"),
+                    action=Action.GET_ZONE_TEMP,
+                    data={"zone_idx": f"{idx:02X}"},
+                )
+            )
+        )
         coro = protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
         tasks.append(protocol._loop.create_task(coro, name=f"cmd_{idx:02X}"))
 

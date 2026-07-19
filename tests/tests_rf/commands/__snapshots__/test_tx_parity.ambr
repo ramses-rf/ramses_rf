@@ -1,0 +1,217 @@
+# serializer version: 1
+# name: test_build_get_dhw_mode
+  'RQ --- 18:000730 01:111111 --:------ 1F41 001 00'
+# ---
+# name: test_build_get_dhw_params
+  'RQ --- 18:000730 01:111111 --:------ 10A0 001 00'
+# ---
+# name: test_build_get_dhw_temp
+  'RQ --- 18:000730 01:111111 --:------ 1260 001 00'
+# ---
+# name: test_build_get_faultlog_entry
+  'RQ --- 18:000730 01:111111 --:------ 0418 003 000005'
+# ---
+# name: test_build_get_opentherm_data
+  'RQ --- 18:000730 10:111111 --:------ 3220 005 00800E0000'
+# ---
+# name: test_build_get_schedule_fragment
+  'RQ --- 18:000730 01:111111 --:------ 0404 007 00200008000100'
+# ---
+# name: test_build_put_dhw_temp
+  ' I --- 07:111111 --:------ 07:111111 1260 003 0013BA'
+# ---
+# name: test_build_set_dhw_mode_parity[0-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[00-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[01-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000001FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[02-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000102FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[04-False-until11-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 012 000004FFFFFF000C120707EA'
+# ---
+# name: test_build_set_dhw_mode_parity[1-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000001FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[2-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000102FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[4-True-until3-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 012 000104FFFFFF000C120707EA'
+# ---
+# name: test_build_set_dhw_mode_parity[advanced_override-True-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000101FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[follow_schedule-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[permanent_override-False-None-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 006 000002FFFFFF'
+# ---
+# name: test_build_set_dhw_mode_parity[temporary_override-True-until7-None]
+  ' W --- 18:000730 01:111111 --:------ 1F41 012 000104FFFFFF000C120707EA'
+# ---
+# name: test_build_set_dhw_params_parity[30.0-0-1.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 000BB8000064'
+# ---
+# name: test_build_set_dhw_params_parity[50.0-5-1.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 001388050064'
+# ---
+# name: test_build_set_dhw_params_parity[55.0-8-2.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 00157C0800C8'
+# ---
+# name: test_build_set_dhw_params_parity[85.0-10-10.0]
+  ' W --- 18:000730 01:111111 --:------ 10A0 006 0021340A03E8'
+# ---
+# name: test_build_set_schedule_fragment
+  ' W --- 18:000730 01:111111 --:------ 0404 012 002000080501030011223344'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-False-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021303E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-False-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021203E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-False-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021103E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-False-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021003E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-True-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020303E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-True-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020203E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-True-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020103E809C4'
+# ---
+# name: test_build_set_zone_config_parity[10.0-25.0-True-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020003E809C4'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-False-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021308340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-False-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021208340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-False-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021108340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-False-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021008340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-True-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020308340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-True-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020208340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-True-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020108340834'
+# ---
+# name: test_build_set_zone_config_parity[21.0-21.0-True-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020008340834'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-False-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021301F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-False-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021201F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-False-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021101F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-False-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 021001F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-True-False-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020301F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-True-False-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020201F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-True-True-False]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020101F40DAC'
+# ---
+# name: test_build_set_zone_config_parity[5.0-35.0-True-True-True]
+  ' W --- 18:000730 01:111111 --:------ 000A 006 020001F40DAC'
+# ---
+# name: test_build_set_zone_mode_parity[0-15.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 0005DC00FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[00-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 007FFF00FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[01-20.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 0007D001FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[02-21.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 00083402FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[04-22.0-until11-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 013 00089804FFFFFF000C120707EA'
+# ---
+# name: test_build_set_zone_mode_parity[1-21.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 00083401FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[2-22.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 00089802FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[4-10.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 0003E804FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[advanced_override-20.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 0007D001FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[follow_schedule-None-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 007FFF00FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[permanent_override-21.0-None-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 007 00083402FFFFFF'
+# ---
+# name: test_build_set_zone_mode_parity[temporary_override-22.0-until7-None]
+  ' W --- 18:000730 01:111111 --:------ 2349 013 00089804FFFFFF000C120707EA'
+# ---
+# name: test_build_set_zone_name_parity[12345678901234567890]
+  ' W --- 18:000730 01:111111 --:------ 0004 022 01003132333435363738393031323334353637383930'
+# ---
+# name: test_build_set_zone_name_parity[A]
+  ' W --- 18:000730 01:111111 --:------ 0004 022 01004100000000000000000000000000000000000000'
+# ---
+# name: test_build_set_zone_name_parity[Extremely Long Zone Name That Exceeds The Limit Of Characters]
+  ' W --- 18:000730 01:111111 --:------ 0004 022 010045787472656D656C79204C6F6E67205A6F6E6520'
+# ---
+# name: test_build_set_zone_name_parity[Living Room]
+  ' W --- 18:000730 01:111111 --:------ 0004 022 01004C6976696E6720526F6F6D000000000000000000'
+# ---
+# name: test_build_set_zone_name_parity[]
+  ' W --- 18:000730 01:111111 --:------ 0004 022 01000000000000000000000000000000000000000000'
+# ---
+# name: test_build_set_zone_setpoint_parity[10.0]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 0003E8'
+# ---
+# name: test_build_set_zone_setpoint_parity[15.5]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 00060E'
+# ---
+# name: test_build_set_zone_setpoint_parity[21.0]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 000834'
+# ---
+# name: test_build_set_zone_setpoint_parity[21.5]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 000866'
+# ---
+# name: test_build_set_zone_setpoint_parity[30.0]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 000BB8'
+# ---
+# name: test_build_set_zone_setpoint_parity[35.0]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 000DAC'
+# ---
+# name: test_build_set_zone_setpoint_parity[5.0]
+  ' W --- 18:000730 01:111111 --:------ 2309 003 0001F4'
+# ---

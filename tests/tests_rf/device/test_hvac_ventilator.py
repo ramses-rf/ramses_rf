@@ -183,19 +183,12 @@ class TestHvacVentilator:
         if hvac_ventilator._gwy.message_store:
             hvac_ventilator._gwy.message_store.stop()  # close sqlite3 connection
 
-    @patch("ramses_tx.command.Command.get_fan_param")
-    async def test_setup_discovery_cmds(
-        self, mock_cmd: MagicMock, hvac_ventilator: HvacVentilator
-    ) -> None:
+    async def test_setup_discovery_cmds(self, hvac_ventilator: HvacVentilator) -> None:
         """Test that discovery commands are set up correctly.
 
-        :param mock_cmd: The patched command class method.
-        :type mock_cmd: MagicMock
         :param hvac_ventilator: The HvacVentilator fixture.
         :type hvac_ventilator: HvacVentilator
         """
-        # Mock the command creation
-        mock_cmd.return_value = "MOCK_CMD"
 
         # Use patch.object to properly mock the discovery service component directly
         # Phase 4 Update: we now call self.discovery.add_cmd instead of the bridge method
