@@ -1016,14 +1016,16 @@ def test_build_send_puzzle(snapshot: Any) -> None:
 
 
 def test_build_put_faultlog_entry(snapshot: Any) -> None:
+    from ramses_tx.const import FaultDeviceClass, FaultState, FaultType
+
     intent = Intent(
         src=Address("01:111111"),
         dst=Address("18:000730"),
         action=Action.PUT_FAULTLOG_ENTRY,
         data={
-            "fault_state": "fault",
-            "fault_type": "communication_error",
-            "device_class": "controller",
+            "fault_state": FaultState.FAULT,
+            "fault_type": FaultType.COMMS_FAULT,
+            "device_class": FaultDeviceClass.CONTROLLER,
             "device_id": "01:111111",
             "log_idx": 1,
             "timestamp": dt(2026, 7, 18, 12, 0),
