@@ -52,17 +52,24 @@ def build_put_faultlog_entry(intent: Command) -> CommandDTO:
     timestamp = intent.get("timestamp")
 
     if isinstance(device_class, enum.Enum):
-        device_class = {v: k for k, v in FAULT_DEVICE_CLASS.items()}[device_class]
+        device_class = next(
+            (k for k, v in FAULT_DEVICE_CLASS.items() if v == device_class),
+            device_class,
+        )
     if device_class not in FAULT_DEVICE_CLASS:
         raise ValueError(f"Invalid device_class: {device_class}")
 
     if isinstance(fault_state, enum.Enum):
-        fault_state = {v: k for k, v in FAULT_STATE.items()}[fault_state]
+        fault_state = next(
+            (k for k, v in FAULT_STATE.items() if v == fault_state), fault_state
+        )
     if fault_state not in FAULT_STATE:
         raise ValueError(f"Invalid fault_state: {fault_state}")
 
     if isinstance(fault_type, enum.Enum):
-        fault_type = {v: k for k, v in FAULT_TYPE.items()}[fault_type]
+        fault_type = next(
+            (k for k, v in FAULT_TYPE.items() if v == fault_type), fault_type
+        )
     if fault_type not in FAULT_TYPE:
         raise ValueError(f"Invalid fault_type: {fault_type}")
 
