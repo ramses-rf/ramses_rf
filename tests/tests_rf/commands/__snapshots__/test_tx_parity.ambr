@@ -11,14 +11,65 @@
 # name: test_build_get_faultlog_entry
   'RQ --- 18:000730 01:111111 --:------ 0418 003 000005'
 # ---
+# name: test_build_get_mix_valve_params
+  'RQ --- 18:000730 01:111111 --:------ 1030 001 00'
+# ---
 # name: test_build_get_opentherm_data
   'RQ --- 18:000730 10:111111 --:------ 3220 005 00800E0000'
+# ---
+# name: test_build_get_relay_demand
+  'RQ --- 18:000730 13:111111 --:------ 0008 001 00'
 # ---
 # name: test_build_get_schedule_fragment
   'RQ --- 18:000730 01:111111 --:------ 0404 007 00200008000100'
 # ---
+# name: test_build_get_system_language
+  'RQ --- 18:000730 01:111111 --:------ 0100 001 00'
+# ---
+# name: test_build_get_system_mode
+  'RQ --- 18:000730 01:111111 --:------ 2E04 001 FF'
+# ---
+# name: test_build_get_system_time
+  'RQ --- 18:000730 01:111111 --:------ 313F 001 00'
+# ---
+# name: test_build_get_tpi_params
+  'RQ --- 18:000730 01:111111 --:------ 1100 001 00'
+# ---
+# name: test_build_put_actuator_cycle
+  'RP --- 13:111111 01:111111 --:------ 3EF1 007 00006400C864FF'
+# ---
+# name: test_build_put_actuator_state
+  ' I --- 13:111111 --:------ 13:111111 3EF0 003 0064FF'
+# ---
+# name: test_build_put_bind_accept
+  ' W --- 01:111111 13:111111 --:------ 1FC9 006 003EF005B207'
+# ---
+# name: test_build_put_bind_confirm
+  ' I --- 13:111111 01:111111 --:------ 1FC9 006 003EF035B207'
+# ---
+# name: test_build_put_bind_offer
+  ' I --- 13:111111 63:262143 --:------ 1FC9 006 003EF035B207'
+# ---
 # name: test_build_put_dhw_temp
   ' I --- 07:111111 --:------ 07:111111 1260 003 0013BA'
+# ---
+# name: test_build_put_faultlog_entry
+  ' I --- 01:111111 18:000730 --:------ 0418 022 000001B0060000000000791A600000FFFF700005B207'
+# ---
+# name: test_build_put_outdoor_temp
+  ' I --- 17:111111 --:------ 17:111111 0002 003 0005DC'
+# ---
+# name: test_build_put_presence_detected
+  ' I --- 18:000730 --:------ 18:000730 2E10 002 00C8'
+# ---
+# name: test_build_put_sensor_temp
+  ' I --- 04:111111 --:------ 04:111111 30C9 003 000866'
+# ---
+# name: test_build_put_weather_temp
+  ' I --- 17:000730 --:------ 17:000730 0002 004 0004E201'
+# ---
+# name: test_build_send_puzzle
+  ' I --- 18:000730 63:262142 --:------ 7FFF 015 0010018BCFE5680076302E35382E33'
 # ---
 # name: test_build_set_dhw_mode_parity[0-True-None-None]
   ' W --- 18:000730 01:111111 --:------ 1F41 006 00FF00FFFFFF'
@@ -68,8 +119,20 @@
 # name: test_build_set_dhw_params_parity[85.0-10-10.0]
   ' W --- 18:000730 01:111111 --:------ 10A0 006 0021340A03E8'
 # ---
+# name: test_build_set_mix_valve_params
+  ' W --- 18:000730 01:111111 --:------ 1030 016 00C80137C9010FCA0196CB010FCC0101'
+# ---
 # name: test_build_set_schedule_fragment
   ' W --- 18:000730 01:111111 --:------ 0404 012 002000080501030011223344'
+# ---
+# name: test_build_set_system_mode
+  ' W --- 18:000730 01:111111 --:------ 2E04 008 01FFFFFFFFFFFF00'
+# ---
+# name: test_build_set_system_time
+  ' W --- 18:000730 01:111111 --:------ 313F 009 006000000C120707EA'
+# ---
+# name: test_build_set_tpi_params
+  ' W --- 18:000730 01:111111 --:------ 1100 008 000C141400009601'
 # ---
 # name: test_build_set_zone_config_parity[10.0-25.0-False-False-False]
   ' W --- 18:000730 01:111111 --:------ 000A 006 021303E809C4'

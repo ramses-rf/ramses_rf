@@ -9,7 +9,7 @@ from ramses_rf.commands.core import Command
 from ramses_rf.enums import Action
 from ramses_tx.dtos import CommandDTO
 
-from . import dhw, faultlog, heat, hvac, opentherm, schedules, zones
+from . import dhw, faultlog, heat, hvac, opentherm, schedules, system, zones
 
 # Maps an Action intent to the appropriate payload constructor.
 BUILDERS: dict[Action, Callable[[Command], CommandDTO]] = {
@@ -51,6 +51,26 @@ BUILDERS: dict[Action, Callable[[Command], CommandDTO]] = {
     Action.GET_ZONE_SETPOINT: zones.build_get_setpoint,
     Action.GET_MODE: zones.build_get_mode,
     Action.GET_ZONE_TEMP: zones.build_get_temp,
+    # Faultlog Commands
+    Action.GET_FAULTLOG_ENTRY: faultlog.build_get_faultlog_entry,
+    Action.PUT_FAULTLOG_ENTRY: faultlog.build_put_faultlog_entry,
+    # System Commands
+    Action.PUT_WEATHER_TEMP: system.build_put_weather_temp,
+    Action.GET_RELAY_DEMAND: system.build_get_relay_demand,
+    Action.GET_SYSTEM_LANGUAGE: system.build_get_system_language,
+    Action.GET_MIX_VALVE_PARAMS: system.build_get_mix_valve_params,
+    Action.SET_MIX_VALVE_PARAMS: system.build_set_mix_valve_params,
+    Action.GET_TPI_PARAMS: system.build_get_tpi_params,
+    Action.SET_TPI_PARAMS: system.build_set_tpi_params,
+    Action.PUT_BIND: system.build_put_bind,
+    Action.GET_SYSTEM_MODE: system.build_get_system_mode,
+    Action.SET_SYSTEM_MODE: system.build_set_system_mode,
+    Action.PUT_PRESENCE_DETECTED: system.build_put_presence_detected,
+    Action.GET_SYSTEM_TIME: system.build_get_system_time,
+    Action.SET_SYSTEM_TIME: system.build_set_system_time,
+    Action.PUT_ACTUATOR_STATE: system.build_put_actuator_state,
+    Action.PUT_ACTUATOR_CYCLE: system.build_put_actuator_cycle,
+    Action.SEND_PUZZLE: system.build_send_puzzle,
 }
 
 
