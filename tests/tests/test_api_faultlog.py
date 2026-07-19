@@ -21,6 +21,43 @@ from ramses_tx.typing import DeviceIdT, LogIdxT
 
 from .helpers import TEST_DIR
 
+
+def _put_system_log_entry(
+    ctl_id: DeviceIdT | str,
+    fault_state: str,
+    fault_type: str,
+    device_class: str,
+    device_id: DeviceIdT | str | None = None,
+    domain_idx: int | str = "00",
+    _log_idx: int | str | None = None,
+    timestamp: dt | str | None = None,
+    **kwargs: Any,
+) -> Command:
+    from ramses_rf.commands.builders import build_dto
+    from ramses_rf.commands.core import Command as Intent
+    from ramses_rf.enums import Action
+    from ramses_tx.command_legacy_shim import LegacyCommandShim
+
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=Address(HGI_DEVICE_ID),
+                dst=Address(ctl_id),
+                action=Action.PUT_FAULTLOG_ENTRY,
+                data={
+                    "fault_state": fault_state,
+                    "fault_type": fault_type,
+                    "device_class": device_class,
+                    "device_id": device_id,
+                    "domain_idx": domain_idx,
+                    "log_idx": _log_idx,
+                    "timestamp": timestamp,
+                },
+            )
+        )
+    )
+
+
 WORK_DIR = f"{TEST_DIR}/parsers"
 
 
@@ -144,7 +181,7 @@ def _proc_test_fault_entry(
 ) -> None:
     entry: FaultLogEntry = TEST_FAULTS[text_idx]
 
-    cmd = Command._put_system_log_entry(
+    cmd = _put_system_log_entry(
         CTL_ID,
         entry.fault_state,
         entry.fault_type,

@@ -42,7 +42,16 @@ async def test_set_system_mode_auto_none() -> None:
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=None)
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": None},
+            )
+        )
+    )
 
     # Assert
     assert str(cmd) == expected
@@ -54,7 +63,16 @@ async def test_set_system_mode_auto() -> None:
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=SYS_MODE_MAP["auto"])
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": SYS_MODE_MAP["auto"]},
+            )
+        )
+    )
     # cls,
     # ctl_id: DeviceIdT | str,
     # system_mode: int | str | None,
@@ -71,7 +89,16 @@ async def test_set_system_mode_auto_int() -> None:
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=0)
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": 0},
+            )
+        )
+    )
 
     # Assert
     assert str(cmd) == expected
@@ -83,11 +110,16 @@ async def test_set_system_mode_heatoff() -> None:
     system_mode = SYS_MODE_MAP.HEAT_OFF
 
     # Act & Assert
-    with pytest.raises(CommandInvalid):
-        _ = Command.set_system_mode(
-            ctl_id="12:123456",
-            system_mode=system_mode,  # until should be None
-            until="456789566",
+    with pytest.raises(ValueError):
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address("12:123456"),
+                    action=Action.SET_SYSTEM_MODE,
+                    data={"system_mode": system_mode, "until": "456789566"},
+                )
+            )
         )
 
 
