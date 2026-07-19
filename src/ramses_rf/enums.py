@@ -50,11 +50,29 @@ class Action(StrEnum):
     SET_SCHEDULE_FRAGMENT = "set_schedule_fragment"
 
     GET_FAULTLOG_ENTRY = "get_faultlog_entry"
+    PUT_FAULTLOG_ENTRY = "put_faultlog_entry"
     CLEAR_FAULTLOG = "clear_faultlog"
 
     GET_OPENTHERM_DATA = "get_opentherm_data"
     GET_OPENTHERM_CONFIG = "get_opentherm_config"
     SET_OPENTHERM_CONFIG = "set_opentherm_config"
+
+    PUT_WEATHER_TEMP = "put_weather_temp"
+    GET_RELAY_DEMAND = "get_relay_demand"
+    GET_SYSTEM_LANGUAGE = "get_system_language"
+    GET_MIX_VALVE_PARAMS = "get_mix_valve_params"
+    SET_MIX_VALVE_PARAMS = "set_mix_valve_params"
+    GET_TPI_PARAMS = "get_tpi_params"
+    SET_TPI_PARAMS = "set_tpi_params"
+    PUT_BIND = "put_bind"
+    GET_SYSTEM_MODE = "get_system_mode"
+    SET_SYSTEM_MODE = "set_system_mode"
+    PUT_PRESENCE_DETECTED = "put_presence_detected"
+    GET_SYSTEM_TIME = "get_system_time"
+    SET_SYSTEM_TIME = "set_system_time"
+    PUT_ACTUATOR_STATE = "put_actuator_state"
+    PUT_ACTUATOR_CYCLE = "put_actuator_cycle"
+    SEND_PUZZLE = "send_puzzle"
 
 
 class TopologyAction(StrEnum):
