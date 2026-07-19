@@ -3,9 +3,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from datetime import datetime as dt
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from ramses_rf.protocol.opentherm import parity
 
@@ -17,7 +16,6 @@ from ..const import (
     FAULT_STATE,
     FAULT_TYPE,
     FC,
-    FF,
     I_,
     LOOKUP_PUZZ,
     RP,
@@ -27,7 +25,6 @@ from ..const import (
     Code,
 )
 from ..helpers import (
-    hex_from_bool,
     hex_from_dtm,
     hex_from_dts,
     hex_from_percent,
@@ -40,7 +37,7 @@ from ..version import VERSION
 from .base import CommandBase, _check_idx
 
 if TYPE_CHECKING:
-    from ..const import FaultDeviceClass, FaultState, FaultType, VerbT
+    from ..const import FaultDeviceClass, FaultState, FaultType
 
 _T = TypeVar("_T", bound="SystemMixins")
 
@@ -66,20 +63,6 @@ class SystemMixins(CommandBase):
     @classmethod
     def get_schedule_version(cls: type[_T], ctl_id: DeviceIdT | str) -> _T:
         return cls.from_attrs(RQ, ctl_id, Code._0006, PayloadT("00"))
-
-    @classmethod
-    def get_relay_demand(
-        cls: type[_T], dev_id: DeviceIdT | str, zone_idx: int | str | None = None
-    ) -> _T:
-        payload = "00" if zone_idx is None else _check_idx(zone_idx)
-        return cls.from_attrs(RQ, dev_id, Code._0008, PayloadT(payload))
-
-    @classmethod
-    def get_system_language(
-        cls: type[_T], ctl_id: DeviceIdT | str, **kwargs: Any
-    ) -> _T:
-        assert not kwargs, kwargs
-        return cls.from_attrs(RQ, ctl_id, Code._0100, PayloadT("00"), **kwargs)
 
     @classmethod
     def get_schedule_fragment(
@@ -295,118 +278,6 @@ class SystemMixins(CommandBase):
         return cls.from_attrs(W_, ctl_id, Code._1100, PayloadT(payload))
 
     @classmethod
-    def put_outdoor_temp(
-        cls: type[_T], dev_id: DeviceIdT | str, temperature: float | None
-    ) -> _T:
-        payload = f"00{hex_from_temp(temperature)}"
-        return cls._from_attrs(
-            I_, Code._1290, PayloadT(payload), addr0=dev_id, addr2=dev_id
-        )
-
-    @classmethod
-    def put_bind(
-        cls: type[_T],
-        verb: VerbT,
-        src_id: DeviceIdT | str,
-        codes: Code | Iterable[Code] | None,
-        dst_id: DeviceIdT | str | None = None,
-        **kwargs: Any,
-    ) -> _T:
-        kodes: list[Code]
-
-        if not codes:
-            kodes = []
-        elif len(list(codes)[0]) == len(Code._1FC9):
-            kodes = list(codes)  # type: ignore[arg-type]
-        elif len(list(codes)[0]) == len(Code._1FC9[0]):
-            kodes = [cast(Code, codes)]
-        else:
-            raise exc.CommandInvalid(f"Invalid codes for a bind command: {codes}")
-
-        if verb == I_ and dst_id in (None, src_id, ALL_DEV_ADDR.id):
-            oem_code = kwargs.pop("oem_code", None)
-            assert not kwargs, f"Unexpected arguments: {kwargs}"
-            return cls._put_bind_offer(src_id, dst_id, kodes, oem_code=oem_code)
-
-        elif verb == W_ and dst_id not in (None, src_id):
-            idx = kwargs.pop("idx", None)
-            assert not kwargs, kwargs
-            return cls._put_bind_accept(src_id, cast(DeviceIdT, dst_id), kodes, idx=idx)
-
-        elif verb == I_:
-            idx = kwargs.pop("idx", None)
-            assert not kwargs, kwargs
-            return cls._put_bind_confirm(
-                src_id, cast(DeviceIdT, dst_id), kodes, idx=idx
-            )
-
-        raise exc.CommandInvalid(
-            f"Invalid verb|dst_id for a bind command: {verb}|{dst_id}"
-        )
-
-    @classmethod
-    def _put_bind_offer(
-        cls: type[_T],
-        src_id: DeviceIdT | str,
-        dst_id: DeviceIdT | str | None,
-        codes: list[Code],
-        *,
-        oem_code: str | None = None,
-    ) -> _T:
-        kodes = [c for c in codes if c not in (Code._1FC9, Code._10E0)]
-        if not kodes:
-            raise exc.CommandInvalid(f"Invalid codes for a bind offer: {codes}")
-
-        hex_id = dev_id_to_hex_id(cast(DeviceIdT, src_id))
-        payload = "".join(f"00{c}{hex_id}" for c in kodes)
-
-        if oem_code:
-            payload += f"{oem_code}{Code._10E0}{hex_id}"
-        payload += f"00{Code._1FC9}{hex_id}"
-
-        return cls.from_attrs(
-            I_, dst_id or src_id, Code._1FC9, PayloadT(payload), from_id=src_id
-        )
-
-    @classmethod
-    def _put_bind_accept(
-        cls: type[_T],
-        src_id: DeviceIdT | str,
-        dst_id: DeviceIdT | str,
-        codes: list[Code],
-        *,
-        idx: str | None = "00",
-    ) -> _T:
-        if not codes:
-            raise exc.CommandInvalid(f"Invalid codes for a bind accept: {codes}")
-
-        hex_id = dev_id_to_hex_id(cast(DeviceIdT, src_id))
-        payload = "".join(f"{idx or '00'}{c}{hex_id}" for c in codes)
-
-        return cls.from_attrs(W_, dst_id, Code._1FC9, PayloadT(payload), from_id=src_id)
-
-    @classmethod
-    def _put_bind_confirm(
-        cls: type[_T],
-        src_id: DeviceIdT | str,
-        dst_id: DeviceIdT | str,
-        codes: list[Code],
-        *,
-        idx: str | None = "00",
-    ) -> _T:
-        if not codes:
-            payload = idx or "00"
-        else:
-            hex_id = dev_id_to_hex_id(cast(DeviceIdT, src_id))
-            payload = f"{idx or '00'}{codes[0]}{hex_id}"
-
-        return cls.from_attrs(I_, dst_id, Code._1FC9, PayloadT(payload), from_id=src_id)
-
-    @classmethod
-    def get_system_mode(cls: type[_T], ctl_id: DeviceIdT | str) -> _T:
-        return cls.from_attrs(RQ, ctl_id, Code._2E04, PayloadT(FF))
-
-    @classmethod
     def set_system_mode(
         cls: type[_T],
         ctl_id: DeviceIdT | str,
@@ -442,37 +313,6 @@ class SystemMixins(CommandBase):
         )
 
         return cls.from_attrs(W_, ctl_id, Code._2E04, PayloadT(payload))
-
-    @classmethod
-    def put_presence_detected(
-        cls: type[_T], dev_id: DeviceIdT | str, presence_detected: bool | None
-    ) -> _T:
-        payload = f"00{hex_from_bool(presence_detected)}"
-        return cls._from_attrs(
-            I_, Code._2E10, PayloadT(payload), addr0=dev_id, addr2=dev_id
-        )
-
-    @classmethod
-    def put_sensor_temp(
-        cls: type[_T], dev_id: DeviceIdT | str, temperature: float | None
-    ) -> _T:
-        if dev_id[:2] not in (
-            DEV_TYPE_MAP.TR0,
-            DEV_TYPE_MAP.HCW,
-            DEV_TYPE_MAP.TRV,
-            DEV_TYPE_MAP.DTS,
-            DEV_TYPE_MAP.DT2,
-            DEV_TYPE_MAP.RND,
-        ):
-            raise exc.CommandInvalid(
-                f"Faked device {dev_id} has an unsupported device type: "
-                f"device_id should be like {DEV_TYPE_MAP.HCW}:xxxxxx"
-            )
-
-        payload = f"00{hex_from_temp(temperature)}"
-        return cls._from_attrs(
-            I_, Code._30C9, PayloadT(payload), addr0=dev_id, addr2=dev_id
-        )
 
     @classmethod
     def get_system_time(cls: type[_T], ctl_id: DeviceIdT | str) -> _T:

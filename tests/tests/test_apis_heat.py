@@ -5,11 +5,16 @@ import inspect
 from collections.abc import Callable, Iterable
 from datetime import datetime as dt
 
+from ramses_rf.address import Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import SZ_DOMAIN_ID
+from ramses_rf.enums import Action
 from ramses_rf.helpers import shrink
 from ramses_rf.messages import Message
 from ramses_tx.address import HGI_DEV_ADDR
 from ramses_tx.command import Command
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_TIMESTAMP
 from ramses_tx.helpers import parse_fault_log_entry
 from ramses_tx.packet import Packet
@@ -223,8 +228,21 @@ PUT_30C9_GOOD = (
 )
 
 
+def put_sensor_temp(dev_id: str, temperature: float) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=Address(dev_id),
+                dst=Address(dev_id),
+                action=Action.PUT_SENSOR_TEMP,
+                data={"temperature": temperature},
+            )
+        )
+    )
+
+
 def test_put_30c9() -> None:
-    _test_api_good(Command.put_sensor_temp, PUT_30C9_GOOD)
+    _test_api_good(put_sensor_temp, PUT_30C9_GOOD)
 
 
 SET_313F_GOOD = (

@@ -12,11 +12,16 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from ramses_rf import exceptions as exc
+from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import SZ_SCHEDULE, SZ_ZONE_IDX
 from ramses_rf.devices import Fakeable
+from ramses_rf.enums import Action
 from ramses_rf.protocol.opentherm import OTB_DATA_IDS
 from ramses_rf.protocol_schema import CODES_SCHEMA
 from ramses_tx import Command, DeviceIdT, Priority
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.typing import PayloadT
 
 from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
@@ -316,7 +321,17 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
             gwy.send_cmd(Command.get_tpi_params(dev_id))
 
         elif code == Code._2E04:
-            gwy.send_cmd(Command.get_system_mode(dev_id))
+            cmd = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_SYSTEM_MODE,
+                        data={},
+                    )
+                )
+            )
+            gwy.send_cmd(cmd)
 
         elif code == Code._3220:
             for data_id in (0, 3):  # these are mandatory READ_DATA data_ids
