@@ -156,13 +156,17 @@ DONT_UPDATE_ENTITIES: Final[int] = 1
 
 SCHED_REFRESH_INTERVAL: Final[int] = 3  # minutes
 
-# 0004 (zone_name) is intentionally excluded: it is low-volume (sent
-# every ~6h) and carries semi-static state (zone names).  Classifying it
-# as high-volume caused cached 0004 packets older than 1h to be skipped
-# during _restore_cached_packets, so zone names were lost on restart.
-# See https://github.com/ramses-rf/ramses_cc/issues/822
+# 0004 (zone_name) and 1060 (device_battery) are intentionally excluded:
+# they are low-volume (sent every ~6h and ~1/day respectively) and carry
+# semi-static state.  Classifying them as high-volume caused cached packets
+# older than 1h to be skipped during _restore_cached_packets, so zone names
+# were lost on restart (issue 822) and battery states went Unknown after
+# restart (issue 840 — battery devices send 1060 only 1/day, so the cached
+# 1060 is almost always >1h old and was silently dropped on restore).
+# See:
+#   - https://github.com/ramses-rf/ramses_cc/issues/822  (0004 zone_name)
+#   - https://github.com/ramses-rf/ramses_cc/issues/840  (1060 battery)
 HIGH_VOLUME_STATUS_CODES: Final = (
-    Code._1060,
     Code._2309,
     Code._2349,
     Code._30C9,
