@@ -23,6 +23,9 @@
 # name: test_build_get_schedule_fragment
   'RQ --- 18:000730 01:111111 --:------ 0404 007 00200008000100'
 # ---
+# name: test_build_get_schedule_version
+  'RQ --- 18:000730 01:111111 --:------ 0006 001 00'
+# ---
 # name: test_build_get_system_language
   'RQ --- 18:000730 01:111111 --:------ 0100 001 00'
 # ---

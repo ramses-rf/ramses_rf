@@ -12,6 +12,17 @@ from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import ZON_MODE_MAP, FaultDeviceClass, FaultState, FaultType
 
 
+def test_build_get_schedule_version(snapshot: Any) -> None:
+    intent = Command(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_SCHEDULE_VERSION,
+        data={},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
 def test_build_get_dhw_params(snapshot: Any) -> None:
     intent = Command(
         src=Address("18:000730"),
