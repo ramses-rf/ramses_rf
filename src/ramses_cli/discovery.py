@@ -61,19 +61,31 @@ def script_decorator(fnc: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(fnc)
     async def wrapper(gwy: Gateway, *args: Any, **kwargs: Any) -> None:
-        gwy.send_cmd(
-            Command._puzzle(message="Script begins:"),
-            priority=Priority.HIGHEST,
-            num_repeats=3,
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=HGI_DEV_ADDR,
+                    action=Action.SEND_PUZZLE,
+                    data={"message": "Script begins:"},
+                )
+            )
         )
+        gwy.send_cmd(cmd, priority=Priority.HIGHEST, num_repeats=3)
 
         await fnc(gwy, *args, **kwargs)
 
-        gwy.send_cmd(
-            Command._puzzle(message="Script done."),
-            priority=Priority.LOWEST,
-            num_repeats=3,
+        cmd2 = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=HGI_DEV_ADDR,
+                    action=Action.SEND_PUZZLE,
+                    data={"message": "Script done."},
+                )
+            )
         )
+        gwy.send_cmd(cmd2, priority=Priority.LOWEST, num_repeats=3)
 
     return wrapper
 
@@ -310,15 +322,55 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
                 )
 
         elif code == Code._0404:  # FIXME
-            gwy.send_cmd(Command.get_schedule_fragment(dev_id, "HW", 1, 0))
-            gwy.send_cmd(Command.get_schedule_fragment(dev_id, "00", 1, 0))
+            cmd1 = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_SCHEDULE_FRAGMENT,
+                        data={"zone_idx": "HW", "frag_number": 1, "total_frags": 0},
+                    )
+                )
+            )
+            gwy.send_cmd(cmd1)
+            cmd2 = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_SCHEDULE_FRAGMENT,
+                        data={"zone_idx": "00", "frag_number": 1, "total_frags": 0},
+                    )
+                )
+            )
+            gwy.send_cmd(cmd2)
 
         elif code == Code._0418:
             for log_idx in range(2):
-                gwy.send_cmd(Command.get_system_log_entry(dev_id, log_idx))
+                cmd3 = LegacyCommandShim.from_dto(
+                    build_dto(
+                        Intent(
+                            src=HGI_DEV_ADDR,
+                            dst=Address(dev_id),
+                            action=Action.GET_FAULTLOG_ENTRY,
+                            data={"log_idx": log_idx},
+                        )
+                    )
+                )
+                gwy.send_cmd(cmd3)
 
         elif code == Code._1100:
-            gwy.send_cmd(Command.get_tpi_params(dev_id))
+            cmd4 = LegacyCommandShim.from_dto(
+                build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_TPI_PARAMS,
+                        data={},
+                    )
+                )
+            )
+            gwy.send_cmd(cmd4)
 
         elif code == Code._2E04:
             cmd = LegacyCommandShim.from_dto(
@@ -335,7 +387,17 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
         elif code == Code._3220:
             for data_id in (0, 3):  # these are mandatory READ_DATA data_ids
-                gwy.send_cmd(Command.get_opentherm_data(dev_id, data_id))
+                cmd = LegacyCommandShim.from_dto(
+                    build_dto(
+                        Intent(
+                            src=HGI_DEV_ADDR,
+                            dst=Address(dev_id),
+                            action=Action.GET_OPENTHERM_DATA,
+                            data={"msg_id": data_id},
+                        )
+                    )
+                )
+                gwy.send_cmd(cmd)
 
         elif code == Code._PUZZ:
             continue
@@ -438,7 +500,17 @@ async def script_scan_otb(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_full invoked - expect a lot of nonsense")
 
     for msg_id in OTB_DATA_IDS:
-        gwy.send_cmd(Command.get_opentherm_data(dev_id, msg_id))
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_OPENTHERM_DATA,
+                    data={"msg_id": msg_id},
+                )
+            )
+        )
+        gwy.send_cmd(cmd)
 
 
 @script_decorator
@@ -451,7 +523,17 @@ async def script_scan_otb_hard(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_hard invoked - expect a lot of nonsense")
 
     for msg_id in range(0x80):
-        gwy.send_cmd(Command.get_opentherm_data(dev_id, msg_id), priority=Priority.LOW)
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_OPENTHERM_DATA,
+                    data={"msg_id": msg_id},
+                )
+            )
+        )
+        gwy.send_cmd(cmd, priority=Priority.LOW)
 
 
 @script_decorator
@@ -480,7 +562,17 @@ async def script_scan_otb_map(gwy: Gateway, dev_id: DeviceIdT) -> None:
         gwy.send_cmd(
             Command.from_attrs(RQ, dev_id, code, PayloadT("00")), priority=Priority.LOW
         )
-        gwy.send_cmd(Command.get_opentherm_data(dev_id, msg_id), priority=Priority.LOW)
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_OPENTHERM_DATA,
+                    data={"msg_id": msg_id},
+                )
+            )
+        )
+        gwy.send_cmd(cmd, priority=Priority.LOW)
 
 
 @script_decorator
