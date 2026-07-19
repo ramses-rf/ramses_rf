@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Final
 
 import voluptuous as vol
 
+from ramses_rf.address import Address
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_rf.enums import Action
 from ramses_tx import ALL_DEV_ADDR, ALL_DEVICE_ID, Command, DevType, Priority, QosParams
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 
 from . import exceptions as exc
 from .messages import Message
@@ -337,7 +342,16 @@ class BindingManagerRespondent(BindingManagerBase):
         :return: The sent accept packet.
         """
 
-        cmd = Command.put_bind(W_, self._dev.id, codes, dst_id=tender.src.id, idx=idx)
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=Address(self._dev.id),
+                    dst=Address(tender.src.id),
+                    action=Action.PUT_BIND,
+                    data={"verb": W_, "codes": codes, "idx": idx},
+                )
+            )
+        )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
             assert Message._from_cmd(cmd).payload["phase"] == BindPhase.ACCEPT
 
@@ -439,8 +453,15 @@ class BindingManagerSupplicant(BindingManagerBase):
         # if oem_code, send an 10E0
 
         # state = self.state
-        cmd = Command.put_bind(
-            I_, self._dev.id, codes, dst_id=self._dev.id, oem_code=oem_code
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=Address(self._dev.id),
+                    dst=Address(self._dev.id),
+                    action=Action.PUT_BIND,
+                    data={"verb": I_, "codes": codes, "oem_code": oem_code},
+                )
+            )
         )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
             assert Message._from_cmd(cmd).payload["phase"] == BindPhase.TENDER
@@ -478,8 +499,15 @@ class BindingManagerSupplicant(BindingManagerBase):
 
         idx = accept._pkt.payload[:2]  # HACK assumes all idx same
 
-        cmd = Command.put_bind(
-            I_, self._dev.id, confirm_code, dst_id=accept.src.id, idx=idx
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=Address(self._dev.id),
+                    dst=Address(accept.src.id),
+                    action=Action.PUT_BIND,
+                    data={"verb": I_, "codes": confirm_code, "idx": idx},
+                )
+            )
         )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
             assert Message._from_cmd(cmd).payload["phase"] == BindPhase.AFFIRM

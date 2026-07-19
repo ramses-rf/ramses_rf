@@ -140,7 +140,19 @@ class RelayDemand(DeviceHeat):  # 0008
         super()._setup_discovery_cmds()
 
         if not self.is_faked:  # discover_flag & Discover.STATUS and
-            self.discovery.add_cmd(Command.get_relay_demand(self.id), 60 * 15)
+            self.discovery.add_cmd(
+                LegacyCommandShim.from_dto(
+                    build_dto(
+                        Intent_(
+                            src=HGI_DEV_ADDR,
+                            dst=Address(self.id),
+                            action=Action.GET_RELAY_DEMAND,
+                            data={"zone_idx": None},
+                        )
+                    )
+                ),
+                60 * 15,
+            )
 
     async def relay_demand(self) -> float | None:  # 0008
         return self.demand_state.relay_demand

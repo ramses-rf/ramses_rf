@@ -948,7 +948,16 @@ class Language(SystemBase):  # 0100
         """Configure discovery for system language."""
         super()._setup_discovery_cmds()
 
-        cmd = Command.get_system_language(self.id)
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent_(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_SYSTEM_LANGUAGE,
+                    data={},
+                )
+            )
+        )
         self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=60 * 15)
 
     async def language(self) -> str | None:
@@ -1247,7 +1256,16 @@ class SysMode(SystemBase):  # 2E04
         """Configure discovery for the system mode."""
         super()._setup_discovery_cmds()
 
-        cmd = Command.get_system_mode(self.id)
+        cmd = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent_(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_SYSTEM_MODE,
+                    data={},
+                )
+            )
+        )
         self.discovery.add_cmd(cmd, 60 * 5, delay=5)
 
     async def system_mode(self) -> dict[str, Any] | None:  # 2E04
