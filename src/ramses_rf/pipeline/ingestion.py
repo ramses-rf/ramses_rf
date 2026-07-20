@@ -84,6 +84,7 @@ from ramses_rf.const import (
     SZ_WINDOW_OPEN,
     SZ_ZONE_IDX,
     Code,
+    DevType,
 )
 from ramses_rf.enums import Action
 from ramses_rf.messages import Message
@@ -199,6 +200,41 @@ class StateProjector:
             finally:
                 self._queue.task_done()
 
+    def _route_2411_to_fan(self, msg: Message) -> None:
+        """Route a 2411 parameter message to its FAN aggregate root.
+
+        Mirrors ``dispatcher._route_2411_to_fan`` for the StateProjector
+        ingestion path.  Phase 2.95 removed the
+        ``HvacVentilator._handle_msg`` override that previously invoked
+        ``_handle_2411_message`` (sets ``_supports_2411`` and stores the
+        parameter) and ``_handle_initialized_callback`` (fires the
+        ramses_cc entity-creation callback).  Without this routing, FAN
+        devices never advertise 2411 support, so ramses_cc never creates
+        the ~15 parameter ``number`` entities.  See ramses_cc issue 851.
+        """
+        registry = getattr(self._gwy, "device_registry", None)
+        if registry is None:
+            return
+
+        candidates: list[Any] = []
+        src_dev = registry.device_by_id.get(msg.src.id)
+        dst_dev = registry.device_by_id.get(msg.dst.id)
+        if src_dev is not None:
+            candidates.append(src_dev)
+        if dst_dev is not None and dst_dev is not src_dev:
+            candidates.append(dst_dev)
+
+        for dev in candidates:
+            if getattr(dev, "_SLUG", "") != DevType.FAN:
+                continue
+            handler = getattr(dev, "_handle_2411_message", None)
+            init_cb = getattr(dev, "_handle_initialized_callback", None)
+            if not callable(handler) or not callable(init_cb):
+                continue
+            with contextlib.suppress(AttributeError, TypeError, ValueError):
+                handler(msg)
+                init_cb()
+
     def process_message_state(self, msg: Message) -> None:
         """Route valid inbound message envelopes to their respective
         engines.
@@ -212,6 +248,15 @@ class StateProjector:
             msg.payload, (dict, list)
         ):
             return
+
+        # 2411 parameter messages are owned by the FAN aggregate root: they
+        # set _supports_2411 and fire the initialized callback that ramses_cc
+        # uses to create the ~15 parameter number entities.  Phase 2.95 moved
+        # this out of HvacVentilator._handle_msg; it must be routed here for
+        # the StateProjector path to keep parity with the dispatcher path.
+        # See ramses_cc issue 851.
+        if msg.code == Code._2411:
+            self._route_2411_to_fan(msg)
 
         payloads = msg.payload if isinstance(msg.payload, list) else [msg.payload]
 
@@ -299,6 +344,68 @@ class StateProjector:
                             zone.id,
                             err,
                         )
+
+            # Route domain-id opcodes (0008/0009/3150) to the DhwZone (F9/FA)
+            # or TCS (FC).  The ingestion path above only routes to src_dev
+            # and dst_dev, but the DhwZone/TCS are virtual twins that are
+            # neither src nor dst.  Without this, demand_state on the DhwZone
+            # is never hydrated (relay_demand, relay_failsafe, heat_demand).
+            # See: https://github.com/ramses-rf/ramses_cc/issues/843
+            if SZ_DOMAIN_ID in p and src_dev and msg.src.id in system_by_id:
+                tcs = system_by_id[msg.src.id]
+                domain_id = p[SZ_DOMAIN_ID]
+                if domain_id == "FC" and tcs is not None:
+                    try:
+                        self._update_demand_state(tcs, p, msg)
+                    except Exception as err:
+                        _LOGGER.error(
+                            "CQRS extraction failed for TCS %s: %s",
+                            tcs.id,
+                            err,
+                        )
+                elif (
+                    domain_id in ("FA", "F9") and getattr(tcs, "dhw", None) is not None
+                ):
+                    try:
+                        self._update_demand_state(tcs.dhw, p, msg)
+                    except Exception as err:
+                        _LOGGER.error(
+                            "CQRS extraction failed for DHW %s: %s",
+                            tcs.dhw.id,
+                            err,
+                        )
+
+            # Route DHW opcodes (1260/10A0/1F41) to the DhwZone.
+            # These payloads carry no zone_idx/domain_id, so the block above
+            # misses the DhwZone.  1260 is sent by the DhwSensor (or relayed
+            # by the Controller as an RP); 10A0/1F41 are sent by the
+            # Controller.  All of these expose a ``tcs`` attribute whose
+            # ``dhw`` is the DhwZone.  The appliance_control (OTB) also emits
+            # 10A0/1260 with different semantics (CH setpoint / null temp), so
+            # it must be excluded to avoid clobbering the DHW read-models.
+            # Without this, the CQRS read-models (temp_state/dhw_state) on the
+            # DhwZone are never hydrated and the ramses_cc water_heater entity
+            # shows no current/target temperature.
+            # See: https://github.com/ramses-rf/ramses_cc/issues/843
+            if msg.code in (Code._1260, Code._10A0, Code._1F41) and src_dev:
+                src_slug = getattr(src_dev, "_SLUG", "")
+                if msg.code == Code._1260:
+                    is_dhw_src = src_slug in ("DHW", "CTL")
+                else:  # 10A0 / 1F41 are owned by the Controller
+                    is_dhw_src = src_slug == "CTL"
+                if is_dhw_src:
+                    tcs = getattr(src_dev, "tcs", None)
+                    dhw = getattr(tcs, "dhw", None) if tcs is not None else None
+                    if dhw is not None:
+                        try:
+                            self._update_dhw_state(dhw, p, msg)
+                            self._update_temperature_state(dhw, p, msg)
+                        except Exception as err:
+                            _LOGGER.error(
+                                "CQRS extraction failed for DHW %s: %s",
+                                dhw.id,
+                                err,
+                            )
 
         # --- CQRS Reactor Hooks ---
         # Automate the legacy Actuator discovery query (3EF1) in response to 3EF0 (I)
@@ -774,8 +881,8 @@ class StateProjector:
             else:
                 updates[SZ_RELAY_DEMAND] = p[SZ_RELAY_DEMAND]
 
-        elif msg.code == Code._0009 and SZ_RELAY_FAILSAFE in p:
-            updates[SZ_RELAY_FAILSAFE] = p[SZ_RELAY_FAILSAFE]
+        elif msg.code == Code._0009 and "failsafe_enabled" in p:
+            updates[SZ_RELAY_FAILSAFE] = p["failsafe_enabled"]
 
         if not updates:
             return
