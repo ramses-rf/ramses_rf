@@ -14,6 +14,7 @@ from datetime import timedelta as td
 from typing import TYPE_CHECKING, Any, Final
 
 from ramses_tx import ALL_DEV_ADDR
+from ramses_tx.address import HGI_DEV_ADDR
 
 from . import exceptions as exc
 from .const import (
@@ -205,16 +206,48 @@ def instantiate_devices(gwy: Gateway, msg: Message) -> bool:
         #  - discovery: from packet fingerprint, excl. payloads (only for 10:)
         #  - eavesdrop: from packet fingerprint, incl. payloads
 
+        hgi_id = gwy.hgi.id if gwy.hgi else None
+
         if src_dev is None:
-            # may: DeviceNotFoundError, but don't suppress
-            src_dev = gwy.device_registry.get_device(msg.src.id)
-            if msg.dst.id == msg.src.id:
-                return True
+            # Foreign HGIs (18: devices that are not the active gateway and
+            # not the generic HGI_DEV_ADDR 18:000730) communicate with our
+            # controller — the controller's RPs are addressed to them, and
+            # they send RQs to the controller.  The active gateway eavesdrops
+            # on both directions (issue 822).
+            #
+            # The protocol-level filter (_is_wanted_addrs in ramses_tx) lets
+            # foreign HGIs through, but when enforce_known_list is True the
+            # device-registry filter (check_filter_lists in dev_filter.py)
+            # rejects them because they are not in the known_list.  This
+            # get_device call is NOT suppressed (the src device is needed for
+            # payload routing), so a DeviceNotFoundError here drops the entire
+            # packet and adds the foreign HGI to the _unwanted list — causing
+            # repeating FILTER EXCEPTION warnings on every subsequent packet
+            # from the foreign HGI (issue 822, comment 5017168119).
+            #
+            # Skip device creation for foreign HGI sources only when
+            # enforce_known_list is active (the filter would reject them).
+            # When enforce_known_list is False, the foreign HGI is created
+            # normally (as an HgiGateway) — this preserves existing behaviour
+            # for systems that don't enforce the known_list.
+            if (
+                gwy.config.engine.enforce_known_list
+                and msg.src.id[:2] == "18"
+                and msg.src.id != HGI_DEV_ADDR.id
+                and msg.src.id != hgi_id
+            ):
+                # Foreign HGI as source — skip device creation, continue
+                # processing (the dst device will be created below)
+                pass
+            else:
+                # may: DeviceNotFoundError, but don't suppress
+                src_dev = gwy.device_registry.get_device(msg.src.id)
+                if msg.dst.id == msg.src.id:
+                    return True
 
         if not gwy.config.enable_eavesdrop:
             return True
 
-        hgi_id = gwy.hgi.id if gwy.hgi else None
         if dst_dev is None and msg.src.id != hgi_id:
             with contextlib.suppress(exc.DeviceNotFoundError):
                 gwy.device_registry.get_device(msg.dst.id)
