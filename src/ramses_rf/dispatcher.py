@@ -712,6 +712,49 @@ def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
         target.apply_state_update(event)
 
 
+def _route_2411_to_fan(gwy: Gateway, msg: Message) -> None:
+    """Route a 2411 parameter message to its FAN aggregate root.
+
+    Phase 2.95 removed the ``HvacVentilator._handle_msg`` override that
+    previously invoked ``_handle_2411_message`` (which sets
+    ``_supports_2411`` and stores the parameter) and
+    ``_handle_initialized_callback`` (which fires the ramses_cc entity
+    creation callback).  Without this routing, FAN devices never advertise
+    2411 support, so ramses_cc never creates the ~15 parameter ``number``
+    entities (comfort temperature, etc.) — see ramses_cc issue 851.
+
+    This re-wires the 2411 handling into the CQRS ingestion pipeline (where
+    issue 639 wants domain logic to live) instead of restoring the leaky
+    ``_handle_msg`` override.  ``_handle_2411_message`` reads
+    ``msg.payload`` directly, so it is invoked once per FAN target, outside
+    the per-payload loop in ``_cqrs_ingestion_engine``.
+    """
+    registry = getattr(gwy, "device_registry", None)
+    if registry is None:
+        return
+
+    candidates: list[Any] = []
+    src_dev = registry.device_by_id.get(msg.src.id)
+    dst_dev = registry.device_by_id.get(msg.dst.id)
+    if src_dev is not None:
+        candidates.append(src_dev)
+    if dst_dev is not None and dst_dev is not src_dev:
+        candidates.append(dst_dev)
+
+    for dev in candidates:
+        # Duck-type HvacVentilator: it carries _SLUG == FAN and the two
+        # handler methods.  Avoids a circular import of HvacVentilator.
+        if getattr(dev, "_SLUG", "") != DevType.FAN:
+            continue
+        handler = getattr(dev, "_handle_2411_message", None)
+        init_cb = getattr(dev, "_handle_initialized_callback", None)
+        if not callable(handler) or not callable(init_cb):
+            continue
+        with contextlib.suppress(AttributeError, TypeError, ValueError):
+            handler(msg)
+            init_cb()
+
+
 def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
     """Parallel ingestion engine to populate immutable CQRS read-models.
 
@@ -724,6 +767,13 @@ def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
 
     if not isinstance(msg.payload, (dict, list)):
         return
+
+    # 2411 parameter messages are handled by the FAN aggregate root directly
+    # (they set _supports_2411 and fire the initialized callback).  This runs
+    # before the per-payload loop because _handle_2411_message reads
+    # msg.payload as a whole.  See ramses_cc issue 851.
+    if msg.code == Code._2411:
+        _route_2411_to_fan(gwy, msg)
 
     payloads = msg.payload if isinstance(msg.payload, list) else [msg.payload]
 
