@@ -18,8 +18,7 @@ from ramses_rf.address import Address
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command as Intent
 from ramses_rf.enums import Action
-from ramses_tx import ALL_DEV_ADDR, ALL_DEVICE_ID, Command, DevType, Priority, QosParams
-from ramses_tx.command_legacy_shim import LegacyCommandShim
+from ramses_tx import ALL_DEVICE_ID, CommandDTO, DevType, Priority, QosParams
 
 from . import exceptions as exc
 from .messages import Message
@@ -266,7 +265,7 @@ class BindingManagerBase:
         if msg.code in (Code._1FC9, Code._10E0):
             self.state.rcvd_msg(msg)
 
-    def sent_cmd(self, cmd: Command) -> None:
+    def sent_cmd(self, cmd: CommandDTO) -> None:
         """Pass relevant Commands through to the state processor.
 
         :param cmd: The outgoing command to process.
@@ -342,14 +341,12 @@ class BindingManagerRespondent(BindingManagerBase):
         :return: The sent accept packet.
         """
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=Address(self._dev.id),
-                    dst=Address(tender.src.id),
-                    action=Action.PUT_BIND,
-                    data={"verb": W_, "codes": codes, "idx": idx},
-                )
+        cmd = build_dto(
+            Intent(
+                src=Address(self._dev.id),
+                dst=Address(tender.src.id),
+                action=Action.PUT_BIND,
+                data={"verb": W_, "codes": codes, "idx": idx},
             )
         )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
@@ -400,7 +397,7 @@ class BindingManagerSupplicant(BindingManagerBase):
         /,
         *,
         confirm_code: Code | None = None,
-        ratify_cmd: Command | None = None,
+        ratify_cmd: CommandDTO | None = None,
     ) -> tuple[Packet, Message, Packet, Packet | None]:
         """Device starts binding as a Supplicant, by sending an Offer.
 
@@ -453,14 +450,12 @@ class BindingManagerSupplicant(BindingManagerBase):
         # if oem_code, send an 10E0
 
         # state = self.state
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=Address(self._dev.id),
-                    dst=Address(self._dev.id),
-                    action=Action.PUT_BIND,
-                    data={"verb": I_, "codes": codes, "oem_code": oem_code},
-                )
+        cmd = build_dto(
+            Intent(
+                src=Address(self._dev.id),
+                dst=Address(self._dev.id),
+                action=Action.PUT_BIND,
+                data={"verb": I_, "codes": codes, "oem_code": oem_code},
             )
         )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
@@ -499,14 +494,12 @@ class BindingManagerSupplicant(BindingManagerBase):
 
         idx = accept._pkt.payload[:2]  # HACK assumes all idx same
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=Address(self._dev.id),
-                    dst=Address(accept.src.id),
-                    action=Action.PUT_BIND,
-                    data={"verb": I_, "codes": confirm_code, "idx": idx},
-                )
+        cmd = build_dto(
+            Intent(
+                src=Address(self._dev.id),
+                dst=Address(accept.src.id),
+                action=Action.PUT_BIND,
+                data={"verb": I_, "codes": confirm_code, "idx": idx},
             )
         )
         if not _DBG_DISABLE_PHASE_ASSERTS:  # TODO: should be in test suite
@@ -519,7 +512,7 @@ class BindingManagerSupplicant(BindingManagerBase):
         await self.state.cast_confirm_accept()
         return pkt
 
-    async def _cast_addenda(self, accept: Message, cmd: Command) -> Packet:
+    async def _cast_addenda(self, accept: Message, cmd: CommandDTO) -> Packet:
         """Supp casts an Addenda (the final 10E0 command).
 
         :param accept: The previously received accept message.
@@ -631,7 +624,7 @@ class BindStateBase:
             raise exc.BindingFsmError  # or: self._fut.set_exception()
         self._context.set_state(next_state, result=self._fut)
 
-    def send_cmd(self, cmd: Command) -> None:
+    def send_cmd(self, cmd: CommandDTO) -> None:
         """Abstract method to handle an outgoing command.
 
         :param cmd: The command that is being sent.
@@ -646,7 +639,7 @@ class BindStateBase:
         raise NotImplementedError
 
     @staticmethod
-    def is_phase(cmd: Command | Message, phase: BindPhase) -> bool:
+    def is_phase(cmd: CommandDTO | Message, phase: BindPhase) -> bool:
         """Evaluate if the given command or message corresponds to the specified binding phase.
 
         :param cmd: The command or message object.
@@ -657,12 +650,29 @@ class BindStateBase:
             return cmd.verb == I_ and cmd.code == Code._10E0
         if cmd.code != Code._1FC9:
             return False
+
+        if isinstance(cmd, Message):
+            dst, src = cmd.dst.id, cmd.src.id
+            if dst == "--:------":  # NON_DEVICE_ID
+                # For 1FC9, addr3 is often the actual destination or equal to src
+                dst = cmd._pkt._addrs[2].id
+        else:
+            from typing import cast
+
+            from ramses_tx.address import NON_DEVICE_ID
+            from ramses_tx.typing import DeviceIdT
+
+            addrs = [a for a in (cmd.addr1, cmd.addr2, cmd.addr3) if a != NON_DEVICE_ID]
+            src = cast(DeviceIdT, addrs[0] if addrs else NON_DEVICE_ID)
+            dst = cast(DeviceIdT, addrs[1] if len(addrs) > 1 else src)
+
         if phase == BindPhase.TENDER:
-            return cmd.verb == I_ and cmd.dst in (cmd.src, ALL_DEV_ADDR)
+            return cmd.verb == I_ and dst in (src, ALL_DEVICE_ID)
         if phase == BindPhase.ACCEPT:
-            return cmd.verb == W_ and cmd.dst is not cmd.src
+            # Historically, this was `dst is not src` on distinct Address objects, which was always True
+            return cmd.verb == W_
         # if phase == BindPhase.AFFIRM:
-        return cmd.verb == I_ and cmd.dst not in (cmd.src, ALL_DEV_ADDR)
+        return cmd.verb == I_ and dst not in (src, ALL_DEVICE_ID)
 
     # Respondent State APIs...
     async def wait_for_offer(self, timeout: float | None = None) -> Message:
@@ -751,7 +761,7 @@ class _DevIsReadyToSendCmd(BindStateBase):
     def __init__(self, context: BindingManagerBase) -> None:
         super().__init__(context)
 
-        self._cmd: Command | None = None
+        self._cmd: CommandDTO | None = None
         self._cmds_sent: int = 0
 
     def _retries_exceeded(self) -> None:
@@ -768,7 +778,7 @@ class _DevIsReadyToSendCmd(BindStateBase):
             self._fut.set_exception(exc.BindingFlowFailed(msg))
         self._set_context_state(DevHasFailedBinding)
 
-    def send_cmd(self, cmd: Command) -> None:
+    def send_cmd(self, cmd: CommandDTO) -> None:
         """If sending a cmd, expect the corresponding echo."""
 
         if not self.is_phase(cmd, self._expected_cmd_phase):
@@ -783,7 +793,13 @@ class _DevIsReadyToSendCmd(BindStateBase):
         """If the msg is the echo of the sent cmd, transition to the next state."""
         if self._fut.done():
             return
-        if (self._cmd and msg._pkt == self._cmd) or (
+        if (
+            self._cmd
+            and msg.verb == self._cmd.verb
+            and msg.code == self._cmd.code
+            and msg.payload == self._cmd.payload
+            and msg.src.id == self._cmd.addr1
+        ) or (
             self.is_phase(msg, self._expected_cmd_phase)
             and msg.src.id == self._context._dev.id
         ):

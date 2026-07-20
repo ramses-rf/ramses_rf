@@ -249,8 +249,8 @@ async def test_send_cmd_excluded(protocol: DummyProtocol) -> None:
     """Test that sending unwanted commands raises a ProtocolError."""
     protocol._exclude = [DeviceIdT("01:111111")]
     mock_cmd = MagicMock()
-    mock_cmd.src.id = "01:111111"
-    mock_cmd.dst.id = "01:222222"
+    mock_cmd.addr1 = "01:111111"
+    mock_cmd.addr2 = "01:222222"
 
     with pytest.raises(ProtocolError, match="Command excluded by device_id filter"):
         await protocol.send_cmd(mock_cmd)
@@ -258,16 +258,16 @@ async def test_send_cmd_excluded(protocol: DummyProtocol) -> None:
 
 async def test_patch_cmd_if_needed_evofw3(protocol: DummyProtocol) -> None:
     """Test that _patch_cmd_if_needed swaps the default HGI address for evofw3."""
-    from ramses_tx.command import Command
+    from ramses_tx.dtos import CommandDTO as Command
 
     protocol._is_evofw3 = True
     protocol._known_hgi = DeviceIdT("18:123456")  # Safely sets the hgi_id property
 
-    original_cmd = Command("RQ --- 18:000730 01:222222 --:------ 12B0 001 00")
+    original_cmd = Command.from_cli("RQ --- 18:000730 01:222222 --:------ 12B0 001 00")
 
     patched_cmd = protocol._patch_cmd_if_needed(original_cmd)
 
     assert patched_cmd is not original_cmd
-    assert patched_cmd.src.id == "18:123456"
-    assert patched_cmd.dst.id == "01:222222"
-    assert original_cmd.src.id == "18:000730"  # Enforces immutability
+    assert patched_cmd.addr1 == "18:123456"
+    assert patched_cmd.addr2 == "01:222222"
+    assert original_cmd.addr1 == "18:000730"  # Enforces immutability

@@ -3,7 +3,7 @@
 import asyncio
 from typing import TYPE_CHECKING, Any, Protocol
 
-from ramses_tx import Command, Packet, Priority, QosParams
+from ramses_tx import CommandDTO, Packet, Priority, QosParams
 
 from .messages import Message
 from .typing import DeviceIdT, DeviceListT
@@ -19,7 +19,7 @@ class CommandDispatcher(Protocol):
 
     async def __call__(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         *,
         priority: Priority | None = None,
         qos: QosParams | None = None,
@@ -223,7 +223,7 @@ class GatewayInterface(Protocol):
 
     async def async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         priority: Priority = Priority.DEFAULT,

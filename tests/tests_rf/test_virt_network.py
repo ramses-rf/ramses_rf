@@ -10,9 +10,10 @@ from typing import Any
 import pytest
 import serial
 
-from ramses_rf import Address, Code, Command, Gateway
+from ramses_rf import Address, Code, CommandDTO as Command, Gateway
 from ramses_rf.gateway import GatewayConfig
 from ramses_tx.config import EngineConfig
+from ramses_tx.packet import Packet
 from ramses_tx.transport.port import PortTransport
 from ramses_tx.typing import DeviceIdT
 from tests_rf.virtual_rf import VirtualRf, rf_factory
@@ -102,9 +103,15 @@ async def assert_this_pkt(
     """
     for _ in range(int(max_sleep / ASSERT_CYCLE_TIME)):
         await asyncio.sleep(ASSERT_CYCLE_TIME)
-        if transport._this_pkt and transport._this_pkt._frame == cmd._frame:
+        if (
+            transport._this_pkt
+            and transport._this_pkt._frame == Packet._from_cmd(cmd)._frame
+        ):
             break
-    assert transport._this_pkt and transport._this_pkt._frame == cmd._frame
+    assert (
+        transport._this_pkt
+        and transport._this_pkt._frame == Packet._from_cmd(cmd)._frame
+    )
 
 
 # ### TESTS ###################################################################
@@ -134,21 +141,21 @@ async def _test_virtual_rf_dev_disc(
     await assert_devices(gwy_1, ["18:000000", "18:111111"])
 
     # TEST 1: Tx to all from GWY /dev/pty/0 (NB: no RSSI)
-    cmd = Command(" I --- 01:010000 --:------ 01:010000 1F09 003 0004B5")
+    cmd = Command.from_cli(" I --- 01:010000 --:------ 01:010000 1F09 003 0004B5")
     gwy_0.send_cmd(cmd)
 
     await assert_devices(gwy_0, ["01:010000", "18:000000", "18:111111"])
     await assert_devices(gwy_1, ["01:010000", "18:000000", "18:111111"])
 
     # TEST 2: Tx to all from non-GWY /dev/pty/2 (NB: no RSSI)
-    cmd = Command(" I --- 01:011111 --:------ 01:011111 1F09 003 0004B5")
+    cmd = Command.from_cli(" I --- 01:011111 --:------ 01:011111 1F09 003 0004B5")
     ser_2.write(bytes(f"{cmd}\r\n".encode("ascii")))
 
     await assert_devices(gwy_0, ["01:010000", "01:011111", "18:000000", "18:111111"])
     await assert_devices(gwy_1, ["01:010000", "01:011111", "18:000000", "18:111111"])
 
     # TEST 3: Rx only by *only one* GWY (NB: needs RSSI)
-    cmd = Command(" I --- 01:022222 --:------ 01:022222 1F09 003 0004B5")
+    cmd = Command.from_cli(" I --- 01:022222 --:------ 01:022222 1F09 003 0004B5")
     list(rf._port_to_object.values())[1].write(bytes(f"000 {cmd}\r\n".encode("ascii")))
 
     # Fix: Reverted gwy_0 expected list to have 18:000000 since it is
@@ -169,7 +176,7 @@ async def _test_virtual_rf_pkt_flow(
         gwy_0, "01:022222", Code._1F09, max_sleep=0, test_not=True
     )  # device won't exist
 
-    cmd = Command(" I --- 01:022222 --:------ 01:022222 1F09 003 0004B5")
+    cmd = Command.from_cli(" I --- 01:022222 --:------ 01:022222 1F09 003 0004B5")
     gwy_0.send_cmd(cmd, num_repeats=1)
 
     await assert_devices(gwy_0, ["01:022222", "18:000000", "18:111111", "40:000000"])
@@ -183,7 +190,7 @@ async def _test_virtual_rf_pkt_flow(
     #     gwy_0, "40:000000", Code._22F1, max_sleep=0, test_not=True
     # )
 
-    cmd = Command(" I --- 40:000000 --:------ 40:000000 22F1 003 000507")
+    cmd = Command.from_cli(" I --- 40:000000 --:------ 40:000000 22F1 003 000507")
     gwy_0.send_cmd(cmd, num_repeats=1)
 
     # await assert_code_in_device_msgindex(gwy_0, "40:000000", Code._22F1)

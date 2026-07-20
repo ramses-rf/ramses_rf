@@ -19,6 +19,12 @@ class MockCommand:
 
     def __init__(self) -> None:
         """Initialize the mock command."""
+        self.verb = " I"
+        self.addr1 = "01:145038"
+        self.addr2 = "--:------"
+        self.addr3 = "01:145038"
+        self.code = "1F09"
+        self.payload = "0004B5"
         self._frame = " I --- 01:145038 --:------ 01:145038 1F09 003 0004B5"
 
 

@@ -1,8 +1,12 @@
 """RAMSES RF - Zone command intent to L3 payload translation."""
 
-from ramses_rf.commands.builders.helpers import resolve_addrs
+from ramses_rf.commands.builders.helpers import (
+    _check_idx,
+    _normalise_mode,
+    _normalise_until,
+    resolve_addrs,
+)
 from ramses_rf.commands.core import Command
-from ramses_tx.command.base import _check_idx, _normalise_mode, _normalise_until
 from ramses_tx.const import DEFAULT_NUM_REPEATS, RQ, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.helpers import hex_from_dtm, hex_from_temp

@@ -63,7 +63,6 @@ from ramses_rf.schemas import (
 )
 from ramses_rf.topology import Parent
 from ramses_tx import DEV_ROLE_MAP, DEV_TYPE_MAP, ZON_ROLE_MAP, DeviceIdT, Priority
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.typing import PayDictT
 
 from ..messages import Message
@@ -180,14 +179,12 @@ class SystemBase(Parent, Entity):  # 3B00 (multi-relay)
             cmd = build_rq_cmd(self.ctl.id, Code._000C, payload)
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_TPI_PARAMS,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_TPI_PARAMS,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60 * 6, delay=5)
@@ -945,14 +942,12 @@ class Language(SystemBase):  # 0100
         """Configure discovery for system language."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_LANGUAGE,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_LANGUAGE,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=60 * 15)
@@ -1106,7 +1101,7 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1120,7 +1115,7 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             delay=5,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1134,7 +1129,7 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             delay=10,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1283,14 +1278,12 @@ class SysMode(SystemBase):  # 2E04
         """Configure discovery for the system mode."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_MODE,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_MODE,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 5, delay=5)
@@ -1326,14 +1319,12 @@ class SysMode(SystemBase):  # 2E04
         :returns: The packet containing the command payload.
         :rtype: Packet
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.SET_SYSTEM_MODE,
-                    data={"system_mode": system_mode, "until": until},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": system_mode, "until": until},
             )
         )
         return await self._gwy.async_send_cmd(
@@ -1370,14 +1361,12 @@ class Datetime(SystemBase):  # 313F
         """Configure discovery for system time."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_TIME,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60, delay=0)
@@ -1405,14 +1394,12 @@ class Datetime(SystemBase):  # 313F
         :returns: The system datetime, or None if unavailable.
         :rtype: dt | None
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_TIME,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
             )
         )
         pkt = await self._gwy.async_send_cmd(cmd, wait_for_reply=True)
@@ -1427,14 +1414,12 @@ class Datetime(SystemBase):  # 313F
         :returns: The packet containing the command payload.
         :rtype: Packet
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.SET_SYSTEM_TIME,
-                    data={"datetime": dtm},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.SET_SYSTEM_TIME,
+                data={"datetime": dtm},
             )
         )
         return await self._gwy.async_send_cmd(cmd, priority=Priority.HIGH)

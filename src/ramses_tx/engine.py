@@ -12,8 +12,6 @@ from datetime import datetime as dt
 from typing import TYPE_CHECKING, Any, Never
 
 from .address import ALL_DEV_ADDR, HGI_DEV_ADDR, NON_DEV_ADDR
-from .command import Command
-from .command_legacy_shim import LegacyCommandShim
 from .const import (
     DEFAULT_DISABLE_QOS,
     DEFAULT_GAP_DURATION,
@@ -333,7 +331,7 @@ class Engine:
         *,
         from_id: str | None = None,
         seqn: str | None = None,
-    ) -> Command:
+    ) -> CommandDTO:
         addr1 = from_id or HGI_DEV_ADDR.id
 
         if device_id == addr1:
@@ -343,20 +341,18 @@ class Engine:
             addr2 = device_id
             addr3 = NON_DEV_ADDR.id
 
-        return LegacyCommandShim.from_dto(
-            CommandDTO(
-                verb=verb,
-                addr1=addr1,
-                addr2=addr2,
-                addr3=addr3,
-                code=code,
-                payload=payload,
-            )
+        return CommandDTO(
+            verb=verb,
+            addr1=addr1,
+            addr2=addr2,
+            addr3=addr3,
+            code=code,
+            payload=payload,
         )
 
     async def async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,

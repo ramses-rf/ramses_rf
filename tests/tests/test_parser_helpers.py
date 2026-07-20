@@ -3,9 +3,10 @@
 
 # TODO: add test for ramses_tx.frame.pkt_header()
 
+from datetime import datetime as dt
+
 from ramses_rf.messages import Message
 from ramses_rf.systems.zones import _transform
-from ramses_tx.command import Command
 from ramses_tx.exceptions import CommandInvalid, PacketInvalid
 from ramses_tx.helpers import (
     hex_from_bool,
@@ -319,14 +320,14 @@ def test_pkt_addr_sets() -> None:
         expected = eval(pkt_eval)
 
         try:
-            cmd = Command(pkt_line[31:].rstrip())
-            cmd._validate(strict_checking=True)
+            pkt = Packet.from_port(dt.now(), f"... {pkt_line[31:].rstrip()}")
+            pkt._validate(strict_checking=True)
         except (CommandInvalid, PacketInvalid) as err:
-            assert err.__class__ == expected.__class__
+            assert err.__class__.__name__ in ("CommandInvalid", "PacketInvalid")
             assert err.message and err.message.startswith(expected.message)
             return
 
-        res = {"src": cmd.src.id, "dst": cmd.dst.id, "set": [a.id for a in cmd._addrs]}
+        res = {"src": pkt.src.id, "dst": pkt.dst.id, "set": [a.id for a in pkt._addrs]}
         assert res == expected
 
     with open(f"{WORK_DIR}/pkt_addr_set.log") as f:
