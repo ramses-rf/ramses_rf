@@ -10,7 +10,7 @@
 # - pip list | grep -E 'pre-commit|ruff|mypy|types-|voluptuous|pytest|hatch'
 
 # used for development (linting)
-  prek == 0.4.8                                 # latest, same as ramses_cc
+  prek == 0.4.10                                 # latest, same as ramses_cc
   ruff >= 0.15.21                               # HA uses 0.15.5 ! also in: pre-commit-config.yaml
 
 # used for development (typing)
