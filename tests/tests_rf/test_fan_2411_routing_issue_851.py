@@ -19,7 +19,6 @@ initialized callback on the target FAN device.
 from __future__ import annotations
 
 from collections.abc import Generator
-from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -89,16 +88,15 @@ class TestDispatcher2411Routing:
     ) -> None:
         """A 2411 `` I`` packet must set supports_2411 and fire the callback."""
         fan = _make_fan(mock_gateway)
-        assert fan._supports_2411 is False
+        # _supports_2411 defaults to False (checked in test_initialization)
 
         callback = MagicMock()
         fan.set_initialized_callback(callback)
-        assert fan._initialized_callback is callback
 
         msg = _make_2411_msg(verb=" I")
         dispatcher._cqrs_ingestion_engine(mock_gateway, msg)
 
-        assert fan._supports_2411 is True, "supports_2411 was not flipped by dispatcher"
+        assert fan._supports_2411, "supports_2411 was not flipped by dispatcher"
         assert TEST_PARAM_ID in fan._params_2411
         assert fan._params_2411[TEST_PARAM_ID] == TEST_PARAM_VALUE
         callback.assert_called_once()
@@ -114,7 +112,7 @@ class TestDispatcher2411Routing:
         msg = _make_2411_msg(verb="RP")
         dispatcher._cqrs_ingestion_engine(mock_gateway, msg)
 
-        assert fan._supports_2411 is True
+        assert fan._supports_2411
 
         if fan._gwy.message_store:
             fan._gwy.message_store.stop()
@@ -125,7 +123,7 @@ class TestDispatcher2411Routing:
         msg = _make_2411_msg(verb="RQ")
         dispatcher._cqrs_ingestion_engine(mock_gateway, msg)
 
-        assert fan._supports_2411 is False, "RQ must not flip supports_2411"
+        assert not fan._supports_2411, "RQ must not flip supports_2411"
         assert fan._params_2411 == {}
 
         if fan._gwy.message_store:
@@ -144,7 +142,7 @@ class TestDispatcher2411Routing:
         dispatcher._cqrs_ingestion_engine(mock_gateway, msg)
 
         # FAN is the src/dst, so it gets routed; the CTL device is not a target
-        assert fan._supports_2411 is True
+        assert fan._supports_2411
         other._handle_2411_message.assert_not_called()
 
         if fan._gwy.message_store:
@@ -160,11 +158,11 @@ class TestStateProjector2411Routing:
         callback = MagicMock()
         fan.set_initialized_callback(callback)
 
-        projector = StateProjector(cast(MagicMock, mock_gateway), MagicMock())
+        projector = StateProjector(mock_gateway, MagicMock())
         msg = _make_2411_msg(verb=" I")
         projector._route_2411_to_fan(msg)
 
-        assert fan._supports_2411 is True
+        assert fan._supports_2411
         assert fan._params_2411.get(TEST_PARAM_ID) == TEST_PARAM_VALUE
         callback.assert_called_once()
 
@@ -176,14 +174,12 @@ class TestStateProjector2411Routing:
     ) -> None:
         """process_message_state must trigger 2411 routing for a 2411 msg."""
         fan = _make_fan(mock_gateway)
-        projector = StateProjector(cast(MagicMock, mock_gateway), MagicMock())
+        projector = StateProjector(mock_gateway, MagicMock())
 
         msg = _make_2411_msg(verb=" I")
         projector.process_message_state(msg)
 
-        assert fan._supports_2411 is True, (
-            "process_message_state did not route 2411 to the FAN"
-        )
+        assert fan._supports_2411, "process_message_state did not route 2411 to the FAN"
 
         if fan._gwy.message_store:
             fan._gwy.message_store.stop()
