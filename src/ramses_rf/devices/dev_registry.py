@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ramses_rf.address import Address, is_valid_dev_id
 from ramses_rf.config import GatewayConfig
-from ramses_rf.const import SZ_DEVICES
+from ramses_rf.const import FA, FC, SZ_DEVICES
 from ramses_rf.devices.dev_base import DeviceHeat, DeviceHvac, Fakeable
 from ramses_rf.enums import TopologyAction
 from ramses_rf.exceptions import (
@@ -196,6 +196,11 @@ class DeviceRegistry:
                 # 1. FORWARD BINDING (Delegating down to legacy graph mutation
                 # to allow the Old Brain to hydrate itself)
                 child_id_raw = metadata.get("child_id")
+                # Fallback: if domain_id is FC (appliance_control) but
+                # child_id was not explicitly set in the metadata, use FC
+                # so the binding targets the System's appliance_control slot.
+                if child_id_raw is None and metadata.get("domain_id") == FC:
+                    child_id_raw = FC
                 child_dev = self.get_device(
                     event.child_id,
                     parent=cast("Parent", parent),
@@ -538,6 +543,54 @@ class DeviceRegistry:
                     _LOGGER.warning(f"The device is not fakeable: {dev}")
 
         if parent or child_id:
+            # Re-parenting: allow a BDR to be promoted from hotwater_valve
+            # (FA, DhwZone) to appliance_control (FC, System) when a
+            # higher-confidence binding (000C APP, or 3B00/3EF0 eavesdrop)
+            # arrives after the 000C HTG binding incorrectly placed it as
+            # hotwater_valve.  This handles issue 834: systems without DHW
+            # where the controller's binding table has the BDR in the HTG
+            # slot but it is actually the appliance_control.
+            #
+            # Only re-parent when the DhwZone has no DHW sensor — if a
+            # sensor exists, the system genuinely has DHW and the BDR may
+            # truly be the hotwater_valve.
+            old_parent = dev._parent if dev else None
+            if (
+                dev
+                and parent
+                and child_id == FC
+                and old_parent is not None
+                and old_parent is not parent
+                and type(old_parent).__name__ == "DhwZone"
+                and getattr(dev, "_child_id", None) == FA
+                and getattr(old_parent, "_dhw_sensor", None) is None
+            ):
+                _LOGGER.info(
+                    "RE-PARENTING: %s from DhwZone (hotwater_valve) to "
+                    "System (appliance_control)",
+                    device_id,
+                )
+                # Detach from DhwZone
+                old_parent._dhw_valve = None
+                if dev in old_parent.childs:
+                    old_parent.childs.remove(dev)
+                old_parent.child_by_id.pop(dev.id, None)
+                dev._parent = None
+                dev._child_id = None
+                # Clean up the DhwZone if it has no children left
+                tcs = getattr(old_parent, "tcs", None)
+                if (
+                    tcs
+                    and not old_parent.childs
+                    and getattr(old_parent, "_dhw_sensor", None) is None
+                    and getattr(old_parent, "_htg_valve", None) is None
+                ):
+                    tcs._dhw = None
+                    _LOGGER.info(
+                        "RE-PARENTING: removed empty DhwZone from %s",
+                        getattr(tcs, "id", None),
+                    )
+
             try:
                 dev._apply_topology_link(parent, child_id=child_id, is_sensor=is_sensor)
             except (DeviceNotFoundError, SchemaInconsistentError) as err:
