@@ -21,8 +21,9 @@ from ramses_rf.enums import Action
 from ramses_rf.protocol.opentherm import OTB_DATA_IDS
 from ramses_rf.protocol_schema import CODES_SCHEMA
 from ramses_tx import Command, DeviceIdT, Priority
+from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.typing import PayloadT
+from ramses_tx.dtos import CommandDTO
 
 from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
@@ -264,7 +265,16 @@ def script_poll_device(gwy: Gateway, dev_id: DeviceIdT) -> list[asyncio.Task[Non
     tasks = []
 
     for code in (Code._0016, Code._1FC9):
-        cmd = Command.from_attrs(RQ, dev_id, code, PayloadT("00"))
+        cmd = LegacyCommandShim.from_dto(
+            CommandDTO(
+                verb=RQ,
+                addr1=HGI_DEV_ADDR.id,
+                addr2=dev_id,
+                addr3=NON_DEV_ADDR.id,
+                code=code,
+                payload="00",
+            )
+        )
         tasks.append(asyncio.create_task(periodic_send(gwy, cmd, count=0)))
 
     gwy._engine._tasks.extend(tasks)
@@ -293,20 +303,48 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("scan_full() invoked - expect a lot of Warnings")
 
     gwy.send_cmd(
-        Command.from_attrs(RQ, dev_id, Code._0016, PayloadT("0000")), num_repeats=3
+        LegacyCommandShim.from_dto(
+            CommandDTO(
+                verb=RQ,
+                addr1=HGI_DEV_ADDR.id,
+                addr2=dev_id,
+                addr3=NON_DEV_ADDR.id,
+                code=Code._0016,
+                payload="0000",
+            )
+        ),
+        num_repeats=3,
     )
 
     for code in sorted(CODES_SCHEMA):
         if code == Code._0005:
             for zone_type in range(20):  # known up to 18
                 gwy.send_cmd(
-                    Command.from_attrs(RQ, dev_id, code, PayloadT(f"00{zone_type:02X}"))
+                    LegacyCommandShim.from_dto(
+                        CommandDTO(
+                            verb=RQ,
+                            addr1=HGI_DEV_ADDR.id,
+                            addr2=dev_id,
+                            addr3=NON_DEV_ADDR.id,
+                            code=code,
+                            payload=f"00{zone_type:02X}",
+                        )
+                    )
                 )
 
         elif code == Code._000C:
             for zone_idx in range(16):  # also: FA-FF?
                 gwy.send_cmd(
-                    Command.from_attrs(RQ, dev_id, code, PayloadT(f"{zone_idx:02X}00"))
+                    LegacyCommandShim.from_dto(
+                        CommandDTO(
+                            verb=RQ,
+                            addr1=HGI_DEV_ADDR.id,
+                            addr2=dev_id,
+                            addr3=NON_DEV_ADDR.id,
+                            code=code,
+                            payload=f"{zone_idx:02X}00",
+                        )
+                    )
                 )
 
         elif code == Code._0016:
@@ -315,10 +353,28 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
         elif code in (Code._01D0, Code._01E9):
             for str_zone_idx in ("00", "01", "FC"):
                 gwy.send_cmd(
-                    Command.from_attrs(W_, dev_id, code, PayloadT(f"{str_zone_idx}00"))
+                    LegacyCommandShim.from_dto(
+                        CommandDTO(
+                            verb=W_,
+                            addr1=HGI_DEV_ADDR.id,
+                            addr2=dev_id,
+                            addr3=NON_DEV_ADDR.id,
+                            code=code,
+                            payload=f"{str_zone_idx}00",
+                        )
+                    )
                 )
                 gwy.send_cmd(
-                    Command.from_attrs(W_, dev_id, code, PayloadT(f"{str_zone_idx}03"))
+                    LegacyCommandShim.from_dto(
+                        CommandDTO(
+                            verb=W_,
+                            addr1=HGI_DEV_ADDR.id,
+                            addr2=dev_id,
+                            addr3=NON_DEV_ADDR.id,
+                            code=code,
+                            payload=f"{str_zone_idx}03",
+                        )
+                    )
                 )
 
         elif code == Code._0404:  # FIXME
@@ -407,14 +463,47 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
             and RQ in CODES_SCHEMA[code]
             and re.match(CODES_SCHEMA[code][RQ], "00")
         ):
-            gwy.send_cmd(Command.from_attrs(RQ, dev_id, code, PayloadT("00")))
+            gwy.send_cmd(
+                LegacyCommandShim.from_dto(
+                    CommandDTO(
+                        verb=RQ,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload="00",
+                    )
+                )
+            )
 
         else:
-            gwy.send_cmd(Command.from_attrs(RQ, dev_id, code, PayloadT("0000")))
+            gwy.send_cmd(
+                LegacyCommandShim.from_dto(
+                    CommandDTO(
+                        verb=RQ,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload="0000",
+                    )
+                )
+            )
 
     # these are possible/difficult codes
     for code in (Code._0150, Code._2389):
-        gwy.send_cmd(Command.from_attrs(RQ, dev_id, code, PayloadT("0000")))
+        gwy.send_cmd(
+            LegacyCommandShim.from_dto(
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=code,
+                    payload="0000",
+                )
+            )
+        )
 
 
 @script_decorator
@@ -433,7 +522,16 @@ async def script_scan_hard(
 
     for code in range(start_code, 0x5000):
         await gwy.async_send_cmd(
-            Command.from_attrs(RQ, dev_id, f"{code:04X}", "0000"),  # type:ignore[arg-type]
+            LegacyCommandShim.from_dto(
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=f"{code:04X}",
+                    payload="0000",
+                )
+            ),
             priority=Priority.LOW,
         )
 
@@ -458,7 +556,18 @@ async def script_scan_fan(gwy: Gateway, dev_id: DeviceIdT) -> None:
         c for k in _DEV_KLASSES_HVAC.values() for c in k if c not in OUT_CODES
     )
     for code in OLD_CODES:
-        gwy.send_cmd(Command.from_attrs(RQ, dev_id, code, PayloadT("00")))
+        gwy.send_cmd(
+            LegacyCommandShim.from_dto(
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=code,
+                    payload="00",
+                )
+            )
+        )
 
     NEW_CODES = (
         Code._0150,
@@ -487,7 +596,18 @@ async def script_scan_fan(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
     for code in NEW_CODES:
         if code not in OLD_CODES and code not in OUT_CODES:
-            gwy.send_cmd(Command.from_attrs(RQ, dev_id, code, PayloadT("00")))
+            gwy.send_cmd(
+                LegacyCommandShim.from_dto(
+                    CommandDTO(
+                        verb=RQ,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload="00",
+                    )
+                )
+            )
 
 
 @script_decorator
@@ -560,7 +680,17 @@ async def script_scan_otb_map(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
     for code, msg_id in RAMSES_TO_OPENTHERM.items():
         gwy.send_cmd(
-            Command.from_attrs(RQ, dev_id, code, PayloadT("00")), priority=Priority.LOW
+            LegacyCommandShim.from_dto(
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=code,
+                    payload="00",
+                )
+            ),
+            priority=Priority.LOW,
         )
         cmd = LegacyCommandShim.from_dto(
             build_dto(
@@ -613,7 +743,17 @@ async def script_scan_otb_ramses(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
     for c in _CODES:
         gwy.send_cmd(
-            Command.from_attrs(RQ, dev_id, c, PayloadT("00")), priority=Priority.LOW
+            LegacyCommandShim.from_dto(
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=c,
+                    payload="00",
+                )
+            ),
+            priority=Priority.LOW,
         )
 
 

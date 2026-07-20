@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 from serial import Serial, SerialException
 
 from .. import exceptions as exc
-from ..command import Command
+from ..command_legacy_shim import LegacyCommandShim
 from ..const import (
     DUTY_CYCLE_DURATION,
     MAX_DUTY_CYCLE_RATE,
@@ -223,7 +223,7 @@ class PortTransport(_FullTransport, _PortTransportAbstractor):  # type: ignore[m
             """Poll port with signatures, call connection_made() after
             first echo.
             """
-            sig = Command._puzzle()
+            sig = LegacyCommandShim._puzzle()
             self._extra[SZ_SIGNATURE] = sig.payload
 
             num_sends = 0

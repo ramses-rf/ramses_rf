@@ -46,9 +46,10 @@ from ramses_rf.schemas import (
     SZ_SENSOR,
 )
 from ramses_rf.topology import Child, Parent
-from ramses_tx import Command, Packet
+from ramses_tx import Packet
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.exceptions import ProtocolSendFailed, ProtocolTimeoutError
-from ramses_tx.typing import HeaderT, PayDictT, PayloadT
+from ramses_tx.typing import HeaderT, PayDictT
 
 from ..messages import Message
 from .schedule import InnerScheduleT, OuterScheduleT, Schedule
@@ -76,7 +77,6 @@ from ramses_rf.const import (  # noqa: F401, isort: skip
 
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command as Intent
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 
 from .helpers import send_system_intent
 
@@ -228,8 +228,10 @@ class DhwZone(ZoneSchedule):  # CS92A
             f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
             f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
         ):
+            from ramses_rf.devices.helpers import build_rq_cmd
+
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.ctl.id, Code._000C, PayloadT(payload)),
+                build_rq_cmd(self.ctl.id, Code._000C, payload),
                 60 * 60 * 24,
             )
 
@@ -581,12 +583,9 @@ class Zone(ZoneSchedule):
         # super()._setup_discovery_cmds()
 
         for dev_role in (self._ROLE_ACTUATORS, DEV_ROLE_MAP.SEN):
-            cmd = Command.from_attrs(
-                RQ,
-                self.ctl.id,
-                Code._000C,
-                PayloadT(f"{self.idx}{dev_role}"),
-            )
+            from ramses_rf.devices.helpers import build_rq_cmd
+
+            cmd = build_rq_cmd(self.ctl.id, Code._000C, f"{self.idx}{dev_role}")
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0.5)
 
         # td should be > long sync_cycle duration (> 1hr)

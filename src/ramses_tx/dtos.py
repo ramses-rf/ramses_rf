@@ -77,5 +77,5 @@ class CommandDTO:
     addr3: str
     code: str
     payload: str
-    priority: int
-    num_repeats: int
+    priority: int = 1
+    num_repeats: int = 1

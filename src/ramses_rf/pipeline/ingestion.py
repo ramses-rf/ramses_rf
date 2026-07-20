@@ -412,12 +412,11 @@ class StateProjector:
         if msg.code == Code._3EF0 and getattr(msg, "verb", "") == " I":
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev and not getattr(src_dev, "is_faked", False):
-                from ramses_tx import Command, Priority
-                from ramses_tx.const import RQ
-                from ramses_tx.typing import PayloadT
+                from ramses_rf.devices.helpers import build_rq_cmd
+                from ramses_tx import Priority
 
                 try:
-                    cmd = Command.from_attrs(RQ, msg.src.id, Code._3EF1, PayloadT("00"))
+                    cmd = build_rq_cmd(msg.src.id, Code._3EF1, "00")
                     self._gwy.send_cmd(cmd, priority=Priority.LOW)
                 except Exception as err:
                     _LOGGER.error(
