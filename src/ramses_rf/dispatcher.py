@@ -23,6 +23,7 @@ from .const import (
     I_,
     RP,
     RQ,
+    SZ_ACTIVE,
     SZ_AIR_QUALITY,
     SZ_AIR_QUALITY_BASIS,
     SZ_BYPASS_MODE,
@@ -31,6 +32,7 @@ from .const import (
     SZ_CO2_LEVEL,
     SZ_DATETIME,
     SZ_DEVICES,
+    SZ_DIFFERENTIAL,
     SZ_EXHAUST_FAN_SPEED,
     SZ_EXHAUST_FLOW,
     SZ_EXHAUST_TEMP,
@@ -45,9 +47,11 @@ from .const import (
     SZ_INDOOR_TEMP,
     SZ_LANGUAGE,
     SZ_MINUTES,
+    SZ_MODE,
     SZ_OFFER,
     SZ_OUTDOOR_HUMIDITY,
     SZ_OUTDOOR_TEMP,
+    SZ_OVERRUN,
     SZ_PHASE,
     SZ_POST_HEAT,
     SZ_PRE_HEAT,
@@ -375,6 +379,27 @@ def _resolve_logical_targets(
     ):
         targets.append(src_dev.tcs)
 
+    # 7. DHW opcodes (1260/10A0/1F41) carry no domain_id/zone_idx, so steps
+    #    4/5 miss the DhwZone.  1260 is sent by the DhwSensor (or relayed by
+    #    the Controller as an RP); 10A0/1F41 are sent by the Controller.  The
+    #    appliance_control (OTB) also emits 10A0/1260 with different semantics
+    #    (CH setpoint / null temp) and must be excluded to avoid clobbering
+    #    the DHW read-models.  Without this, the CQRS read-models
+    #    (temp_state/dhw_state) on the DhwZone are never hydrated and the
+    #    ramses_cc water_heater entity shows no current/target temperature.
+    #    See: https://github.com/ramses-rf/ramses_cc/issues/843
+    if msg.code in (Code._1260, Code._10A0, Code._1F41) and src_dev:
+        src_slug = getattr(src_dev, "_SLUG", "")
+        if msg.code == Code._1260:
+            is_dhw_src = src_slug in ("DHW", "CTL")
+        else:  # 10A0 / 1F41 are owned by the Controller
+            is_dhw_src = src_slug == "CTL"
+        if is_dhw_src:
+            tcs = getattr(src_dev, "tcs", None)
+            dhw = getattr(tcs, "dhw", None) if tcs is not None else None
+            if dhw is not None and dhw not in targets:
+                targets.append(dhw)
+
     return targets
 
 
@@ -422,8 +447,10 @@ def _update_demand_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     if SZ_HEAT_DEMAND in p:
         updates[SZ_HEAT_DEMAND] = p[SZ_HEAT_DEMAND]
     if SZ_RELAY_DEMAND in p:
-        updates[SZ_HEAT_DEMAND] = p[SZ_RELAY_DEMAND]
+        updates[SZ_RELAY_DEMAND] = p[SZ_RELAY_DEMAND]
         updates["relay_active"] = float(p[SZ_RELAY_DEMAND]) > 0.0
+    if msg.code == Code._0009 and "failsafe_enabled" in p:
+        updates["relay_failsafe"] = p["failsafe_enabled"]
 
     if not updates:
         return
@@ -642,6 +669,49 @@ def _update_hvac_state(target: Any, p: dict[str, Any], msg: Message) -> None:
         target.apply_state_update(event)
 
 
+def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
+    """Translate DHW opcodes (10A0/1260/1F41) into the frozen DhwState.
+
+    Mirrors ``pipeline.ingestion.StateProjector._update_dhw_state`` so that
+    the legacy dispatcher hydrates the DhwZone's ``dhw_state`` read-model
+    (setpoint/overrun/differential from 10A0, mode/active/until from 1F41)
+    in addition to ``temp_state``.
+    """
+    if not hasattr(target, "dhw_state"):
+        return
+
+    updates: dict[str, Any] = {}
+    if msg.code == Code._10A0:
+        if SZ_SETPOINT in p:
+            updates[SZ_SETPOINT] = p[SZ_SETPOINT]
+        if SZ_OVERRUN in p:
+            updates[SZ_OVERRUN] = p[SZ_OVERRUN]
+        if SZ_DIFFERENTIAL in p:
+            updates[SZ_DIFFERENTIAL] = p[SZ_DIFFERENTIAL]
+    elif msg.code == Code._1F41:
+        if SZ_MODE in p:
+            updates[SZ_MODE] = p[SZ_MODE]
+        if SZ_ACTIVE in p:
+            updates[SZ_ACTIVE] = p[SZ_ACTIVE]
+        if SZ_UNTIL in p:
+            updates[SZ_UNTIL] = p[SZ_UNTIL]
+
+    if not updates:
+        return
+
+    new_state = dataclasses.replace(target.dhw_state, **updates)
+    target.dhw_state = new_state
+
+    event = StateUpdatedEvent(
+        entity_id=getattr(target, "id", "unknown"),
+        state=new_state,
+        correlation_id=getattr(msg, "correlation_id", uuid.uuid4()),
+        causation_id=getattr(msg, "message_id", uuid.uuid4()),
+    )
+    if hasattr(target, "apply_state_update"):
+        target.apply_state_update(event)
+
+
 def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
     """Parallel ingestion engine to populate immutable CQRS read-models.
 
@@ -666,6 +736,7 @@ def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
             with contextlib.suppress(AttributeError, TypeError, ValueError):
                 _update_system_state(target, p, msg)
                 _update_hvac_state(target, p, msg)
+                _update_dhw_state(target, p, msg)
                 _update_temperature_state(target, p, msg)
                 _update_demand_state(target, p, msg)
                 _update_faultlog_state(target, p, msg)
