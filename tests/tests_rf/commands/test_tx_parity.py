@@ -1016,6 +1016,7 @@ def test_build_put_actuator_cycle(snapshot: Any) -> None:
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
+@patch("ramses_tx.version.VERSION", "0.0.0")
 @patch("ramses_rf.commands.builders.system.timestamp", return_value=1700000000.0)
 def test_build_send_puzzle(mock_timestamp: Any, snapshot: Any) -> None:
     intent = Intent(
