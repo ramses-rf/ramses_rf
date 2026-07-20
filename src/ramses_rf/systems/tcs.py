@@ -1204,6 +1204,32 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             self._dhw._handle_msg(msg)
         return self._dhw
 
+    def _remove_dhw_zone(self) -> bool:
+        """Remove the DhwZone from this system if it is empty.
+
+        A DhwZone is considered empty when it has no sensor, no hotwater
+        valve, no heating valve, and no remaining children.  This is used
+        during re-parenting (e.g. when a BDR is promoted from
+        ``hotwater_valve`` to ``appliance_control``) to clean up a
+        spurious DhwZone that was created by a lower-confidence binding.
+
+        :returns: ``True`` if the DhwZone was removed, ``False`` if it
+            was retained because it still has children.
+        :rtype: bool
+        """
+        if not self._dhw:
+            return False
+
+        if (
+            self._dhw.sensor is None
+            and self._dhw.hotwater_valve is None
+            and self._dhw.heating_valve is None
+            and not self._dhw.childs
+        ):
+            self._dhw = None  # type: ignore[assignment]
+            return True
+        return False
+
     @property
     def dhw(self) -> DhwZone | None:
         """Return the DHW zone instance."""

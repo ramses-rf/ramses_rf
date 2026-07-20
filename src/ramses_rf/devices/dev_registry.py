@@ -543,53 +543,7 @@ class DeviceRegistry:
                     _LOGGER.warning(f"The device is not fakeable: {dev}")
 
         if parent or child_id:
-            # Re-parenting: allow a BDR to be promoted from hotwater_valve
-            # (FA, DhwZone) to appliance_control (FC, System) when a
-            # higher-confidence binding (000C APP, or 3B00/3EF0 eavesdrop)
-            # arrives after the 000C HTG binding incorrectly placed it as
-            # hotwater_valve.  This handles issue 834: systems without DHW
-            # where the controller's binding table has the BDR in the HTG
-            # slot but it is actually the appliance_control.
-            #
-            # Only re-parent when the DhwZone has no DHW sensor — if a
-            # sensor exists, the system genuinely has DHW and the BDR may
-            # truly be the hotwater_valve.
-            old_parent = dev._parent if dev else None
-            if (
-                dev
-                and parent
-                and child_id == FC
-                and old_parent is not None
-                and old_parent is not parent
-                and type(old_parent).__name__ == "DhwZone"
-                and getattr(dev, "_child_id", None) == FA
-                and getattr(old_parent, "_dhw_sensor", None) is None
-            ):
-                _LOGGER.info(
-                    "RE-PARENTING: %s from DhwZone (hotwater_valve) to "
-                    "System (appliance_control)",
-                    device_id,
-                )
-                # Detach from DhwZone
-                old_parent._dhw_valve = None
-                if dev in old_parent.childs:
-                    old_parent.childs.remove(dev)
-                old_parent.child_by_id.pop(dev.id, None)
-                dev._parent = None
-                dev._child_id = None
-                # Clean up the DhwZone if it has no children left
-                tcs = getattr(old_parent, "tcs", None)
-                if (
-                    tcs
-                    and not old_parent.childs
-                    and getattr(old_parent, "_dhw_sensor", None) is None
-                    and getattr(old_parent, "_htg_valve", None) is None
-                ):
-                    tcs._dhw = None
-                    _LOGGER.info(
-                        "RE-PARENTING: removed empty DhwZone from %s",
-                        getattr(tcs, "id", None),
-                    )
+            self._maybe_reparent_bdr(dev, parent, child_id)
 
             try:
                 dev._apply_topology_link(parent, child_id=child_id, is_sensor=is_sensor)
@@ -601,6 +555,69 @@ class DeviceRegistry:
                 raise
 
         return dev
+
+    @staticmethod
+    def _maybe_reparent_bdr(
+        dev: Device | None,
+        parent: Parent | None,
+        child_id: str | None,
+    ) -> None:
+        """Re-parent a BDR from hotwater_valve (FA) to appliance_control (FC).
+
+        When the controller's 000C binding table has a BDR in the HTG slot
+        (domain FA = hotwater_valve) but the BDR is actually the
+        appliance_control (domain FC), the 000C HTG binding wins the race
+        and incorrectly binds the BDR as hotwater_valve to a
+        spuriously-created DhwZone.  This method allows re-parenting the
+        BDR from DhwZone.hotwater_valve (FA) to System.appliance_control
+        (FC) when a higher-confidence binding arrives later.
+
+        Re-parenting is suppressed when the DhwZone has a DHW sensor — if
+        a sensor exists, the system genuinely has DHW and the BDR may
+        truly be the hotwater_valve.
+
+        See: https://github.com/ramses-rf/ramses_cc/issues/834
+
+        :param dev: The device being bound (expected to be a BDR).
+        :param parent: The new parent to bind to (expected to be the TCS).
+        :param child_id: The new child_id (must be FC for re-parenting).
+        """
+        if not dev or not parent or child_id != FC:
+            return
+
+        old_parent = dev._parent
+        if old_parent is None or old_parent is parent:
+            return
+
+        # Deferred import to avoid a circular dependency (zones.py imports
+        # from ramses_rf.devices, which imports this module)
+        from ramses_rf.systems.zones import DhwZone
+
+        if not isinstance(old_parent, DhwZone):
+            return
+
+        if getattr(dev, "_child_id", None) != FA:
+            return
+
+        if old_parent.sensor is not None:
+            return  # system genuinely has DHW; BDR may truly be hotwater_valve
+
+        _LOGGER.info(
+            "RE-PARENTING: %s from DhwZone (hotwater_valve) to "
+            "System (appliance_control)",
+            dev.id,
+        )
+
+        # Detach from the DhwZone (encapsulated referential integrity)
+        old_parent._detach_child(dev)
+
+        # Clean up the DhwZone if it is now empty
+        tcs = getattr(old_parent, "tcs", None)
+        if tcs is not None and tcs._remove_dhw_zone():
+            _LOGGER.info(
+                "RE-PARENTING: removed empty DhwZone from %s",
+                getattr(tcs, "id", None),
+            )
 
     async def fake_device(
         self,
