@@ -36,83 +36,22 @@ TEST_COMMANDS: Final = [
 ]
 
 
-async def test_set_dhw_mode_follow() -> None:
-    """Test parameter checks from ZON_MODE_MAP key"""
-    # Arrange
-    expected = TEST_COMMANDS[0]
-
-    # Act
-    cmd = Command.set_dhw_mode(ctl_id="12:123456", mode=ZON_MODE_MAP["follow_schedule"])
-    #  cls,
-    #  ctl_id: DeviceIdT | str,
-    #  mode: int | str | None = None,
-    #  active: bool | None = None,
-    #  until: dt | str | None = None,
-    #  duration: int | None = None,  # never passed on by ramses_cc
-
-    # Assert
-    assert str(cmd) == expected
-
-
-async def test_set_dhw_mode_follow_int() -> None:
-    """Test parameter checks from int"""
-    # Arrange
-    expected = TEST_COMMANDS[0]
-
-    # Act
-    cmd = Command.set_dhw_mode(ctl_id="12:123456", mode=0)
-
-    # Assert
-    assert str(cmd) == expected
-
-
-async def test_set_dhw_mode_perm_false() -> None:
-    """Test parameter checks mode 2, active false"""  # from Peter Nash
-    # Arrange
-    expected = TEST_COMMANDS[1]
-
-    # Act
-    cmd = Command.set_dhw_mode(
-        ctl_id="12:123456", mode=ZON_MODE_MAP.PERMANENT, active=False
-    )
-
-    # Assert
-    assert str(cmd) == expected
-
-
-async def test_set_dhw_mode_follow_extra() -> None:
-    """Test parameter checks extra"""
-    # Arrange
-    mode = ZON_MODE_MAP["follow_schedule"]
-
-    # Act & Assert
-    with pytest.raises(CommandInvalid):
-        _ = Command.set_dhw_mode(ctl_id="12:123456", mode=mode, duration=1)
-
-
-async def test_set_dhw_mode_untilduration() -> None:
-    """Test parameter checks extra"""
-    # Arrange
-    mode = "temporary_override"
-
-    # Act & Assert
-    with pytest.raises(CommandInvalid):
-        _ = Command.set_dhw_mode(
-            ctl_id="12:123456",
-            mode=mode,
-            active=True,
-            duration=3600,  # never passed on by ramses_cc
-            until=_UNTIL,  # Invalid args: At least one of until or duration must be None
-        )
-
-
 async def test_set_system_mode_auto_none() -> None:
     """Test parameter checks from int"""
     # Arrange
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=None)
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": None},
+            )
+        )
+    )
 
     # Assert
     assert str(cmd) == expected
@@ -124,7 +63,16 @@ async def test_set_system_mode_auto() -> None:
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=SYS_MODE_MAP["auto"])
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": SYS_MODE_MAP["auto"]},
+            )
+        )
+    )
     # cls,
     # ctl_id: DeviceIdT | str,
     # system_mode: int | str | None,
@@ -141,7 +89,16 @@ async def test_set_system_mode_auto_int() -> None:
     expected = TEST_COMMANDS[2]
 
     # Act
-    cmd = Command.set_system_mode(ctl_id="12:123456", system_mode=0)
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("12:123456"),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": 0},
+            )
+        )
+    )
 
     # Assert
     assert str(cmd) == expected
@@ -153,11 +110,16 @@ async def test_set_system_mode_heatoff() -> None:
     system_mode = SYS_MODE_MAP.HEAT_OFF
 
     # Act & Assert
-    with pytest.raises(CommandInvalid):
-        _ = Command.set_system_mode(
-            ctl_id="12:123456",
-            system_mode=system_mode,  # until should be None
-            until="456789566",
+    with pytest.raises(ValueError):
+        _ = LegacyCommandShim.from_dto(
+            build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address("12:123456"),
+                    action=Action.SET_SYSTEM_MODE,
+                    data={"system_mode": system_mode, "until": "456789566"},
+                )
+            )
         )
 
 

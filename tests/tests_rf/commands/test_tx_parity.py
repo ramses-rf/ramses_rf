@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -8,7 +9,18 @@ from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command, Command as Intent
 from ramses_rf.enums import Action
 from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.const import ZON_MODE_MAP
+from ramses_tx.const import ZON_MODE_MAP, FaultDeviceClass, FaultState, FaultType
+
+
+def test_build_get_schedule_version(snapshot: Any) -> None:
+    intent = Command(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_SCHEDULE_VERSION,
+        data={},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
 
 
 def test_build_get_dhw_params(snapshot: Any) -> None:
@@ -798,4 +810,260 @@ def test_build_set_zone_mode_parity(
 
     dto = build_dto(intent)
 
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_weather_temp(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("17:000730"),
+        dst=Address("17:000730"),
+        action=Action.PUT_WEATHER_TEMP,
+        data={"temperature": 12.5},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_relay_demand(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("13:111111"),
+        action=Action.GET_RELAY_DEMAND,
+        data={"zone_idx": 0},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_system_language(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_SYSTEM_LANGUAGE,
+        data={},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_mix_valve_params(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_MIX_VALVE_PARAMS,
+        data={"zone_idx": 0},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_set_mix_valve_params(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_MIX_VALVE_PARAMS,
+        data={
+            "zone_idx": 0,
+            "max_flow_setpoint": 55,
+            "min_flow_setpoint": 15,
+            "valve_run_time": 150,
+            "pump_run_time": 15,
+        },
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_tpi_params(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_TPI_PARAMS,
+        data={"domain_id": "00"},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_set_tpi_params(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_TPI_PARAMS,
+        data={
+            "domain_id": "00",
+            "cycle_rate": 3,
+            "min_on_time": 5,
+            "min_off_time": 5,
+            "proportional_band_width": 1.5,
+        },
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_bind_offer(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("13:111111"),
+        dst=Address("63:262143"),
+        action=Action.PUT_BIND,
+        data={"verb": " I", "codes": ["3EF0"], "oem_code": "01"},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_bind_accept(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("01:111111"),
+        dst=Address("13:111111"),
+        action=Action.PUT_BIND,
+        data={"verb": " W", "codes": ["3EF0"]},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_bind_confirm(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("13:111111"),
+        dst=Address("01:111111"),
+        action=Action.PUT_BIND,
+        data={"verb": " I", "codes": ["3EF0"]},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_system_mode(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_SYSTEM_MODE,
+        data={},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_set_system_mode(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_SYSTEM_MODE,
+        data={"system_mode": 1},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_presence_detected(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("18:000730"),
+        action=Action.PUT_PRESENCE_DETECTED,
+        data={"presence_detected": True},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_get_system_time(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.GET_SYSTEM_TIME,
+        data={},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_set_system_time(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_SYSTEM_TIME,
+        data={"datetime": dt(2026, 7, 18, 12, 0)},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_actuator_state(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("13:111111"),
+        dst=Address("13:111111"),
+        action=Action.PUT_ACTUATOR_STATE,
+        data={"modulation_level": 0.5},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_actuator_cycle(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("13:111111"),
+        dst=Address("01:111111"),
+        action=Action.PUT_ACTUATOR_CYCLE,
+        data={
+            "modulation_level": 0.5,
+            "actuator_countdown": 200,
+            "cycle_countdown": 100,
+        },
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+@patch("ramses_rf.commands.builders.system.timestamp", return_value=1700000000.0)
+def test_build_send_puzzle(mock_timestamp: Any, snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("63:262143"),
+        action=Action.SEND_PUZZLE,
+        data={"msg_type": "10"},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_faultlog_entry(snapshot: Any) -> None:
+
+    intent = Intent(
+        src=Address("01:111111"),
+        dst=Address("18:000730"),
+        action=Action.PUT_FAULTLOG_ENTRY,
+        data={
+            "fault_state": FaultState.FAULT,
+            "fault_type": FaultType.COMMS_FAULT,
+            "device_class": FaultDeviceClass.CONTROLLER,
+            "device_id": "01:111111",
+            "log_idx": 1,
+            "timestamp": dt(2026, 7, 18, 12, 0),
+        },
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_sensor_temp(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("04:111111"),
+        dst=Address("04:111111"),
+        action=Action.PUT_SENSOR_TEMP,
+        data={"temperature": 21.5},
+    )
+    dto = build_dto(intent)
+    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+
+
+def test_build_put_outdoor_temp(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("17:111111"),
+        dst=Address("17:111111"),
+        action=Action.PUT_OUTDOOR_TEMP,
+        data={"temperature": 15.0},
+    )
+    dto = build_dto(intent)
     assert str(LegacyCommandShim.from_dto(dto)) == snapshot

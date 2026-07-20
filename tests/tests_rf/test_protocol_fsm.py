@@ -45,7 +45,21 @@ ASSERT_CYCLE_TIME = 0.0005  # max_cycles_per_assert = max_sleep / ASSERT_CYCLE_T
 DEFAULT_MAX_SLEEP = 0.1
 
 
-# TODO: better handling than AttributeError for this...
+def put_sensor_temp(dev_id: str, temperature: float) -> Command:
+    return LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=Address(dev_id),
+                dst=Address(dev_id),
+                action=Action.PUT_SENSOR_TEMP,
+                data={"temperature": temperature},
+            )
+        )
+    )
+
+
+#
+# TODO: add tests for send_cmd() with QoSan AttributeError for this...
 # Command("RQ --- 18:111111 01:222222 --:------ 12B0 003 07")
 
 II_CMD_STR_0 = " I --- 01:006056 --:------ 01:006056 1F09 003 0005C8"
@@ -251,14 +265,14 @@ async def _test_flow_401(protocol: PortProtocol) -> None:
     tasks = dict()
 
     for i in numbers:
-        cmd = Command.put_sensor_temp("03:123456", i)
+        cmd = put_sensor_temp("03:123456", i)
         tasks[i] = protocol._loop.create_task(protocol._send_cmd(cmd, qos=qos))
 
     assert await asyncio.gather(*tasks.values())
 
     for i in numbers:
         pkt = tasks[i].result()
-        assert pkt == Command.put_sensor_temp("03:123456", i)
+        assert pkt == put_sensor_temp("03:123456", i)
 
 
 async def _test_flow_402(protocol: PortProtocol) -> None:
@@ -268,14 +282,14 @@ async def _test_flow_402(protocol: PortProtocol) -> None:
     tasks = dict()
 
     for i in numbers:
-        cmd = Command.put_sensor_temp("03:123456", i)
+        cmd = put_sensor_temp("03:123456", i)
         tasks[i] = protocol._loop.create_task(protocol._send_cmd(cmd, qos=qos))
 
     random.shuffle(numbers)
 
     for i in numbers:
         pkt = await tasks[i]
-        assert pkt == Command.put_sensor_temp("03:123456", i)
+        assert pkt == put_sensor_temp("03:123456", i)
 
 
 async def _test_flow_qos_helper(
@@ -320,59 +334,113 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
     #
     # ### Simple test for an I (does not expect any reply)...
 
-    cmd = Command.put_sensor_temp("03:000111", 19.5)
+    cmd = put_sensor_temp("03:000111", 19.5)
     pkt = await protocol._send_cmd(cmd)  # qos == QosParams()
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.put_sensor_temp("03:000222", 19.5)
+    cmd = put_sensor_temp("03:000222", 19.5)
     pkt = await protocol._send_cmd(cmd, qos=None)  # qos == QosParams()
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.put_sensor_temp("03:000333", 19.5)
+    cmd = put_sensor_temp("03:000333", 19.5)
     pkt = await protocol._send_cmd(cmd, qos=QosParams())
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.put_sensor_temp("03:000444", 19.5)
+    cmd = put_sensor_temp("03:000444", 19.5)
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=None))
     assert pkt == cmd, "should be echo as there is no wait_for_reply"
 
-    cmd = Command.put_sensor_temp("03:000555", 19.5)
+    cmd = put_sensor_temp("03:000555", 19.5)
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
     assert pkt == cmd, "should be echo as there is no wait_for_reply"
 
-    cmd = Command.put_sensor_temp("03:000666", 19.5)
+    cmd = put_sensor_temp("03:000666", 19.5)
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=True))
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
     # # ### Simple test for an RQ (expects an RP)...
 
-    cmd = Command.get_system_time("01:000111")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000111"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd)
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000222")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000222"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=None)
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000333")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000333"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams())
     assert pkt == cmd, "Should be echo as there's no reply to wait for"
 
-    cmd = Command.get_system_time("01:000444")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000444"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=None))
     assert pkt == cmd, "Should be echo as there is no wait_for_reply"
 
-    cmd = Command.get_system_time("01:000555")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000555"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
     assert pkt == cmd, "Should be echo as there is no wait_for_reply"
 
-    cmd = Command.get_system_time("01:000666")
+    cmd = LegacyCommandShim.from_dto(
+        build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address("01:000666"),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
+            )
+        )
+    )
     coro = protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=True, timeout=0.05))
     await _test_flow_qos_helper(coro)
 
     # # ### Simple test for an I (does not expect any reply)...
 
-    cmd = Command.put_sensor_temp("03:000999", 19.5)
+    cmd = put_sensor_temp("03:000999", 19.5)
     pkt = await protocol._send_cmd(cmd)
     assert pkt == cmd
 

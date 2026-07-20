@@ -385,13 +385,13 @@ CODES_SCHEMA: dict[Code, CodeSchemaEntry] = {  # rf_unknown
     },  # TODO: This could be an array
     Code._2209: {  # setpoint_bounds (legacy/DT4R variant)
         "name": "setpoint_bounds_variant",
-        " I": r"^(0[0-9A-F][0-9A-F]{8}0[12]){1,4}(0[12]03)?$",
-        " W": r"^(0[0-9A-F][0-9A-F]{8}0[12])$",
+        " I": r"^(0[0-9A-F][0-9A-F]{8}0[012]){1,4}(0[012]03)?$",
+        " W": r"^(0[0-9A-F][0-9A-F]{8}0[012])$",
     },
     Code._22C9: {  # setpoint_bounds (was: ufh_setpoint)
         "name": "setpoint_bounds",
-        " I": r"^(0[0-9A-F][0-9A-F]{8}0[12]){1,4}(0[12]03)?$",  # (0[12]03)? only if len(array) == 1
-        " W": r"^(0[0-9A-F][0-9A-F]{8}0[12])$",  # never an array
+        " I": r"^(0[0-9A-F][0-9A-F]{8}0[012]){1,4}(0[012]03)?$",  # (0[012]03)? only if len(array) == 1
+        " W": r"^(0[0-9A-F][0-9A-F]{8}0[012])$",  # never an array
     },
     Code._22D0: {  # unknown_22d0, Spider thermostat, HVAC system switch?
         "name": "message_22d0",
@@ -878,7 +878,7 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[VerbT, Any]]] = {
         Code._12C0: {I_: {}},
         Code._1F09: {I_: {}},
         Code._1FC9: {I_: {}},
-        Code._22C9: {W_: {}},  # DT4R
+        Code._22C9: {I_: {}, W_: {}},  # DT4R, Spider (I_ for Spider broadcasts)
         Code._22D0: {W_: {}},  # Spider master THM
         Code._2309: {I_: {}, RQ: {}, W_: {}},
         Code._2349: {RQ: {}, W_: {}},
