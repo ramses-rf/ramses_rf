@@ -571,7 +571,11 @@ class TopologyBuilder:
                 action=TopologyAction.BIND_DEVICE,
                 parent_id=msg.src.id,  # Assume src is the Controller
                 child_id=app_cntrl_id,
-                metadata={"domain_id": "FC", "device_role": "appliance_control"},
+                metadata={
+                    "domain_id": "FC",
+                    "child_id": "FC",
+                    "device_role": "appliance_control",
+                },
                 causation="Rule_Legacy_Appliance_Eavesdrop",
             )
             self._emit(event)

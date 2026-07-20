@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ramses_rf.address import Address, is_valid_dev_id
 from ramses_rf.config import GatewayConfig
-from ramses_rf.const import SZ_DEVICES
+from ramses_rf.const import FA, FC, SZ_DEVICES
 from ramses_rf.devices.dev_base import DeviceHeat, DeviceHvac, Fakeable
 from ramses_rf.enums import TopologyAction
 from ramses_rf.exceptions import (
@@ -196,6 +196,11 @@ class DeviceRegistry:
                 # 1. FORWARD BINDING (Delegating down to legacy graph mutation
                 # to allow the Old Brain to hydrate itself)
                 child_id_raw = metadata.get("child_id")
+                # Fallback: if domain_id is FC (appliance_control) but
+                # child_id was not explicitly set in the metadata, use FC
+                # so the binding targets the System's appliance_control slot.
+                if child_id_raw is None and metadata.get("domain_id") == FC:
+                    child_id_raw = FC
                 child_dev = self.get_device(
                     event.child_id,
                     parent=cast("Parent", parent),
@@ -538,6 +543,8 @@ class DeviceRegistry:
                     _LOGGER.warning(f"The device is not fakeable: {dev}")
 
         if parent or child_id:
+            self._maybe_reparent_bdr(dev, parent, child_id)
+
             try:
                 dev._apply_topology_link(parent, child_id=child_id, is_sensor=is_sensor)
             except (DeviceNotFoundError, SchemaInconsistentError) as err:
@@ -548,6 +555,69 @@ class DeviceRegistry:
                 raise
 
         return dev
+
+    @staticmethod
+    def _maybe_reparent_bdr(
+        dev: Device | None,
+        parent: Parent | None,
+        child_id: str | None,
+    ) -> None:
+        """Re-parent a BDR from hotwater_valve (FA) to appliance_control (FC).
+
+        When the controller's 000C binding table has a BDR in the HTG slot
+        (domain FA = hotwater_valve) but the BDR is actually the
+        appliance_control (domain FC), the 000C HTG binding wins the race
+        and incorrectly binds the BDR as hotwater_valve to a
+        spuriously-created DhwZone.  This method allows re-parenting the
+        BDR from DhwZone.hotwater_valve (FA) to System.appliance_control
+        (FC) when a higher-confidence binding arrives later.
+
+        Re-parenting is suppressed when the DhwZone has a DHW sensor — if
+        a sensor exists, the system genuinely has DHW and the BDR may
+        truly be the hotwater_valve.
+
+        See: https://github.com/ramses-rf/ramses_cc/issues/834
+
+        :param dev: The device being bound (expected to be a BDR).
+        :param parent: The new parent to bind to (expected to be the TCS).
+        :param child_id: The new child_id (must be FC for re-parenting).
+        """
+        if not dev or not parent or child_id != FC:
+            return
+
+        old_parent = dev._parent
+        if old_parent is None or old_parent is parent:
+            return
+
+        # Deferred import to avoid a circular dependency (zones.py imports
+        # from ramses_rf.devices, which imports this module)
+        from ramses_rf.systems.zones import DhwZone
+
+        if not isinstance(old_parent, DhwZone):
+            return
+
+        if getattr(dev, "_child_id", None) != FA:
+            return
+
+        if old_parent.sensor is not None:
+            return  # system genuinely has DHW; BDR may truly be hotwater_valve
+
+        _LOGGER.info(
+            "RE-PARENTING: %s from DhwZone (hotwater_valve) to "
+            "System (appliance_control)",
+            dev.id,
+        )
+
+        # Detach from the DhwZone (encapsulated referential integrity)
+        old_parent._detach_child(dev)
+
+        # Clean up the DhwZone if it is now empty
+        tcs = getattr(old_parent, "tcs", None)
+        if tcs is not None and tcs._remove_dhw_zone():
+            _LOGGER.info(
+                "RE-PARENTING: removed empty DhwZone from %s",
+                getattr(tcs, "id", None),
+            )
 
     async def fake_device(
         self,

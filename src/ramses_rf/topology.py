@@ -182,6 +182,48 @@ class Parent:
         self.childs.append(child)
         self.child_by_id[child.id] = child
 
+    def _detach_child(self, child: Child) -> None:
+        """Detach a child device from this Parent, maintaining referential integrity.
+
+        This is the inverse of :meth:`_add_child`. It clears the slot the
+        child occupied (sensor, valve, actuator, circuit, or appliance
+        control), removes the child from the ``childs`` list and
+        ``child_by_id`` registry, and clears the child's back-references.
+
+        :param child: The child entity to detach.
+        :type child: Child
+        """
+        # Clear the slot based on identity (not child_id, which may have
+        # been mutated since the child was added)
+        child_id_ = cast("DeviceIdT", getattr(child, "id", None))
+
+        if getattr(self, "_dhw_sensor", None) is child:
+            self._dhw_sensor = None
+        elif getattr(self, "_dhw_valve", None) is child:
+            self._dhw_valve = None
+        elif getattr(self, "_htg_valve", None) is child:
+            self._htg_valve = None
+        elif getattr(self, "_app_cntrl", None) is child:
+            self._app_cntrl = None
+        elif hasattr(self, SZ_SENSOR) and getattr(self, "_sensor", None) is child:
+            self._sensor = None
+        elif hasattr(self, SZ_ACTUATORS) and child in getattr(self, "actuators", []):
+            self.actuators.remove(child)
+            self.actuator_by_id.pop(child_id_, None)
+        elif hasattr(self, SZ_CIRCUITS) and child_id_ in getattr(
+            self, "circuit_by_id", {}
+        ):
+            self.circuit_by_id.pop(child_id_, None)
+
+        # Remove from child registries
+        if child in self.childs:
+            self.childs.remove(child)
+        self.child_by_id.pop(child_id_, None)
+
+        # Clear the child's back-references
+        child._parent = None
+        child._child_id = None
+
 
 class Child:
     """A Device can be the Child of a Parent (System, Zone, or UFH Controller).
