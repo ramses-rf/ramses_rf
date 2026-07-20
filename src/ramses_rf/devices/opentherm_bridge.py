@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta as td
 from typing import Any, Final, Literal
 
-from ramses_rf.const import FC, HEARTBEAT_TIMEOUT_OTB, RQ, Code, DevType
+from ramses_rf.const import FC, HEARTBEAT_TIMEOUT_OTB, Code, DevType
 from ramses_rf.models import DemandState, DeviceTraits, OpenThermState, TemperatureState
 from ramses_tx import Command, Priority
 from ramses_tx.const import (
@@ -48,7 +48,7 @@ from ramses_tx.const import (
     SZ_SUMMER_MODE,
     MsgId,
 )
-from ramses_tx.typing import PayDictT, PayloadT
+from ramses_tx.typing import PayDictT
 
 from ..protocol.opentherm import (
     PARAMS_DATA_IDS,
@@ -58,6 +58,7 @@ from ..protocol.opentherm import (
     parity,
 )
 from .heat_actuators import Actuator, HeatDemand
+from .helpers import build_rq_cmd
 
 QOS_LOW = {SZ_PRIORITY: Priority.LOW}  # FIXME:  deprecate QoS in kwargs
 QOS_MID = {SZ_PRIORITY: Priority.HIGH}  # FIXME: deprecate QoS in kwargs
@@ -143,7 +144,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
             payload = (
                 f"0080{msg_id}0000" if parity(int(msg_id, 16)) else f"0000{msg_id}0000"
             )
-            return Command.from_attrs(RQ, self.id, Code._3220, PayloadT(payload))
+            return build_rq_cmd(self.id, Code._3220, payload)
 
         def which_cmd(
             use_native_ot: Literal["always", "prefer", "avoid", "never"] | str | None,
@@ -154,9 +155,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
             if use_native_ot in ("always", "prefer"):
                 return _ot_cmd(msg_id)
             if msg_id in self.OT_TO_RAMSES:  # is: in ("avoid", "never")
-                return Command.from_attrs(
-                    RQ, self.id, self.OT_TO_RAMSES[msg_id], PayloadT("00")
-                )
+                return build_rq_cmd(self.id, self.OT_TO_RAMSES[msg_id])
             if use_native_ot == "avoid":
                 return _ot_cmd(msg_id)
             return None  # use_native_ot == "never"
@@ -168,11 +167,9 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
             self.discovery.add_cmd(_ot_cmd(MsgId._00), 60)
 
         if getattr(self._gwy.config, "use_native_ot", "avoid") != "always":
-            self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, Code._3EF0, PayloadT("00")), 60
-            )
+            self.discovery.add_cmd(build_rq_cmd(self.id, Code._3EF0), 60)
             self.discovery.add_cmd(  # NOTE: this code is a WIP
-                Command.from_attrs(RQ, self.id, Code._2401, PayloadT("00")), 60
+                build_rq_cmd(self.id, Code._2401), 60
             )
 
         for data_id in SCHEMA_DATA_IDS:  # From OT v2.2: version numbers
@@ -201,9 +198,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
                 Code._3221,  # R8810A/20A
                 Code._3223,  # R8810A/20A
             ):
-                self.discovery.add_cmd(
-                    Command.from_attrs(RQ, self.id, code, PayloadT("00")), 60
-                )
+                self.discovery.add_cmd(build_rq_cmd(self.id, code), 60)
 
         if _DBG_EXTRA_OTB_DISCOVERY:  # TODO: these are WIP, appear FIXED in payload
             for code in (
@@ -215,9 +210,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
                 Code._2410,  # payload always "000000000000000000000000010000000100000C"
                 Code._2420,  # payload always "0000001000000...
             ):  # TODO: to test against BDR91T
-                self.discovery.add_cmd(
-                    Command.from_attrs(RQ, self.id, code, PayloadT("00")), 300
-                )
+                self.discovery.add_cmd(build_rq_cmd(self.id, code), 300)
 
     async def boiler_output_temp(self) -> float | None:  # 3220|19, or 3200
         return self.opentherm_state.temperatures.boiler_output

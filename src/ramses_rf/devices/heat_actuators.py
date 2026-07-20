@@ -12,18 +12,18 @@ from ramses_rf.const import (
     F9,
     FA,
     FC,
-    RQ,
     SZ_HEAT_DEMAND,
     SZ_RELAY_DEMAND,
     Code,
     DevType,
 )
+from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits
-from ramses_tx import Command, Priority
+from ramses_tx import Priority
 from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_PRIORITY
-from ramses_tx.typing import PayDictT, PayloadT
+from ramses_tx.typing import PayDictT
 
 from .dev_base import DeviceHeat
 
@@ -221,7 +221,7 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
             6 * 3600,
         )  # params
         self.discovery.add_cmd(
-            Command.from_attrs(RQ, self.id, Code._3EF1, PayloadT("00")),
+            build_rq_cmd(self.id, Code._3EF1, "00"),
             60 if getattr(self, "_child_id", None) in (F9, FA, FC) else 300,
         )  # status
 

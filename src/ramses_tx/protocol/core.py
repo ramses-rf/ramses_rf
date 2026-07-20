@@ -12,6 +12,7 @@ import logging
 from typing import Final, TypeAlias
 
 from ..command import Command
+from ..command_legacy_shim import LegacyCommandShim
 from ..const import (
     DEFAULT_DISABLE_QOS,
     DEFAULT_GAP_DURATION,
@@ -217,7 +218,9 @@ class PortProtocol(_DeviceIdFilterMixin):
         else:
             _LOGGER.info(msg)
 
-        await self._send_cmd(Command._puzzle(msg_type="11", message=cmd.tx_header))
+        await self._send_cmd(
+            LegacyCommandShim._puzzle(msg_type="11", message=cmd.tx_header)
+        )
 
     async def _send_cmd(
         self,

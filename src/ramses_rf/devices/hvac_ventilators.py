@@ -12,7 +12,6 @@ from ramses_rf.address import Address
 from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import (
     HEARTBEAT_TIMEOUT_FILTER,
-    RQ,
     SZ_AIR_QUALITY,
     SZ_AIR_QUALITY_BASIS,
     SZ_BYPASS_MODE,
@@ -45,10 +44,11 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
+from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits, HvacState
-from ramses_tx import Command, Packet, Priority
-from ramses_tx.typing import DeviceIdT, PayloadT
+from ramses_tx import Packet, Priority
+from ramses_tx.typing import DeviceIdT
 
 from .dev_base import DeviceHvac
 
@@ -98,7 +98,7 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
         # Note: not all FANs will respond to RQ 10D0 ( they're orphans_hvac in Schema)
         # Remove once we have discovery_service?
         self.discovery.add_cmd(
-            Command.from_attrs(RQ, self.id, Code._10D0, PayloadT("00")),
+            build_rq_cmd(self.id, Code._10D0, "00"),
             60 * 60 * 24,
             delay=30,
         )
@@ -430,7 +430,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
         # RP --- 32:155617 18:005904 --:------ 22F1 003 000207
         self.discovery.add_cmd(
-            Command.from_attrs(RQ, self.id, Code._22F1, PayloadT("00")),
+            build_rq_cmd(self.id, Code._22F1, "00"),
             60 * 60 * 24,
             delay=15,
         )  # to learn scheme: orcon/itho/other (04/07/0?)
@@ -440,7 +440,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         # the appropriate parameter and also set the supports_2411 flag.
         _LOGGER.debug("Adding single discovery command for all 2411 parameters")
         self.discovery.add_cmd(
-            Command.from_attrs(RQ, self.id, Code._2411, PayloadT("00003F")),
+            build_rq_cmd(self.id, Code._2411, "00003F"),
             interval=60 * 60 * 24,  # Check daily
             delay=40,  # Initial delay before first discovery
         )
@@ -456,14 +456,14 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             Code._22F8,  # Air quality base
         ):
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, code, PayloadT("00")),
+                build_rq_cmd(self.id, code, "00"),
                 60 * 30,
                 delay=15,
             )
 
         for code in (Code._313E, Code._3222):
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, code, PayloadT("00")),
+                build_rq_cmd(self.id, code, "00"),
                 60 * 30,
                 delay=30,
             )

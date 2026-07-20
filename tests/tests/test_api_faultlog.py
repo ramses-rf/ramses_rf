@@ -7,8 +7,10 @@ from typing import Any
 
 from ramses_rf import Address, Command, Message, Packet
 from ramses_rf.systems.faultlog import FaultLog, FaultLogEntry
-from ramses_tx.address import HGI_DEVICE_ID
+from ramses_tx.address import HGI_DEVICE_ID, NON_DEV_ADDR
+from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_LOG_ENTRY, FaultDeviceClass, FaultState, FaultType
+from ramses_tx.dtos import CommandDTO
 
 from ramses_tx.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
@@ -167,11 +169,15 @@ def _proc_log_line(log_line: str) -> None:
 
 def _proc_null_fault_entry(fault_log: FaultLog, _log_idx: LogIdxT = "00") -> None:
     """Return a 0418 packet with no entry."""
-    cmd = Command.from_attrs(
-        I_,
-        CTL_ID,
-        Code._0418,
-        f"0000{_log_idx}B0000000000000000000007FFFFF7000000000",
+    cmd = LegacyCommandShim.from_dto(
+        CommandDTO(
+            verb=I_,
+            addr1=HGI_DEVICE_ID,
+            addr2=NON_DEV_ADDR.id,
+            addr3=CTL_ID,
+            code=Code._0418,
+            payload=f"0000{_log_idx}B0000000000000000000007FFFFF7000000000",
+        )
     )
     fault_log.handle_msg(Message._from_cmd(cmd))
 
