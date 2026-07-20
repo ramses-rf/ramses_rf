@@ -82,6 +82,7 @@ from .protocol.ramses import (
     CODES_OF_HVAC_DOMAIN_ONLY,
 )
 from .protocol_schema import CODES_BY_DEV_SLUG
+from .systems.zones import DhwZone
 
 if TYPE_CHECKING:
     from .gateway import Gateway
@@ -313,6 +314,51 @@ def validate_slugs(gwy: Gateway, msg: Message) -> bool:
     return gwy.config.reduce_processing < DONT_UPDATE_ENTITIES
 
 
+# DHW opcodes that carry no zone_idx/domain_id and need special routing.
+_DHW_OPCODES: Final[frozenset[Code]] = frozenset({Code._1260, Code._10A0, Code._1F41})
+
+
+def _get_dhw_zone_from_msg(msg: Message, src_dev: Any) -> DhwZone | None:
+    """Resolve the DhwZone that should ingest a DHW opcode (1260/10A0/1F41).
+
+    These payloads carry no ``zone_idx``/``domain_id``, so the standard
+    routing in ``_resolve_logical_targets`` (and the equivalent block in
+    ``StateProjector.process_message_state``) misses the DhwZone.
+
+    ``1260`` is sent by the DhwSensor (or relayed by the Controller as an
+    RP); ``10A0``/``1F41`` are sent by the Controller.  The
+    appliance_control (OTB) also emits ``10A0``/``1260`` with different
+    semantics (CH setpoint / null temp) and is excluded to avoid
+    clobbering the DHW read-models.
+
+    See: https://github.com/ramses-rf/ramses_cc/issues/843
+
+    :param msg: The inbound message.
+    :type msg: Message
+    :param src_dev: The source device (DhwSensor or Controller).
+    :return: The DhwZone to route to, or ``None`` if the message is not
+        a DHW opcode or the source is not a DHW sender.
+    :rtype: DhwZone | None
+    """
+    if msg.code not in _DHW_OPCODES or src_dev is None:
+        return None
+
+    src_slug = getattr(src_dev, "_SLUG", "")
+    if msg.code == Code._1260:
+        is_dhw_src = src_slug in ("DHW", "CTL")
+    else:  # 10A0 / 1F41 are owned by the Controller
+        is_dhw_src = src_slug == "CTL"
+
+    if not is_dhw_src:
+        return None
+
+    tcs = getattr(src_dev, "tcs", None)
+    if tcs is None:
+        return None
+
+    return getattr(tcs, "dhw", None)
+
+
 def _resolve_logical_targets(
     gwy: Gateway, msg: Message, p: dict[str, Any]
 ) -> list[Any]:
@@ -380,25 +426,11 @@ def _resolve_logical_targets(
         targets.append(src_dev.tcs)
 
     # 7. DHW opcodes (1260/10A0/1F41) carry no domain_id/zone_idx, so steps
-    #    4/5 miss the DhwZone.  1260 is sent by the DhwSensor (or relayed by
-    #    the Controller as an RP); 10A0/1F41 are sent by the Controller.  The
-    #    appliance_control (OTB) also emits 10A0/1260 with different semantics
-    #    (CH setpoint / null temp) and must be excluded to avoid clobbering
-    #    the DHW read-models.  Without this, the CQRS read-models
-    #    (temp_state/dhw_state) on the DhwZone are never hydrated and the
-    #    ramses_cc water_heater entity shows no current/target temperature.
+    #    4/5 miss the DhwZone.  Route them via the shared helper.
     #    See: https://github.com/ramses-rf/ramses_cc/issues/843
-    if msg.code in (Code._1260, Code._10A0, Code._1F41) and src_dev:
-        src_slug = getattr(src_dev, "_SLUG", "")
-        if msg.code == Code._1260:
-            is_dhw_src = src_slug in ("DHW", "CTL")
-        else:  # 10A0 / 1F41 are owned by the Controller
-            is_dhw_src = src_slug == "CTL"
-        if is_dhw_src:
-            tcs = getattr(src_dev, "tcs", None)
-            dhw = getattr(tcs, "dhw", None) if tcs is not None else None
-            if dhw is not None and dhw not in targets:
-                targets.append(dhw)
+    dhw = _get_dhw_zone_from_msg(msg, src_dev)
+    if dhw is not None and dhw not in targets:
+        targets.append(dhw)
 
     return targets
 
@@ -677,7 +709,7 @@ def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     (setpoint/overrun/differential from 10A0, mode/active/until from 1F41)
     in addition to ``temp_state``.
     """
-    if not hasattr(target, "dhw_state"):
+    if not isinstance(target, DhwZone):
         return
 
     updates: dict[str, Any] = {}
@@ -703,13 +735,12 @@ def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     target.dhw_state = new_state
 
     event = StateUpdatedEvent(
-        entity_id=getattr(target, "id", "unknown"),
+        entity_id=target.id,
         state=new_state,
         correlation_id=getattr(msg, "correlation_id", uuid.uuid4()),
         causation_id=getattr(msg, "message_id", uuid.uuid4()),
     )
-    if hasattr(target, "apply_state_update"):
-        target.apply_state_update(event)
+    target.apply_state_update(event)
 
 
 def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
