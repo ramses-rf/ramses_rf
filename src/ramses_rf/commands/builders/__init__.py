@@ -28,6 +28,7 @@ BUILDERS: dict[Action, Callable[[Command], CommandDTO]] = {
     Action.SET_FAN_PARAM: hvac.build_set_fan_param,
     Action.GET_FAN_PARAM: hvac.build_get_fan_param,
     Action.GET_HVAC_FAN_31DA: hvac.build_get_hvac_fan_31da,
+    Action.SET_PROGRAM_ENABLED: hvac.build_set_program_enabled,
     # Heat Commands
     Action.PUT_OUTDOOR_TEMP: heat.build_put_outdoor_temp,
     Action.PUT_DHW_TEMP: heat.build_put_dhw_temp,

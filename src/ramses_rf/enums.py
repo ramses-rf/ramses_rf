@@ -44,6 +44,7 @@ class Action(StrEnum):
     SET_FAN_PARAM = "set_fan_param"
     GET_FAN_PARAM = "get_fan_param"
     GET_HVAC_FAN_31DA = "get_hvac_fan_31da"
+    SET_PROGRAM_ENABLED = "set_program_enabled"
 
     GET_SCHEDULE_VERSION = "get_schedule_version"
     GET_SCHEDULE_FRAGMENT = "get_schedule_fragment"
