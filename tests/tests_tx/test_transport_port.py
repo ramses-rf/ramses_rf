@@ -135,7 +135,7 @@ async def test_create_connection_with_signature_success() -> None:
     with (
         patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
         patch(
-            "ramses_tx.transport.port.LegacyCommandShim._puzzle",
+            "ramses_tx.transport.port.CommandDTO",
             return_value=mock_sig,
         ),
     ):
@@ -155,7 +155,7 @@ async def test_create_connection_with_signature_timeout() -> None:
 
     with (
         patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
-        patch("ramses_tx.transport.port.LegacyCommandShim._puzzle", MagicMock()),
+        patch("ramses_tx.transport.port.CommandDTO", MagicMock()),
         patch("asyncio.wait_for", side_effect=TimeoutError),
         pytest.raises(TransportSerialError),
     ):

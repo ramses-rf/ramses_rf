@@ -8,7 +8,7 @@ from typing import Any, Final, Literal
 
 from ramses_rf.const import FC, HEARTBEAT_TIMEOUT_OTB, Code, DevType
 from ramses_rf.models import DemandState, DeviceTraits, OpenThermState, TemperatureState
-from ramses_tx import Command, Priority
+from ramses_tx import CommandDTO, Priority
 from ramses_tx.const import (
     SZ_BOILER_OUTPUT_TEMP,
     SZ_BOILER_RETURN_TEMP,
@@ -140,7 +140,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         return HEARTBEAT_TIMEOUT_OTB
 
     def _setup_discovery_cmds(self) -> None:
-        def _ot_cmd(msg_id: str) -> Command:
+        def _ot_cmd(msg_id: str) -> CommandDTO:
             payload = (
                 f"0080{msg_id}0000" if parity(int(msg_id, 16)) else f"0000{msg_id}0000"
             )
@@ -149,7 +149,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         def which_cmd(
             use_native_ot: Literal["always", "prefer", "avoid", "never"] | str | None,
             msg_id: MsgId,
-        ) -> Command | None:
+        ) -> CommandDTO | None:
             """Create a OT cmd, or its RAMSES equivalent, depending."""
             # we know RQ|3220 is an option, question is: use that, or RAMSES or nothing?
             if use_native_ot in ("always", "prefer"):

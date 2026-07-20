@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias
 
-from ..command import Command
 from ..const import (
     DEFAULT_BUFFER_SIZE,
     DEFAULT_ECHO_TIMEOUT,
@@ -22,6 +21,7 @@ from ..const import (
     MAX_SEND_TIMEOUT,
     Priority,
 )
+from ..dtos import CommandDTO
 from ..exceptions import ProtocolSendFailed
 from ..packet import Packet
 from ..typing import QosParams
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 _FutureT: TypeAlias = asyncio.Future[Packet]
-_QueueEntryT: TypeAlias = tuple[Priority, dt, Command, QosParams, _FutureT]
+_QueueEntryT: TypeAlias = tuple[Priority, dt, CommandDTO, QosParams, _FutureT]
 
 
 class QosManager:
@@ -73,7 +73,7 @@ class QosManager:
         )
 
         self._multiplier: int = 0
-        self.cmd: Command | None = None
+        self.cmd: CommandDTO | None = None
         self.qos: QosParams | None = None
         self.fut: _FutureT | None = None
         self.tx_count: int = 0
@@ -89,13 +89,13 @@ class QosManager:
         """Return the number of commands currently in the queue."""
         return self._que.qsize()
 
-    def enqueue(self, priority: Priority, cmd: Command, qos: QosParams) -> _FutureT:
+    def enqueue(self, priority: Priority, cmd: CommandDTO, qos: QosParams) -> _FutureT:
         """Add a command to the queue and return its future.
 
         :param priority: The transmission priority.
         :type priority: Priority
         :param cmd: The command to transmit.
-        :type cmd: Command
+        :type cmd: CommandDTO
         :param qos: Quality of Service parameters.
         :type qos: QosParams
         :return: The future representing the expected response.

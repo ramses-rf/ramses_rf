@@ -32,7 +32,7 @@ from .protocol.ramses import (
 from .version import VERSION
 
 if TYPE_CHECKING:
-    from ramses_tx import Address, Command, Packet
+    from ramses_tx import Address, CommandDTO, Packet
 
     from .config import GatewayConfig
     from .const import IndexT, VerbT
@@ -48,7 +48,7 @@ __all__ = [
     "GatewayConfig",
     #
     "Address",
-    "Command",
+    "CommandDTO",
     "CommandInvalid",
     "Device",
     "Message",
@@ -90,7 +90,7 @@ def __getattr__(name: str) -> Any:
     :rtype: Any
     :raises AttributeError: If the requested attribute is not exported.
     """
-    if name in ("Address", "Command", "Packet"):
+    if name in ("Address", "CommandDTO", "Packet"):
         import ramses_tx
 
         return getattr(ramses_tx, name)

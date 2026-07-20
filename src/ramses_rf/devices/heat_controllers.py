@@ -30,7 +30,6 @@ from ramses_rf.helpers import shrink
 from ramses_rf.models import DeviceTraits
 from ramses_rf.schemas import SCH_TCS, SZ_CIRCUITS
 from ramses_rf.topology import Child, Parent
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.typing import DeviceIdT, DevIndexT
 
 from .dev_base import DeviceHeat
@@ -187,26 +186,22 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
         # TODO: this needs work
         # if discover_flag & Discover.PARAMS:  # only 2309 has any potential?
         for ufc_idx in getattr(self, "circuit_by_id", {}):
-            cmd = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_ZONE_CONFIG,
-                        data={"zone_idx": ufc_idx},
-                    )
+            cmd = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_ZONE_CONFIG,
+                    data={"zone_idx": ufc_idx},
                 )
             )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)
 
-            cmd = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_ZONE_SETPOINT,
-                        data={"zone_idx": ufc_idx},
-                    )
+            cmd = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_ZONE_SETPOINT,
+                    data={"zone_idx": ufc_idx},
                 )
             )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)

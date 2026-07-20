@@ -30,7 +30,7 @@ from ramses_rf.exceptions import DeviceNotFaked, SchemaInconsistentError
 from ramses_rf.models import DemandState, PowerState, TemperatureState
 from ramses_rf.schemas import SZ_ALIAS, SZ_CLASS, SZ_FAKED
 from ramses_rf.topology import Child
-from ramses_tx import Command, Packet, Priority, QosParams
+from ramses_tx import CommandDTO, Packet, Priority, QosParams
 
 from ..messages import Message
 from ..protocol.ramses import CODES_BY_DEV_SLUG
@@ -193,12 +193,12 @@ class DeviceBase(Entity):
         """Configure initial discovery commands for the device."""
         pass
 
-    def _send_cmd(self, cmd: Command, **kwargs: Any) -> asyncio.Task[Any] | None:
+    def _send_cmd(self, cmd: CommandDTO, **kwargs: Any) -> asyncio.Task[Any] | None:
         """Send a command from this device."""
         if (
             isinstance(self, BatteryState)
             and not self.is_faked
-            and cmd.dst.id == self.id
+            and cmd.addr2 == self.id
         ):
             _LOGGER.info(f"{cmd} < Sending inadvisable for {self} (it has a battery)")
 
@@ -442,7 +442,7 @@ class Fakeable(DeviceBase):
 
     async def _async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         priority: Priority | None = None,
         qos: QosParams | None = None,
     ) -> Packet | None:
@@ -521,7 +521,7 @@ class Fakeable(DeviceBase):
         /,
         *,
         confirm_code: Code | None = None,
-        ratify_cmd: Command | None = None,
+        ratify_cmd: CommandDTO | None = None,
     ) -> tuple[Packet, Message, Packet, Packet | None]:
         """Start a binding and return the Accept, or raise an exception.
 

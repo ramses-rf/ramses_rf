@@ -6,32 +6,32 @@ import pytest
 
 from ramses_rf.address import Address
 from ramses_rf.commands.builders import build_dto
-from ramses_rf.commands.core import Command, Command as Intent
+from ramses_rf.commands.core import Command as Intent
 from ramses_rf.enums import Action
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import ZON_MODE_MAP, FaultDeviceClass, FaultState, FaultType
+from ramses_tx.packet import Packet
 
 
 def test_build_get_schedule_version(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_SCHEDULE_VERSION,
         data={},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_dhw_params(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_DHW_PARAMS,
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -46,7 +46,7 @@ def test_build_get_dhw_params(snapshot: Any) -> None:
 def test_build_set_dhw_params_parity(
     setpoint: float, overrun: int, differential: float, snapshot: Any
 ) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.SET_DHW_PARAMS,
@@ -58,40 +58,40 @@ def test_build_set_dhw_params_parity(
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_dhw_temp(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_DHW_TEMP,
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_dhw_temp(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("07:111111"),
         dst=Address("07:111111"),
         action=Action.PUT_DHW_TEMP,
         data={"dhw_idx": 0, "temperature": 50.5},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_dhw_mode(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_DHW_MODE,
         data={"dhw_idx": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -114,7 +114,7 @@ def test_build_get_dhw_mode(snapshot: Any) -> None:
 def test_build_set_dhw_mode_parity(
     mode: Any, active: Any, until: Any, duration: Any, snapshot: Any
 ) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.SET_DHW_MODE,
@@ -127,51 +127,51 @@ def test_build_set_dhw_mode_parity(
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_schedule_fragment(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_SCHEDULE_FRAGMENT,
         data={"zone_idx": 0, "frag_number": 1, "total_frags": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_set_schedule_fragment(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.SET_SCHEDULE_FRAGMENT,
         data={"zone_idx": 0, "frag_num": 1, "frag_cnt": 3, "fragment": "0011223344"},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_faultlog_entry(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("01:111111"),
         action=Action.GET_FAULTLOG_ENTRY,
         data={"log_idx": 5},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_opentherm_data(snapshot: Any) -> None:
-    intent = Command(
+    intent = Intent(
         src=Address("18:000730"),
         dst=Address("10:111111"),
         action=Action.GET_OPENTHERM_DATA,
         data={"msg_id": 14},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_set_fan_mode_orcon_2byte_default() -> None:
@@ -712,7 +712,7 @@ def test_build_set_zone_setpoint_parity(setpoint: float, snapshot: Any) -> None:
 
     dto = build_dto(intent)
 
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -736,7 +736,7 @@ def test_build_set_zone_name_parity(name: str, snapshot: Any) -> None:
 
     dto = build_dto(intent)
 
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @pytest.mark.parametrize("local_override", [True, False])
@@ -771,7 +771,7 @@ def test_build_set_zone_config_parity(
 
     dto = build_dto(intent)
 
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @pytest.mark.parametrize(
@@ -810,7 +810,7 @@ def test_build_set_zone_mode_parity(
 
     dto = build_dto(intent)
 
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_weather_temp(snapshot: Any) -> None:
@@ -821,7 +821,7 @@ def test_build_put_weather_temp(snapshot: Any) -> None:
         data={"temperature": 12.5},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_relay_demand(snapshot: Any) -> None:
@@ -832,7 +832,7 @@ def test_build_get_relay_demand(snapshot: Any) -> None:
         data={"zone_idx": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_system_language(snapshot: Any) -> None:
@@ -843,7 +843,7 @@ def test_build_get_system_language(snapshot: Any) -> None:
         data={},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_mix_valve_params(snapshot: Any) -> None:
@@ -854,7 +854,7 @@ def test_build_get_mix_valve_params(snapshot: Any) -> None:
         data={"zone_idx": 0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_set_mix_valve_params(snapshot: Any) -> None:
@@ -871,7 +871,7 @@ def test_build_set_mix_valve_params(snapshot: Any) -> None:
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_tpi_params(snapshot: Any) -> None:
@@ -882,7 +882,7 @@ def test_build_get_tpi_params(snapshot: Any) -> None:
         data={"domain_id": "00"},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_set_tpi_params(snapshot: Any) -> None:
@@ -899,7 +899,7 @@ def test_build_set_tpi_params(snapshot: Any) -> None:
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_bind_offer(snapshot: Any) -> None:
@@ -910,7 +910,7 @@ def test_build_put_bind_offer(snapshot: Any) -> None:
         data={"verb": " I", "codes": ["3EF0"], "oem_code": "01"},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_bind_accept(snapshot: Any) -> None:
@@ -921,7 +921,7 @@ def test_build_put_bind_accept(snapshot: Any) -> None:
         data={"verb": " W", "codes": ["3EF0"]},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_bind_confirm(snapshot: Any) -> None:
@@ -932,7 +932,7 @@ def test_build_put_bind_confirm(snapshot: Any) -> None:
         data={"verb": " I", "codes": ["3EF0"]},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_system_mode(snapshot: Any) -> None:
@@ -943,7 +943,7 @@ def test_build_get_system_mode(snapshot: Any) -> None:
         data={},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_set_system_mode(snapshot: Any) -> None:
@@ -954,7 +954,7 @@ def test_build_set_system_mode(snapshot: Any) -> None:
         data={"system_mode": 1},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_presence_detected(snapshot: Any) -> None:
@@ -965,7 +965,7 @@ def test_build_put_presence_detected(snapshot: Any) -> None:
         data={"presence_detected": True},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_get_system_time(snapshot: Any) -> None:
@@ -976,7 +976,7 @@ def test_build_get_system_time(snapshot: Any) -> None:
         data={},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_set_system_time(snapshot: Any) -> None:
@@ -987,7 +987,7 @@ def test_build_set_system_time(snapshot: Any) -> None:
         data={"datetime": dt(2026, 7, 18, 12, 0)},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_actuator_state(snapshot: Any) -> None:
@@ -998,7 +998,7 @@ def test_build_put_actuator_state(snapshot: Any) -> None:
         data={"modulation_level": 0.5},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_actuator_cycle(snapshot: Any) -> None:
@@ -1013,7 +1013,7 @@ def test_build_put_actuator_cycle(snapshot: Any) -> None:
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 @patch("ramses_tx.version.VERSION", "0.0.0")
@@ -1026,7 +1026,7 @@ def test_build_send_puzzle(mock_timestamp: Any, snapshot: Any) -> None:
         data={"msg_type": "10"},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_faultlog_entry(snapshot: Any) -> None:
@@ -1045,7 +1045,7 @@ def test_build_put_faultlog_entry(snapshot: Any) -> None:
         },
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_sensor_temp(snapshot: Any) -> None:
@@ -1056,7 +1056,7 @@ def test_build_put_sensor_temp(snapshot: Any) -> None:
         data={"temperature": 21.5},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
 def test_build_put_outdoor_temp(snapshot: Any) -> None:
@@ -1067,4 +1067,4 @@ def test_build_put_outdoor_temp(snapshot: Any) -> None:
         data={"temperature": 15.0},
     )
     dto = build_dto(intent)
-    assert str(LegacyCommandShim.from_dto(dto)) == snapshot
+    assert str(Packet._from_cmd(dto)._frame) == snapshot

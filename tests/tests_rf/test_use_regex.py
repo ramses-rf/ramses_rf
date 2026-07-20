@@ -7,7 +7,7 @@ from datetime import datetime as dt
 import pytest
 import serial
 
-from ramses_rf import Command, Gateway, Packet
+from ramses_rf import CommandDTO as Command, Gateway, Packet
 from ramses_rf.gateway import GatewayConfig
 from ramses_tx.config import EngineConfig
 from ramses_tx.protocol import PortProtocol
@@ -37,7 +37,7 @@ RULES_OUTBOUND = {
 RULES_COMBINED = {SZ_INBOUND: RULES_INBOUND, SZ_OUTBOUND: RULES_OUTBOUND}
 
 TESTS_OUTBOUND = {  # sent, received by other
-    " I 003 01:215819 --:------ 01:215819 0009 003 0000FF": " I 003 --:------ --:------ 12:215819 0009 003 0000FF",
+    " I --- 01:215819 --:------ 01:215819 0009 003 0000FF": " I --- --:------ --:------ 12:215819 0009 003 0000FF",
     " I --- 04:262143 --:------ 04:262143 30C9 003 000713": " I --- 63:262143 --:------ 63:262143 30C9 003 000713",
     " I --- 04:262143 --:------ 01:182924 2309 003 0205DC": " I --- 63:262143 --:------ 01:182924 2309 003 0205DC",
     # NOTE: the below doesn't work with QoS, as expects a response pkt (would be an I)
@@ -45,13 +45,13 @@ TESTS_OUTBOUND = {  # sent, received by other
 }
 
 TESTS_INBOUND = {  # sent by other, received
-    " I 003 --:------ --:------ 12:215819 0009 003 0000FF": " I 003 01:215819 --:------ 01:215819 0009 003 0000FF",
-    " I --- 63:262143 --:------ 63:262143 30C9 003 000713": " I --- 04:262143 --:------ 04:262143 30C9 003 000713",
-    " I --- 63:262143 --:------ 01:182924 2309 003 0205DC": " I --- 04:262143 --:------ 01:182924 2309 003 0205DC",
+    " I --- --:------ --:------ 12:215819 0009 003 0000FF": "000  I --- 01:215819 --:------ 01:215819 0009 003 0000FF",
+    " I --- 63:262143 --:------ 63:262143 30C9 003 000713": "000  I --- 04:262143 --:------ 04:262143 30C9 003 000713",
+    " I --- 63:262143 --:------ 01:182924 2309 003 0205DC": "000  I --- 04:262143 --:------ 01:182924 2309 003 0205DC",
     # NOTE: the below won't work with QoS - why? - still the case with refactored QoS
-    " W --- 30:098165 32:206251 --:------ 1FC9 006 2131DA797F75": " W --- 30:098165 32:206251 --:------ 1FC9 006 0031DA797F75",
-    "RP --- 01:182924 30:068640 --:------ 000C 006 020400FFFFFF": "RP --- 01:182924 30:068640 --:------ 000C 006 02040013FFFF",
-    "RP --- 01:182924 30:068640 --:------ 000C 006 020800FFFFFF": "RP --- 01:182924 30:068640 --:------ 000C 006 02080013FFFF",
+    " W --- 30:098165 32:206251 --:------ 1FC9 006 2131DA797F75": "000  W --- 30:098165 32:206251 --:------ 1FC9 006 0031DA797F75",
+    "RP --- 01:182924 30:068640 --:------ 000C 006 020400FFFFFF": "000 RP --- 01:182924 30:068640 --:------ 000C 006 02040013FFFF",
+    "RP --- 01:182924 30:068640 --:------ 000C 006 020800FFFFFF": "000 RP --- 01:182924 30:068640 --:------ 000C 006 02080013FFFF",
 }
 
 
@@ -68,7 +68,7 @@ def patches_for_tests(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def assert_this_pkt(
-    gwy: Gateway, expected: Command, max_sleep: float = DEFAULT_MAX_SLEEP
+    gwy: Gateway, expected: Packet, max_sleep: float = DEFAULT_MAX_SLEEP
 ) -> None:
     """Check, at the gateway layer, that the current packet is as expected."""
     for _ in range(int(max_sleep / ASSERT_CYCLE_TIME)):
@@ -108,7 +108,8 @@ async def test_regex_inbound_() -> None:
         for cmd, pkt in TESTS_INBOUND.items():
             ser_1.write(bytes(cmd.encode("ascii")) + b"\r\n")
 
-            await assert_this_pkt(gwy_0, Command(pkt))
+            expected = Packet.from_port(dt.now(), pkt)
+            await assert_this_pkt(gwy_0, expected)
 
     finally:
         await gwy_0.stop()
@@ -151,11 +152,10 @@ async def test_regex_with_qos() -> None:
         _ = ser_1.read(ser_1.in_waiting)  # ser_1.flush() doesn't work?
 
         for before, after in TESTS_OUTBOUND.items():
-            cmd = Command(before)
+            cmd = Command.from_cli(before)
             if cmd.rx_header:  # we won't be getting any replies
                 continue
 
-            # , timeout=DEFAULT_WAIT_TIMEOUT)
             pkt_src = await gwy_0.async_send_cmd(cmd)
             assert str(pkt_src) == before
 
@@ -164,7 +164,8 @@ async def test_regex_with_qos() -> None:
 
         for before, after in TESTS_INBOUND.items():
             ser_1.write(bytes(before.encode("ascii")) + b"\r\n")
-            await assert_this_pkt(gwy_0, Command(after))
+            expected = Packet.from_port(dt.now(), after)
+            await assert_this_pkt(gwy_0, expected)
 
     finally:
         await gwy_0.stop()

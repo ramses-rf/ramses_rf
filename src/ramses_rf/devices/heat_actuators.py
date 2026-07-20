@@ -21,7 +21,6 @@ from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits
 from ramses_tx import Priority
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_PRIORITY
 from ramses_tx.typing import PayDictT
 
@@ -141,7 +140,7 @@ class RelayDemand(DeviceHeat):  # 0008
 
         if not self.is_faked:  # discover_flag & Discover.STATUS and
             self.discovery.add_cmd(
-                LegacyCommandShim.from_dto(
+                (
                     build_dto(
                         Intent_(
                             src=HGI_DEV_ADDR,
@@ -208,7 +207,7 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
             return
 
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,

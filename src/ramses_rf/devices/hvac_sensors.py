@@ -21,7 +21,6 @@ from ramses_rf.const import (
 from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits, HvacState
 from ramses_tx import Packet, Priority
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 
 from .dev_base import BatteryState, DeviceHvac, Fakeable
 
@@ -182,14 +181,12 @@ class PresenceDetect(HvacSensorBase):  # 2E10
         if not self.is_faked:
             raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=Address(self.id),
-                    dst=Address(self.id),
-                    action=Action.PUT_PRESENCE_DETECTED,
-                    data={"presence_detected": value},
-                )
+        cmd = build_dto(
+            Intent(
+                src=Address(self.id),
+                dst=Address(self.id),
+                action=Action.PUT_PRESENCE_DETECTED,
+                data={"presence_detected": value},
             )
         )
         return await self._gwy.async_send_cmd(

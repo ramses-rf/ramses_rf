@@ -20,10 +20,8 @@ from ramses_rf.devices import Fakeable
 from ramses_rf.enums import Action
 from ramses_rf.protocol.opentherm import OTB_DATA_IDS
 from ramses_rf.protocol_schema import CODES_SCHEMA
-from ramses_tx import Command, DeviceIdT, Priority
+from ramses_tx import CommandDTO, DeviceIdT, Priority
 from ramses_tx.address import NON_DEV_ADDR
-from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.dtos import CommandDTO
 
 from ramses_rf.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
@@ -62,28 +60,24 @@ def script_decorator(fnc: Callable[..., Any]) -> Callable[..., Any]:
 
     @functools.wraps(fnc)
     async def wrapper(gwy: Gateway, *args: Any, **kwargs: Any) -> None:
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=HGI_DEV_ADDR,
-                    action=Action.SEND_PUZZLE,
-                    data={"message": "Script begins:"},
-                )
+        cmd = build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=HGI_DEV_ADDR,
+                action=Action.SEND_PUZZLE,
+                data={"message": "Script begins:"},
             )
         )
         gwy.send_cmd(cmd, priority=Priority.HIGHEST, num_repeats=3)
 
         await fnc(gwy, *args, **kwargs)
 
-        cmd2 = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=HGI_DEV_ADDR,
-                    action=Action.SEND_PUZZLE,
-                    data={"message": "Script done."},
-                )
+        cmd2 = build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=HGI_DEV_ADDR,
+                action=Action.SEND_PUZZLE,
+                data={"message": "Script done."},
             )
         )
         gwy.send_cmd(cmd2, priority=Priority.LOWEST, num_repeats=3)
@@ -135,7 +129,7 @@ async def exec_cmd(gwy: Gateway, **kwargs: Any) -> None:
     :param gwy: The gateway instance.
     :param kwargs: CLI parameters containing the 'EXEC_CMD' string.
     """
-    cmd = Command.from_cli(kwargs[EXEC_CMD])
+    cmd = CommandDTO.from_cli(kwargs[EXEC_CMD])
     await gwy.async_send_cmd(cmd, priority=Priority.HIGH, wait_for_reply=True)
 
 
@@ -242,7 +236,7 @@ def script_poll_device(gwy: Gateway, dev_id: DeviceIdT) -> list[asyncio.Task[Non
 
     async def periodic_send(
         gwy: Gateway,
-        cmd: Command,
+        cmd: CommandDTO,
         count: int = 1,
         interval: float | None = None,
     ) -> None:
@@ -265,15 +259,13 @@ def script_poll_device(gwy: Gateway, dev_id: DeviceIdT) -> list[asyncio.Task[Non
     tasks = []
 
     for code in (Code._0016, Code._1FC9):
-        cmd = LegacyCommandShim.from_dto(
-            CommandDTO(
-                verb=RQ,
-                addr1=HGI_DEV_ADDR.id,
-                addr2=dev_id,
-                addr3=NON_DEV_ADDR.id,
-                code=code,
-                payload="00",
-            )
+        cmd = CommandDTO(
+            verb=RQ,
+            addr1=HGI_DEV_ADDR.id,
+            addr2=dev_id,
+            addr3=NON_DEV_ADDR.id,
+            code=code,
+            payload="00",
         )
         tasks.append(asyncio.create_task(periodic_send(gwy, cmd, count=0)))
 
@@ -303,7 +295,7 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("scan_full() invoked - expect a lot of Warnings")
 
     gwy.send_cmd(
-        LegacyCommandShim.from_dto(
+        (
             CommandDTO(
                 verb=RQ,
                 addr1=HGI_DEV_ADDR.id,
@@ -320,30 +312,26 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
         if code == Code._0005:
             for zone_type in range(20):  # known up to 18
                 gwy.send_cmd(
-                    LegacyCommandShim.from_dto(
-                        CommandDTO(
-                            verb=RQ,
-                            addr1=HGI_DEV_ADDR.id,
-                            addr2=dev_id,
-                            addr3=NON_DEV_ADDR.id,
-                            code=code,
-                            payload=f"00{zone_type:02X}",
-                        )
+                    CommandDTO(
+                        verb=RQ,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload=f"00{zone_type:02X}",
                     )
                 )
 
         elif code == Code._000C:
             for zone_idx in range(16):  # also: FA-FF?
                 gwy.send_cmd(
-                    LegacyCommandShim.from_dto(
-                        CommandDTO(
-                            verb=RQ,
-                            addr1=HGI_DEV_ADDR.id,
-                            addr2=dev_id,
-                            addr3=NON_DEV_ADDR.id,
-                            code=code,
-                            payload=f"{zone_idx:02X}00",
-                        )
+                    CommandDTO(
+                        verb=RQ,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload=f"{zone_idx:02X}00",
                     )
                 )
 
@@ -353,104 +341,88 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
         elif code in (Code._01D0, Code._01E9):
             for str_zone_idx in ("00", "01", "FC"):
                 gwy.send_cmd(
-                    LegacyCommandShim.from_dto(
-                        CommandDTO(
-                            verb=W_,
-                            addr1=HGI_DEV_ADDR.id,
-                            addr2=dev_id,
-                            addr3=NON_DEV_ADDR.id,
-                            code=code,
-                            payload=f"{str_zone_idx}00",
-                        )
+                    CommandDTO(
+                        verb=W_,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload=f"{str_zone_idx}00",
                     )
                 )
                 gwy.send_cmd(
-                    LegacyCommandShim.from_dto(
-                        CommandDTO(
-                            verb=W_,
-                            addr1=HGI_DEV_ADDR.id,
-                            addr2=dev_id,
-                            addr3=NON_DEV_ADDR.id,
-                            code=code,
-                            payload=f"{str_zone_idx}03",
-                        )
+                    CommandDTO(
+                        verb=W_,
+                        addr1=HGI_DEV_ADDR.id,
+                        addr2=dev_id,
+                        addr3=NON_DEV_ADDR.id,
+                        code=code,
+                        payload=f"{str_zone_idx}03",
                     )
                 )
 
         elif code == Code._0404:  # FIXME
-            cmd1 = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(dev_id),
-                        action=Action.GET_SCHEDULE_FRAGMENT,
-                        data={"zone_idx": "HW", "frag_number": 1, "total_frags": 0},
-                    )
+            cmd1 = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_SCHEDULE_FRAGMENT,
+                    data={"zone_idx": "HW", "frag_number": 1, "total_frags": 0},
                 )
             )
             gwy.send_cmd(cmd1)
-            cmd2 = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(dev_id),
-                        action=Action.GET_SCHEDULE_FRAGMENT,
-                        data={"zone_idx": "00", "frag_number": 1, "total_frags": 0},
-                    )
+            cmd2 = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_SCHEDULE_FRAGMENT,
+                    data={"zone_idx": "00", "frag_number": 1, "total_frags": 0},
                 )
             )
             gwy.send_cmd(cmd2)
 
         elif code == Code._0418:
             for log_idx in range(2):
-                cmd3 = LegacyCommandShim.from_dto(
-                    build_dto(
-                        Intent(
-                            src=HGI_DEV_ADDR,
-                            dst=Address(dev_id),
-                            action=Action.GET_FAULTLOG_ENTRY,
-                            data={"log_idx": log_idx},
-                        )
+                cmd3 = build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_FAULTLOG_ENTRY,
+                        data={"log_idx": log_idx},
                     )
                 )
                 gwy.send_cmd(cmd3)
 
         elif code == Code._1100:
-            cmd4 = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(dev_id),
-                        action=Action.GET_TPI_PARAMS,
-                        data={},
-                    )
+            cmd4 = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_TPI_PARAMS,
+                    data={},
                 )
             )
             gwy.send_cmd(cmd4)
 
         elif code == Code._2E04:
-            cmd = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(dev_id),
-                        action=Action.GET_SYSTEM_MODE,
-                        data={},
-                    )
+            cmd = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(dev_id),
+                    action=Action.GET_SYSTEM_MODE,
+                    data={},
                 )
             )
             gwy.send_cmd(cmd)
 
         elif code == Code._3220:
             for data_id in (0, 3):  # these are mandatory READ_DATA data_ids
-                cmd = LegacyCommandShim.from_dto(
-                    build_dto(
-                        Intent(
-                            src=HGI_DEV_ADDR,
-                            dst=Address(dev_id),
-                            action=Action.GET_OPENTHERM_DATA,
-                            data={"msg_id": data_id},
-                        )
+                cmd = build_dto(
+                    Intent(
+                        src=HGI_DEV_ADDR,
+                        dst=Address(dev_id),
+                        action=Action.GET_OPENTHERM_DATA,
+                        data={"msg_id": data_id},
                     )
                 )
                 gwy.send_cmd(cmd)
@@ -464,36 +436,18 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
             and re.match(CODES_SCHEMA[code][RQ], "00")
         ):
             gwy.send_cmd(
-                LegacyCommandShim.from_dto(
-                    CommandDTO(
-                        verb=RQ,
-                        addr1=HGI_DEV_ADDR.id,
-                        addr2=dev_id,
-                        addr3=NON_DEV_ADDR.id,
-                        code=code,
-                        payload="00",
-                    )
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=code,
+                    payload="00",
                 )
             )
 
         else:
             gwy.send_cmd(
-                LegacyCommandShim.from_dto(
-                    CommandDTO(
-                        verb=RQ,
-                        addr1=HGI_DEV_ADDR.id,
-                        addr2=dev_id,
-                        addr3=NON_DEV_ADDR.id,
-                        code=code,
-                        payload="0000",
-                    )
-                )
-            )
-
-    # these are possible/difficult codes
-    for code in (Code._0150, Code._2389):
-        gwy.send_cmd(
-            LegacyCommandShim.from_dto(
                 CommandDTO(
                     verb=RQ,
                     addr1=HGI_DEV_ADDR.id,
@@ -502,6 +456,18 @@ async def script_scan_full(gwy: Gateway, dev_id: DeviceIdT) -> None:
                     code=code,
                     payload="0000",
                 )
+            )
+
+    # these are possible/difficult codes
+    for code in (Code._0150, Code._2389):
+        gwy.send_cmd(
+            CommandDTO(
+                verb=RQ,
+                addr1=HGI_DEV_ADDR.id,
+                addr2=dev_id,
+                addr3=NON_DEV_ADDR.id,
+                code=code,
+                payload="0000",
             )
         )
 
@@ -522,7 +488,7 @@ async def script_scan_hard(
 
     for code in range(start_code, 0x5000):
         await gwy.async_send_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 CommandDTO(
                     verb=RQ,
                     addr1=HGI_DEV_ADDR.id,
@@ -557,15 +523,13 @@ async def script_scan_fan(gwy: Gateway, dev_id: DeviceIdT) -> None:
     )
     for code in OLD_CODES:
         gwy.send_cmd(
-            LegacyCommandShim.from_dto(
-                CommandDTO(
-                    verb=RQ,
-                    addr1=HGI_DEV_ADDR.id,
-                    addr2=dev_id,
-                    addr3=NON_DEV_ADDR.id,
-                    code=code,
-                    payload="00",
-                )
+            CommandDTO(
+                verb=RQ,
+                addr1=HGI_DEV_ADDR.id,
+                addr2=dev_id,
+                addr3=NON_DEV_ADDR.id,
+                code=code,
+                payload="00",
             )
         )
 
@@ -597,15 +561,13 @@ async def script_scan_fan(gwy: Gateway, dev_id: DeviceIdT) -> None:
     for code in NEW_CODES:
         if code not in OLD_CODES and code not in OUT_CODES:
             gwy.send_cmd(
-                LegacyCommandShim.from_dto(
-                    CommandDTO(
-                        verb=RQ,
-                        addr1=HGI_DEV_ADDR.id,
-                        addr2=dev_id,
-                        addr3=NON_DEV_ADDR.id,
-                        code=code,
-                        payload="00",
-                    )
+                CommandDTO(
+                    verb=RQ,
+                    addr1=HGI_DEV_ADDR.id,
+                    addr2=dev_id,
+                    addr3=NON_DEV_ADDR.id,
+                    code=code,
+                    payload="00",
                 )
             )
 
@@ -620,14 +582,12 @@ async def script_scan_otb(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_full invoked - expect a lot of nonsense")
 
     for msg_id in OTB_DATA_IDS:
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(dev_id),
-                    action=Action.GET_OPENTHERM_DATA,
-                    data={"msg_id": msg_id},
-                )
+        cmd = build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(dev_id),
+                action=Action.GET_OPENTHERM_DATA,
+                data={"msg_id": msg_id},
             )
         )
         gwy.send_cmd(cmd)
@@ -643,14 +603,12 @@ async def script_scan_otb_hard(gwy: Gateway, dev_id: DeviceIdT) -> None:
     _LOGGER.warning("script_scan_otb_hard invoked - expect a lot of nonsense")
 
     for msg_id in range(0x80):
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(dev_id),
-                    action=Action.GET_OPENTHERM_DATA,
-                    data={"msg_id": msg_id},
-                )
+        cmd = build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(dev_id),
+                action=Action.GET_OPENTHERM_DATA,
+                data={"msg_id": msg_id},
             )
         )
         gwy.send_cmd(cmd, priority=Priority.LOW)
@@ -680,7 +638,7 @@ async def script_scan_otb_map(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
     for code, msg_id in RAMSES_TO_OPENTHERM.items():
         gwy.send_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 CommandDTO(
                     verb=RQ,
                     addr1=HGI_DEV_ADDR.id,
@@ -692,14 +650,12 @@ async def script_scan_otb_map(gwy: Gateway, dev_id: DeviceIdT) -> None:
             ),
             priority=Priority.LOW,
         )
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(dev_id),
-                    action=Action.GET_OPENTHERM_DATA,
-                    data={"msg_id": msg_id},
-                )
+        cmd = build_dto(
+            Intent(
+                src=HGI_DEV_ADDR,
+                dst=Address(dev_id),
+                action=Action.GET_OPENTHERM_DATA,
+                data={"msg_id": msg_id},
             )
         )
         gwy.send_cmd(cmd, priority=Priority.LOW)
@@ -743,7 +699,7 @@ async def script_scan_otb_ramses(gwy: Gateway, dev_id: DeviceIdT) -> None:
 
     for c in _CODES:
         gwy.send_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 CommandDTO(
                     verb=RQ,
                     addr1=HGI_DEV_ADDR.id,

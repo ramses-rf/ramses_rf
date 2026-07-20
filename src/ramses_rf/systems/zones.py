@@ -47,7 +47,6 @@ from ramses_rf.schemas import (
 )
 from ramses_rf.topology import Child, Parent
 from ramses_tx import Packet
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.exceptions import ProtocolSendFailed, ProtocolTimeoutError
 from ramses_tx.typing import HeaderT, PayDictT
 
@@ -236,7 +235,7 @@ class DhwZone(ZoneSchedule):  # CS92A
             )
 
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -249,7 +248,7 @@ class DhwZone(ZoneSchedule):  # CS92A
             60 * 60 * 6,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -262,7 +261,7 @@ class DhwZone(ZoneSchedule):  # CS92A
             60 * 5,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -590,7 +589,7 @@ class Zone(ZoneSchedule):
 
         # td should be > long sync_cycle duration (> 1hr)
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -604,7 +603,7 @@ class Zone(ZoneSchedule):
             delay=30,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -620,7 +619,7 @@ class Zone(ZoneSchedule):
 
         # 2349 instead of 2309
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -636,7 +635,7 @@ class Zone(ZoneSchedule):
         # td should be > sync_cycle duration,?delay in hope of
         # picking up cycle
         self.discovery.add_cmd(  # 30C9
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -652,7 +651,7 @@ class Zone(ZoneSchedule):
         # longer dt as low yield (factory duration is 30 min): prefer
         # eavesdropping
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
@@ -973,7 +972,7 @@ class MixZone(Zone):  # HM80  # TODO: 0008/0009/3150
         super()._setup_discovery_cmds()
 
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent(
                         src=HGI_DEV_ADDR,
