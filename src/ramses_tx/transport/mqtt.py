@@ -27,6 +27,7 @@ from ..const import (
     SZ_IS_EVOFW3,
     SZ_RAMSES_GATEWAY,
 )
+from ..typing import DeviceIdT
 from .base import TransportConfig, _FullTransport
 from .helpers import _normalise
 
@@ -79,6 +80,7 @@ class _MqttTransportAbstractor:
 
 class MqttTransport(_FullTransport, _MqttTransportAbstractor):
     """Send/receive packets to/from ramses_esp via MQTT.
+
     For full RX logging, turn on debug logging.
 
     See: https://github.com/IndaloTech/ramses_esp
@@ -99,7 +101,19 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         extra: dict[str, Any] | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> None:
-        """Initialize the MQTT transport."""
+        """Initialize the MQTT transport.
+
+        :param broker_url: The candidate broker connection URL.
+        :type broker_url: str
+        :param protocol: The RAMSES protocol instance bound to transport.
+        :type protocol: RamsesProtocolT
+        :param config: Extracted setup configuration for transports.
+        :type config: TransportConfig
+        :param extra: Extra configuration dictionary, defaults to None.
+        :type extra: dict[str, Any] | None
+        :param loop: Asyncio event loop instance, defaults to None.
+        :type loop: asyncio.AbstractEventLoop | None
+        """
         _MqttTransportAbstractor.__init__(self, broker_url, protocol, loop=loop)
         _FullTransport.__init__(self, config=config, extra=extra, loop=loop)
 
@@ -132,10 +146,11 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         self._log_all = config.log_all
 
-        self.client = mqtt.Client(
-            protocol=mqtt.MQTTv5,
-            callback_api_version=CallbackAPIVersion.VERSION2,
-        )
+        client_kwargs: dict[str, Any] = {"protocol": mqtt.MQTTv5}
+        if CallbackAPIVersion is not None:
+            client_kwargs["callback_api_version"] = CallbackAPIVersion.VERSION2
+
+        self.client = mqtt.Client(**client_kwargs)
         self.client.on_connect = self._on_connect
         self.client.on_connect_fail = self._on_connect_fail
         self.client.on_disconnect = self._on_disconnect
@@ -280,16 +295,17 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             device_topic = self._topic_sub[:-3]
             _LOGGER.warning("%s: the MQTT device is offline: %s", self, device_topic)
 
-            if hasattr(self, "_protocol"):
-                self._protocol.pause_writing()
+            if hasattr(self, "_protocol") and not self._loop.is_closed():
+                try:
+                    self._loop.call_soon_threadsafe(self._protocol.pause_writing)
+                except RuntimeError:
+                    _LOGGER.debug("Event loop closed, cannot pause writing")
 
         if not self._closing:
             self._schedule_reconnect()
 
     def _create_connection(self, msg: mqtt.MQTTMessage) -> None:
-        """Invoke the Protocols's connection_made() callback MQTT is
-        established.
-        """
+        """Invoke the Protocol's connection_made() callback once MQTT is established."""
         assert msg.payload == b"online", "Coding error"
 
         if self._connected:
@@ -325,7 +341,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
         if not self._connection_established:
             self._connection_established = True
-            self._make_connection(gwy_id=msg.topic[-9:])  # type: ignore[arg-type]
+            if not self._loop.is_closed():
+                try:
+                    self._loop.call_soon_threadsafe(
+                        self._make_connection, DeviceIdT(msg.topic[-9:])
+                    )
+                except RuntimeError:
+                    _LOGGER.debug("Event loop closed, cannot make connection")
         else:
             _LOGGER.info("MQTT reconnected - protocol connection already established")
 
@@ -348,8 +370,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
                         self,
                         msg.topic,
                     )
-                    if hasattr(self, "_protocol"):
-                        self._protocol.pause_writing()
+                    if hasattr(self, "_protocol") and not self._loop.is_closed():
+                        try:
+                            self._loop.call_soon_threadsafe(
+                                self._protocol.pause_writing
+                            )
+                        except RuntimeError:
+                            _LOGGER.debug("Event loop closed, cannot pause writing")
 
             elif msg.payload == b"online":
                 _LOGGER.info(
@@ -376,7 +403,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
 
                 self._connected = True
                 self._connection_established = True
-                self._make_connection(gwy_id=gateway_id)  # type: ignore[arg-type]
+                if not self._loop.is_closed():
+                    try:
+                        self._loop.call_soon_threadsafe(
+                            self._make_connection, DeviceIdT(gateway_id)
+                        )
+                    except RuntimeError:
+                        _LOGGER.debug("Event loop closed, cannot make connection")
 
                 try:
                     self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
@@ -409,11 +442,13 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
                 self,
             )
 
-        try:
-            self._frame_read(dtm.isoformat(), _normalise(payload["msg"]))
-        except exc.TransportError:
-            if not self._closing and not self.loop.is_closed():
-                raise
+        if not self._loop.is_closed():
+            try:
+                self._loop.call_soon_threadsafe(
+                    self._frame_read, dtm.isoformat(), _normalise(payload["msg"])
+                )
+            except RuntimeError:
+                _LOGGER.debug("Event loop closed, cannot read frame")
 
     async def write_frame(self, frame: str, disable_tx_limits: bool = False) -> None:
         """Transmit a frame via the underlying handler (e.g. serial port, MQTT)."""
