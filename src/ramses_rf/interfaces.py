@@ -1,7 +1,9 @@
 """RAMSES RF - Abstract Base Classes and Interfaces."""
 
+from __future__ import annotations
+
 import asyncio
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, overload
 
 from ramses_tx import CommandDTO, Packet, Priority, QosParams
 
@@ -10,8 +12,12 @@ from .typing import DeviceIdT, DeviceListT
 
 if TYPE_CHECKING:
     from .commands.dispatcher import CommandDispatcher as CQRSDispatcher
+    from .devices.dev_base import Device
     from .models import TopologyChangedEvent
     from .topology import Parent
+
+# Generic type variable for downcasting returned Device instances to subclasses
+_DeviceT = TypeVar("_DeviceT", bound="Device")
 
 
 class CommandDispatcher(Protocol):
@@ -152,15 +158,40 @@ class DeviceRegistryInterface(Protocol):
         """Add a device to the registry."""
         ...
 
+    @overload
     def get_device(
         self,
-        device_id: DeviceIdT,
+        device_id: DeviceIdT | str,
         *,
         msg: Message | None = None,
-        parent: "Parent | None" = None,
+        parent: Parent | None = None,
         child_id: str | None = None,
         is_sensor: bool | None = None,
-    ) -> Any:
+        cls: None = None,
+    ) -> Device: ...
+
+    @overload
+    def get_device(
+        self,
+        device_id: DeviceIdT | str,
+        *,
+        msg: Message | None = None,
+        parent: Parent | None = None,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
+        cls: type[_DeviceT],
+    ) -> _DeviceT: ...
+
+    def get_device(
+        self,
+        device_id: DeviceIdT | str,
+        *,
+        msg: Message | None = None,
+        parent: Parent | None = None,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
+        cls: type[_DeviceT] | None = None,
+    ) -> Device | _DeviceT:
         """Return a device, creating it if it does not already exist."""
         ...
 
@@ -192,7 +223,7 @@ class DeviceRegistryInterface(Protocol):
         """Return the status for all devices."""
         ...
 
-    def handle_topology_event(self, event: "TopologyChangedEvent") -> None:
+    def handle_topology_event(self, event: TopologyChangedEvent) -> None:
         """Process an immutable structural graph mutation event."""
         ...
 
@@ -206,7 +237,7 @@ class GatewayInterface(Protocol):
         ...
 
     @property
-    def dispatcher(self) -> "CQRSDispatcher":
+    def dispatcher(self) -> CQRSDispatcher:
         """Return the CommandDispatcher for outbound command translation."""
         ...
 

@@ -53,7 +53,7 @@ async def _test_get_schedule(gwy: Gateway, ctl_id: DeviceIdT, idx: str) -> None:
     assert isinstance(gwy._engine._protocol, PortProtocol)  # mypy
     assert gwy._engine._protocol._disable_qos is False  # QoS is required for this test
 
-    _: Controller = gwy.device_registry.get_device(ctl_id)
+    _: Controller = gwy.device_registry.get_device(ctl_id, cls=Controller)
 
     tcs: Evohome | None = gwy.tcs
     assert isinstance(tcs, Evohome)  # mypy

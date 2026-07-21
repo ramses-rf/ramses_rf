@@ -7,7 +7,7 @@ import contextlib
 import inspect
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 from ramses_rf.address import Address, is_valid_dev_id
 from ramses_rf.config import GatewayConfig
@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     from ramses_rf.messages import Message
     from ramses_rf.systems import Evohome
     from ramses_rf.topology import Parent
+
+# Generic type variable for downcasting returned Device instances to subclasses
+_DeviceT = TypeVar("_DeviceT", bound="Device")
 
 _LOGGER = logging.getLogger(__name__)
 _TRACE = logging.getLogger("ramses_rf.legacy_trace")
@@ -476,15 +479,40 @@ class DeviceRegistry:
         self.devices.append(dev)
         self.device_by_id[dev.id] = dev
 
+    @overload
     def get_device(
         self,
-        device_id: DeviceIdT,
+        device_id: DeviceIdT | str,
         *,
         msg: Message | None = None,
         parent: Parent | None = None,
         child_id: str | None = None,
         is_sensor: bool | None = None,
-    ) -> Device:
+        cls: None = None,
+    ) -> Device: ...
+
+    @overload
+    def get_device(
+        self,
+        device_id: DeviceIdT | str,
+        *,
+        msg: Message | None = None,
+        parent: Parent | None = None,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
+        cls: type[_DeviceT],
+    ) -> _DeviceT: ...
+
+    def get_device(
+        self,
+        device_id: DeviceIdT | str,
+        *,
+        msg: Message | None = None,
+        parent: Parent | None = None,
+        child_id: str | None = None,
+        is_sensor: bool | None = None,
+        cls: type[_DeviceT] | None = None,
+    ) -> Device | _DeviceT:
         """Return a device, creating it if it does not already exist.
 
         :param device_id: The unique identifier for the device.
@@ -501,6 +529,8 @@ class DeviceRegistry:
         :rtype: Device
         :raises DeviceNotFoundError: If device ID is blocked or unknown.
         """
+        device_id = DeviceIdT(device_id)
+
         try:
             self._device_filter.check_filter_lists(device_id)
         except DeviceNotFoundError as err:
@@ -553,6 +583,12 @@ class DeviceRegistry:
                     f"{getattr(parent, 'id', None)}: {err}"
                 )
                 raise
+
+        if cls is not None and not isinstance(dev, cls):
+            raise TypeError(
+                f"Device {device_id} is of type {type(dev).__name__}, "
+                f"but {cls.__name__} was expected."
+            )
 
         return dev
 
