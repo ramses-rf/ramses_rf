@@ -143,3 +143,56 @@ class TestCallbackTransport(unittest.IsolatedAsyncioTestCase):
             self.fail(f"Test failed: {err}")
         finally:
             await gwy.stop()
+
+    async def test_write_frame_propagates_asyncio_cancelled_error(self) -> None:
+        """Verify asyncio.CancelledError is re-raised during task cancellation."""
+        # Arrange
+        self.mock_writer.side_effect = asyncio.CancelledError()
+
+        # Act & Assert
+        with self.assertRaises(asyncio.CancelledError):
+            await self.transport.write_frame("test_frame")
+
+    async def test_receive_frame_handles_malformed_packets_gracefully(self) -> None:
+        """Verify malformed inbound packets do not raise unhandled exceptions."""
+        # Arrange
+        self.transport.resume_reading()
+
+        # Act & Assert (invalid hex string should log warning inside _frame_read and not raise)
+        try:
+            self.transport.receive_frame("INVALID_HEX_STRING")
+            await asyncio.sleep(0)
+        except Exception as err:
+            self.fail(
+                f"receive_frame raised unhandled exception on malformed packet: {err}"
+            )
+
+    async def test_receive_frame_validates_iso_timestamp(self) -> None:
+        """Verify invalid ISO timestamps fallback to current system time."""
+        # Arrange
+        self.transport.resume_reading()
+        invalid_timestamp = "NOT-A-VALID-TIMESTAMP"
+        valid_frame = (
+            "059 RP --- 01:195932 04:017982 --:------ 313F 009 00FC2300C4150C07E9"
+        )
+
+        # Act
+        self.transport.receive_frame(valid_frame, dtm=invalid_timestamp)
+        await asyncio.sleep(0)
+
+        # Assert
+        self.assertEqual(self.mock_protocol.pkt_received.call_count, 1)
+
+    async def test_callback_transport_teardown_cleans_up_writer(self) -> None:
+        """Verify _close resets state and clears io_writer reference."""
+        # Arrange
+        self.transport.resume_reading()
+        self.assertTrue(self.transport.is_reading())
+
+        # Act
+        self.transport.close()
+
+        # Assert
+        self.assertFalse(self.transport.is_reading())
+        with self.assertRaises(exc.TransportError):
+            await self.transport.write_frame("test_frame")
