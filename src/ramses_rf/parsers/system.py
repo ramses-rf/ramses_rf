@@ -88,13 +88,12 @@ from ramses_tx.helpers import (
     hex_to_percent,
     hex_to_str,
     hex_to_temp,
-    parse_fault_log_entry,
-    parse_outdoor_temp,
 )
 from ramses_tx.typing import PayDictT
 from ramses_tx.version import VERSION
 
 from ..protocol.fingerprints import check_signature
+from .helpers import parse_fault_log_entry, parse_outdoor_temp
 from .registry import register_parser
 
 if TYPE_CHECKING:

@@ -55,10 +55,10 @@ from ramses_tx.helpers import (
     hex_to_percent,
     hex_to_str,
     hex_to_temp,
-    parse_valve_demand,
 )
 from ramses_tx.typing import PayDictT
 
+from .helpers import parse_valve_demand
 from .registry import register_parser
 
 if TYPE_CHECKING:

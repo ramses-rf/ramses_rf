@@ -741,14 +741,14 @@ class TestParseFanInfoNullMarkers:
 
     def test_ff_returns_none(self) -> None:
         """0xFF (no data) should return fan_info=None, not crash."""
-        from ramses_tx.helpers import parse_fan_info
+        from ramses_rf.parsers.helpers import parse_fan_info
 
         result = parse_fan_info("FF")
         assert result["fan_info"] is None
 
     def test_ef_returns_none(self) -> None:
         """0xEF (not implemented) should return fan_info=None, not crash."""
-        from ramses_tx.helpers import parse_fan_info
+        from ramses_rf.parsers.helpers import parse_fan_info
 
         result = parse_fan_info("EF")
         assert result["fan_info"] is None
@@ -756,7 +756,7 @@ class TestParseFanInfoNullMarkers:
     def test_unknown_code_returns_unknown_string(self) -> None:
         """Unknown codes (e.g. 0x1F) should return '-unknown 0xNN-',
         not crash with AssertionError."""
-        from ramses_tx.helpers import parse_fan_info
+        from ramses_rf.parsers.helpers import parse_fan_info
 
         result = parse_fan_info("1F")
         assert result["fan_info"] == "-unknown 0x1F-"
@@ -764,14 +764,14 @@ class TestParseFanInfoNullMarkers:
 
     def test_valid_off_still_works(self) -> None:
         """0x00 should still parse as 'off'."""
-        from ramses_tx.helpers import parse_fan_info
+        from ramses_rf.parsers.helpers import parse_fan_info
 
         result = parse_fan_info("00")
         assert result["fan_info"] == "off"
 
     def test_valid_speed_still_works(self) -> None:
         """0x08 should still parse as a valid speed."""
-        from ramses_tx.helpers import parse_fan_info
+        from ramses_rf.parsers.helpers import parse_fan_info
 
         result = parse_fan_info("08")
         assert result["fan_info"] is not None
