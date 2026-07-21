@@ -125,13 +125,6 @@ ramses\_rf.lifecycle module
    :show-inheritance:
    :undoc-members:
 
-ramses\_rf.protocol_schema module
--------------------------
-
-.. automodule:: ramses_rf.protocol_schema
-   :members:
-   :show-inheritance:
-   :undoc-members:
 
 ramses\_rf.quirks module
 -------------------------

@@ -35,10 +35,11 @@ from ramses_tx.const import (
     W_,
     Code,
 )
-from ramses_tx.helpers import (
-    hex_to_flag8,
-    hex_to_percent,
-    hex_to_temp,
+from ramses_tx.helpers import hex_to_flag8, hex_to_percent, hex_to_temp
+from ramses_tx.typing import PayDictT
+
+from ..protocol.ramses import _31D9_FAN_INFO_VASCO, _2411_PARAMS_SCHEMA
+from .helpers import (
     parse_air_quality,
     parse_bypass_position,
     parse_capabilities,
@@ -59,9 +60,6 @@ from ramses_tx.helpers import (
     parse_supply_flow,
     parse_supply_temp,
 )
-from ramses_tx.typing import PayDictT
-
-from ..protocol.ramses import _31D9_FAN_INFO_VASCO, _2411_PARAMS_SCHEMA
 from .registry import register_parser
 
 if TYPE_CHECKING:

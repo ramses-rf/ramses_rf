@@ -19,7 +19,7 @@ from ramses_rf.const import SZ_SCHEDULE, SZ_ZONE_IDX
 from ramses_rf.devices import Controller, Fakeable
 from ramses_rf.enums import Action
 from ramses_rf.protocol.opentherm import OTB_DATA_IDS
-from ramses_rf.protocol_schema import CODES_SCHEMA
+from ramses_rf.protocol.ramses import CODES_SCHEMA
 from ramses_tx import CommandDTO, DeviceIdT, Priority
 from ramses_tx.address import NON_DEV_ADDR
 

@@ -557,7 +557,6 @@ class WantEcho(ProtocolStateBase):
         else:
             pkt__hdr = pkt_hdr
 
-        print(f"DEBUG: pkt__hdr={pkt__hdr!r} tx_header={self._sent_cmd.tx_header!r}")
         if pkt__hdr != self._sent_cmd.tx_header:
             return
 

@@ -325,7 +325,7 @@
 
 
 [tool.ruff.lint.per-file-ignores]
-  "tests/*" = ["ASYNC"]
+  "tests/*" = ["ASYNC", "D"]
 
 [tool.importlinter]
 root_packages = [

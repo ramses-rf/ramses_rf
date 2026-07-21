@@ -55,10 +55,10 @@ from ramses_tx.helpers import (
     hex_to_percent,
     hex_to_str,
     hex_to_temp,
-    parse_valve_demand,
 )
 from ramses_tx.typing import PayDictT
 
+from .helpers import parse_valve_demand
 from .registry import register_parser
 
 if TYPE_CHECKING:
@@ -758,7 +758,8 @@ def parser_2309(
     if msg.verb == RQ and msg.len == 1:  # some RQs have a payload (why?)
         return {}
 
-    return {SZ_SETPOINT: hex_to_temp(payload[2:])}
+    # payload[:2] is the zone_idx (zz), payload[2:] is the setpoint
+    return {SZ_ZONE_IDX: payload[:2], SZ_SETPOINT: hex_to_temp(payload[2:])}
 
 
 # zone_mode  # TODO: messy
@@ -786,6 +787,7 @@ def parser_2349(payload: str, msg: Message) -> PayDictT._2349 | PayDictT.EMPTY:
 
     assert payload[6:8] in ZON_MODE_MAP, f"unknown zone_mode: {payload[6:8]}"
     result: PayDictT._2349 = {
+        SZ_ZONE_IDX: payload[:2],  # zz — zone_idx
         SZ_MODE: ZON_MODE_MAP.get(payload[6:8]),  # type: ignore[typeddict-item]
         SZ_SETPOINT: hex_to_temp(payload[2:6]),
     }
