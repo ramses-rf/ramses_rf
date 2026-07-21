@@ -440,7 +440,7 @@ class DeviceRegistry:
                     bind_event = TopologyChangedEvent(
                         action=TopologyAction.BIND_DEVICE,
                         parent_id=event.device_id,
-                        child_id=cast(DeviceIdT, matched_orphan),
+                        child_id=DeviceIdT(matched_orphan),
                         metadata={
                             "zone_idx": str(zone_idx),
                             "child_id": str(zone_idx),

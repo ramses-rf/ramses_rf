@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Final, cast
+from typing import Final
 
 from . import exceptions as exc
 from .const import DEV_TYPE_MAP as _DEV_TYPE_MAP, DEVICE_ID_REGEX, DevType
@@ -102,10 +102,7 @@ class Address:
             return f"{'':10}" if friendly_id else NON_DEVICE_ID
 
         _tmp = int(device_hex, 16)
-        device_id = cast(
-            DeviceIdT,
-            f"{(_tmp & 0xFC0000) >> 18:02d}:{_tmp & 0x03FFFF:06d}",
-        )
+        device_id = DeviceIdT(f"{(_tmp & 0xFC0000) >> 18:02d}:{_tmp & 0x03FFFF:06d}")
 
         return cls._friendly(device_id) if friendly_id else device_id
 
@@ -154,10 +151,10 @@ def dev_id_to_hex_id(device_id: DeviceIdT) -> str:
 def hex_id_to_dev_id(device_hex: str, friendly_id: bool = False) -> DeviceIdT:
     """Convert (say) '06368E' to '01:145038' (or 'CTL:145038')."""
     if device_hex == "FFFFFE":  # aka '63:262142'
-        return cast(DeviceIdT, "NUL:262142" if friendly_id else ALL_DEVICE_ID)
+        return DeviceIdT("NUL:262142" if friendly_id else ALL_DEVICE_ID)
 
     if not device_hex.strip():  # aka '--:------'
-        return cast(DeviceIdT, f"{'':10}" if friendly_id else NON_DEVICE_ID)
+        return DeviceIdT(f"{'':10}" if friendly_id else NON_DEVICE_ID)
 
     _tmp = int(device_hex, 16)
     dev_type = f"{(_tmp & 0xFC0000) >> 18:02d}"
@@ -165,7 +162,7 @@ def hex_id_to_dev_id(device_hex: str, friendly_id: bool = False) -> DeviceIdT:
     if friendly_id:
         dev_type = DEV_TYPE_MAP.get(dev_type, f"{dev_type:<3}")
 
-    return cast(DeviceIdT, f"{dev_type}:{_tmp & 0x03FFFF:06d}")
+    return DeviceIdT(f"{dev_type}:{_tmp & 0x03FFFF:06d}")
 
 
 @lru_cache(maxsize=128)

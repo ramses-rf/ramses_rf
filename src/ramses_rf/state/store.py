@@ -24,7 +24,7 @@ import sqlite3
 import uuid
 from collections import OrderedDict
 from datetime import datetime as dt, timedelta as td
-from typing import TYPE_CHECKING, Any, NewType, cast
+from typing import TYPE_CHECKING, Any, NewType
 
 import orjson
 
@@ -94,8 +94,8 @@ class MessageStore:
     Index holds all the latest messages to & from all devices by `dtm`
     (timestamp) and strictly-typed `StateHeader` DTOs."""
 
-    _housekeeping_task: asyncio.Task[None]
-    _hydration_task: asyncio.Task[None]
+    _housekeeping_task: asyncio.Task[None] | None
+    _hydration_task: asyncio.Task[None] | None
 
     def __init__(
         self,
@@ -162,8 +162,8 @@ class MessageStore:
 
         if self.maintain:
             self._lock = asyncio.Lock()
-            self._last_housekeeping: dt = cast(dt, None)
-            self._housekeeping_task = cast(asyncio.Task[None], None)
+            self._last_housekeeping: dt | None = None
+            self._housekeeping_task: asyncio.Task[None] | None = None
 
         self.start()
 
@@ -174,8 +174,9 @@ class MessageStore:
         """Start the housekeeper loop."""
 
         if self.maintain:
-            if getattr(self, "_housekeeping_task", None) and (
-                not self._housekeeping_task.done()
+            if (
+                self._housekeeping_task is not None
+                and not self._housekeeping_task.done()
             ):
                 return
 
@@ -316,7 +317,7 @@ class MessageStore:
                     if len(row) > 9 and row[9]
                     else f"{verb} --- {src} {dst} --:------ {code} 001 00"
                 )
-                dtm_str = cast(DtmStrT, dtm_val.isoformat(timespec="microseconds"))
+                dtm_str = DtmStrT(dtm_val.isoformat(timespec="microseconds"))
 
                 # Reconstruct exactly as received. RSSI is stripped natively,
                 # so we pad with `... ` to satisfy Packet logic.
@@ -369,8 +370,7 @@ class MessageStore:
                 self._state_cache = {
                     m.state_header: m
                     for m in self._state_cache.values()
-                    if cast(DtmStrT, m.dtm.isoformat(timespec="microseconds"))
-                    in valid_dtms
+                    if DtmStrT(m.dtm.isoformat(timespec="microseconds")) in valid_dtms
                 }
 
             except Exception as err:
@@ -403,7 +403,7 @@ class MessageStore:
         old: Message | None = None
 
         # Check in-memory cache for collision instead of blocking SQL
-        dtm_str = cast(DtmStrT, msg.dtm.isoformat(timespec="microseconds"))
+        dtm_str = DtmStrT(msg.dtm.isoformat(timespec="microseconds"))
         if dtm_str in self._message_log:
             dup = (self._message_log[dtm_str],)
 
@@ -446,7 +446,7 @@ class MessageStore:
         :param payload: payload str to use
         """
         _now: dt = dt.now()
-        dtm = cast(DtmStrT, _now.isoformat(timespec="microseconds"))
+        dtm = DtmStrT(_now.isoformat(timespec="microseconds"))
         hdr = f"{code}|{verb}|{src}|{payload}"
 
         if self._worker:
@@ -568,7 +568,7 @@ class MessageStore:
         else:
             if msgs is not None:
                 for m in msgs:
-                    dtm_val = cast(DtmStrT, m.dtm.isoformat(timespec="microseconds"))
+                    dtm_val = DtmStrT(m.dtm.isoformat(timespec="microseconds"))
                     self._message_log.pop(dtm_val, None)
                     self._state_cache.pop(m.state_header, None)
         return msgs

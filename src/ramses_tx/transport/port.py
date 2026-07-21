@@ -214,7 +214,7 @@ class PortTransport(_FullTransport, _PortTransportAbstractor):  # type: ignore[m
 
     async def _create_connection(self) -> None:
         """Invoke connection_made() callback after HGI80 discovery."""
-        self._is_hgi80 = await is_hgi80(cast(SerPortNameT, self.serial.name or ""))
+        self._is_hgi80 = await is_hgi80(SerPortNameT(self.serial.name or ""))
 
         async def connect_sans_signature() -> None:
             """Call connection_made() without sending/waiting for a
