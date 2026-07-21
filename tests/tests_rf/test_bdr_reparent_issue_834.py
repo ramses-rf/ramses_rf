@@ -108,12 +108,17 @@ async def test_bdr_reparent_from_hotwater_valve_to_appliance_control() -> None:
 
 
 @pytest.mark.asyncio
-async def test_bdr_no_reparent_when_dhw_sensor_exists() -> None:
-    """A BDR must NOT be re-parented from hotwater_valve to
-    appliance_control when a DHW sensor exists.
+async def test_bdr_reparent_even_when_dhw_sensor_exists() -> None:
+    """A BDR must be re-parented from hotwater_valve to
+    appliance_control even when a DHW sensor exists.
 
-    If the system genuinely has DHW (sensor present), the BDR may truly be
-    the hotwater_valve, so the re-parenting must be suppressed.
+    The FC binding (appliance_control) is a higher-confidence signal than
+    the FA binding (hotwater_valve).  In issue 834, the DhwZone was
+    created spuriously from a 000C HTG binding, and a 07: DHW sensor may
+    have been auto-assigned even though the system has no DHW.  The
+    sensor is not a reliable indicator that the system genuinely has
+    DHW, so re-parenting must proceed and the spurious DhwZone must be
+    removed.
     """
     known_list = {
         CTL_ID: {"class": "CTL"},
@@ -146,15 +151,19 @@ async def test_bdr_no_reparent_when_dhw_sensor_exists() -> None:
         assert tcs.dhw.hotwater_valve is not None
         assert tcs.dhw.hotwater_valve.id == BDR_ID
 
-        # 4. Attempt to bind the same BDR as appliance_control (FC)
-        # This should NOT re-parent because a DHW sensor exists
+        # 4. Bind the same BDR as appliance_control (FC)
+        # This MUST re-parent because the FC binding is higher-confidence
+        # than the FA binding, even though a DHW sensor is present.
         with contextlib.suppress(Exception):
             gwy.device_registry.get_device(BDR_ID, parent=tcs, child_id=FC)
 
-        # 5. Verify the BDR is still hotwater_valve (not re-parented)
-        assert tcs.dhw is not None
-        assert tcs.dhw.hotwater_valve is not None
-        assert tcs.dhw.hotwater_valve.id == BDR_ID
+        # 5. Verify the BDR was re-parented to appliance_control
+        assert tcs.appliance_control is not None
+        assert tcs.appliance_control.id == BDR_ID
+        # The spurious DhwZone must be removed (no hotwater_valve, no
+        # heating_valve, no childs — the sensor alone is not enough to
+        # keep it alive).
+        assert tcs.dhw is None or tcs.dhw.hotwater_valve is None
     finally:
         await gwy.stop()
 

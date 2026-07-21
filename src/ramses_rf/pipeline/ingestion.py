@@ -86,6 +86,7 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
+from ramses_rf.dispatcher import _get_dhw_zone_from_msg
 from ramses_rf.enums import Action
 from ramses_rf.messages import Message
 from ramses_rf.models import (
@@ -338,6 +339,12 @@ class StateProjector:
                 if zone:
                     try:
                         self._update_zone_state(zone, p, msg)
+                        # 2309/2349 also carry a setpoint that the Zone's
+                        # `setpoint` property reads from temp_state.  Without
+                        # this, the zone climate entity's target_temperature
+                        # stays None (issue 843).
+                        if msg.code in (Code._2309, Code._2349):
+                            self._update_temperature_state(zone, p, msg)
                     except Exception as err:
                         _LOGGER.error(
                             "CQRS extraction failed for zone %s: %s",
@@ -377,35 +384,20 @@ class StateProjector:
 
             # Route DHW opcodes (1260/10A0/1F41) to the DhwZone.
             # These payloads carry no zone_idx/domain_id, so the block above
-            # misses the DhwZone.  1260 is sent by the DhwSensor (or relayed
-            # by the Controller as an RP); 10A0/1F41 are sent by the
-            # Controller.  All of these expose a ``tcs`` attribute whose
-            # ``dhw`` is the DhwZone.  The appliance_control (OTB) also emits
-            # 10A0/1260 with different semantics (CH setpoint / null temp), so
-            # it must be excluded to avoid clobbering the DHW read-models.
-            # Without this, the CQRS read-models (temp_state/dhw_state) on the
-            # DhwZone are never hydrated and the ramses_cc water_heater entity
-            # shows no current/target temperature.
+            # misses the DhwZone.  The shared helper in dispatcher.py
+            # encapsulates the routing logic (src_slug check, OTB exclusion).
             # See: https://github.com/ramses-rf/ramses_cc/issues/843
-            if msg.code in (Code._1260, Code._10A0, Code._1F41) and src_dev:
-                src_slug = getattr(src_dev, "_SLUG", "")
-                if msg.code == Code._1260:
-                    is_dhw_src = src_slug in ("DHW", "CTL")
-                else:  # 10A0 / 1F41 are owned by the Controller
-                    is_dhw_src = src_slug == "CTL"
-                if is_dhw_src:
-                    tcs = getattr(src_dev, "tcs", None)
-                    dhw = getattr(tcs, "dhw", None) if tcs is not None else None
-                    if dhw is not None:
-                        try:
-                            self._update_dhw_state(dhw, p, msg)
-                            self._update_temperature_state(dhw, p, msg)
-                        except Exception as err:
-                            _LOGGER.error(
-                                "CQRS extraction failed for DHW %s: %s",
-                                dhw.id,
-                                err,
-                            )
+            dhw = _get_dhw_zone_from_msg(msg, src_dev)
+            if dhw is not None:
+                try:
+                    self._update_dhw_state(dhw, p, msg)
+                    self._update_temperature_state(dhw, p, msg)
+                except Exception as err:
+                    _LOGGER.error(
+                        "CQRS extraction failed for DHW %s: %s",
+                        dhw.id,
+                        err,
+                    )
 
         # --- CQRS Reactor Hooks ---
         # Automate the legacy Actuator discovery query (3EF1) in response to 3EF0 (I)
@@ -818,7 +810,14 @@ class StateProjector:
             if hasattr(target, "apply_state_update"):
                 target.apply_state_update(event)
 
-        if msg.code in (Code._30C9, Code._1260, Code._0002, Code._12C0):
+        if msg.code in (
+            Code._30C9,
+            Code._1260,
+            Code._0002,
+            Code._12C0,
+            Code._2309,
+            Code._2349,
+        ):
             updates: dict[str, Any] = {}
             if SZ_TEMPERATURE in p:
                 # Legacy Parity: Physical sensors only track their own local sensor readings.
@@ -1021,13 +1020,33 @@ class StateProjector:
             target.apply_state_update(event)
 
     def _update_zone_state(self, target: Any, p: dict[str, Any], msg: Message) -> None:
-        """Translate zone configuration opcodes into ZoneState."""
-        if msg.code != Code._0004:
-            return
+        """Translate zone configuration opcodes into ZoneState.
 
+        Handles:
+        - 0004 (zone_name): updates zone_state.name
+        - 2349 (zone_mode): updates zone_state.mode, setpoint, until
+        - 2309 (setpoint): updates zone_state.setpoint
+        """
         updates: dict[str, Any] = {}
-        if SZ_NAME in p:
-            updates[SZ_NAME] = str(p[SZ_NAME])
+
+        if msg.code == Code._0004:
+            if SZ_NAME in p:
+                updates[SZ_NAME] = str(p[SZ_NAME])
+
+        elif msg.code == Code._2349:
+            if SZ_MODE in p:
+                updates[SZ_MODE] = p[SZ_MODE]
+            if SZ_SETPOINT in p:
+                updates[SZ_SETPOINT] = p[SZ_SETPOINT]
+            if SZ_UNTIL in p:
+                updates[SZ_UNTIL] = p[SZ_UNTIL]
+
+        elif msg.code == Code._2309:
+            if SZ_SETPOINT in p:
+                updates[SZ_SETPOINT] = p[SZ_SETPOINT]
+
+        else:
+            return
 
         if not updates:
             return
@@ -1038,7 +1057,6 @@ class StateProjector:
 
         current_state = getattr(target, "zone_state", None) or ZoneState()
         new_state = dataclasses.replace(current_state, **updates)
-        target.zone_state = new_state
 
         event = StateUpdatedEvent(
             entity_id=getattr(target, "id", "unknown"),
@@ -1048,3 +1066,5 @@ class StateProjector:
         )
         if hasattr(target, "apply_state_update"):
             target.apply_state_update(event)
+        else:
+            target.zone_state = new_state  # noqa: B010

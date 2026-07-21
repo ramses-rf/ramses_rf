@@ -198,10 +198,10 @@ class DiscoveryService:
         :type timeout: float | None, optional
         :raises CommandInvalid: If the header is missing.
         """
-        cmd_key = HeaderT(str(cmd))
+        cmd_key = HeaderT(cmd.rx_header or "")
         if not cmd_key:
             raise exc.CommandInvalid(
-                f"cmd({cmd}): invalid command not added to discovery"
+                f"cmd({cmd}): invalid (null) header not added to discovery"
             )
 
         if cmd_key in self.cmds:
