@@ -437,3 +437,48 @@ def build_get_hvac_fan_31da(intent: Command) -> CommandDTO:
         priority=Priority.DEFAULT,
         num_repeats=DEFAULT_NUM_REPEATS,
     )
+
+
+def build_set_program_enabled(intent: Command) -> CommandDTO:
+    """Translate a SET_PROGRAM_ENABLED intent into a CommandDTO.
+
+    The 22B0 (programme_status) packet enables or disables the HVAC
+    calendar/programme on a ventilation device. The REM (37:) sends a
+    ``W`` to the fan (32:), which echoes back an ``I`` frame.
+
+    Observed payloads (see ``parsers/hvac.py:parser_22b0``):
+
+    .. code-block:: text
+
+        .W --- 37:171871 32:155617 --:------ 22B0 002 0005  # enable,  calendar on
+        .W --- 37:171871 32:155617 --:------ 22B0 002 0006  # disable, calendar off
+
+    :param intent: The SET_PROGRAM_ENABLED intent. It is expected to
+        contain ``enabled`` (bool) in its data dictionary.
+    :return: A populated CommandDTO.
+    :raises ValueError: If ``enabled`` is missing or not a bool.
+    """
+    enabled = intent.get("enabled")
+
+    if enabled is None:
+        raise ValueError("Missing 'enabled' in intent data")
+    if not isinstance(enabled, bool):
+        raise ValueError(
+            f"'enabled' must be a bool, got {type(enabled).__name__}: {enabled!r}"
+        )
+
+    # 05 = calendar on, 06 = calendar off (per parser_22b0)
+    state = "05" if enabled else "06"
+    payload = f"00{state}"
+
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+    return CommandDTO(
+        verb=W_,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._22B0,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
