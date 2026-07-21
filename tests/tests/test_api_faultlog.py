@@ -5,10 +5,14 @@ import random
 from datetime import datetime as dt
 from typing import Any
 
-from ramses_rf import Address, Command, Message, Packet
+from ramses_rf import Address, CommandDTO as Command, Message, Packet
+from ramses_rf.commands.builders import build_dto
+from ramses_rf.commands.core import Command as Intent
+from ramses_rf.enums import Action
 from ramses_rf.systems.faultlog import FaultLog, FaultLogEntry
-from ramses_tx.address import HGI_DEVICE_ID
+from ramses_tx.address import HGI_DEVICE_ID, NON_DEV_ADDR
 from ramses_tx.const import SZ_LOG_ENTRY, FaultDeviceClass, FaultState, FaultType
+from ramses_tx.dtos import CommandDTO
 
 from ramses_tx.const import (  # noqa: F401, isort: skip, pylint: disable=unused-import
     I_,
@@ -33,27 +37,21 @@ def _put_system_log_entry(
     timestamp: dt | str | None = None,
     **kwargs: Any,
 ) -> Command:
-    from ramses_rf.commands.builders import build_dto
-    from ramses_rf.commands.core import Command as Intent
-    from ramses_rf.enums import Action
-    from ramses_tx.command_legacy_shim import LegacyCommandShim
 
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=Address(HGI_DEVICE_ID),
-                dst=Address(ctl_id),
-                action=Action.PUT_FAULTLOG_ENTRY,
-                data={
-                    "fault_state": fault_state,
-                    "fault_type": fault_type,
-                    "device_class": device_class,
-                    "device_id": device_id,
-                    "domain_idx": domain_idx,
-                    "log_idx": _log_idx,
-                    "timestamp": timestamp,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=Address(HGI_DEVICE_ID),
+            dst=Address(ctl_id),
+            action=Action.PUT_FAULTLOG_ENTRY,
+            data={
+                "fault_state": fault_state,
+                "fault_type": fault_type,
+                "device_class": device_class,
+                "device_id": device_id,
+                "domain_idx": domain_idx,
+                "log_idx": _log_idx,
+                "timestamp": timestamp,
+            },
         )
     )
 
@@ -167,11 +165,13 @@ def _proc_log_line(log_line: str) -> None:
 
 def _proc_null_fault_entry(fault_log: FaultLog, _log_idx: LogIdxT = "00") -> None:
     """Return a 0418 packet with no entry."""
-    cmd = Command.from_attrs(
-        I_,
-        CTL_ID,
-        Code._0418,
-        f"0000{_log_idx}B0000000000000000000007FFFFF7000000000",
+    cmd = CommandDTO(
+        verb=I_,
+        addr1=HGI_DEVICE_ID,
+        addr2=NON_DEV_ADDR.id,
+        addr3=CTL_ID,
+        code=Code._0418,
+        payload=f"0000{_log_idx}B0000000000000000000007FFFFF7000000000",
     )
     fault_log.handle_msg(Message._from_cmd(cmd))
 

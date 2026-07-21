@@ -14,6 +14,7 @@ from datetime import timedelta as td
 from typing import TYPE_CHECKING, Any, Final
 
 from ramses_tx import ALL_DEV_ADDR
+from ramses_tx.address import HGI_DEV_ADDR
 
 from . import exceptions as exc
 from .const import (
@@ -210,16 +211,48 @@ def instantiate_devices(gwy: Gateway, msg: Message) -> bool:
         #  - discovery: from packet fingerprint, excl. payloads (only for 10:)
         #  - eavesdrop: from packet fingerprint, incl. payloads
 
+        hgi_id = gwy.hgi.id if gwy.hgi else None
+
         if src_dev is None:
-            # may: DeviceNotFoundError, but don't suppress
-            src_dev = gwy.device_registry.get_device(msg.src.id)
-            if msg.dst.id == msg.src.id:
-                return True
+            # Foreign HGIs (18: devices that are not the active gateway and
+            # not the generic HGI_DEV_ADDR 18:000730) communicate with our
+            # controller — the controller's RPs are addressed to them, and
+            # they send RQs to the controller.  The active gateway eavesdrops
+            # on both directions (issue 822).
+            #
+            # The protocol-level filter (_is_wanted_addrs in ramses_tx) lets
+            # foreign HGIs through, but when enforce_known_list is True the
+            # device-registry filter (check_filter_lists in dev_filter.py)
+            # rejects them because they are not in the known_list.  This
+            # get_device call is NOT suppressed (the src device is needed for
+            # payload routing), so a DeviceNotFoundError here drops the entire
+            # packet and adds the foreign HGI to the _unwanted list — causing
+            # repeating FILTER EXCEPTION warnings on every subsequent packet
+            # from the foreign HGI (issue 822, comment 5017168119).
+            #
+            # Skip device creation for foreign HGI sources only when
+            # enforce_known_list is active (the filter would reject them).
+            # When enforce_known_list is False, the foreign HGI is created
+            # normally (as an HgiGateway) — this preserves existing behaviour
+            # for systems that don't enforce the known_list.
+            if (
+                gwy.config.engine.enforce_known_list
+                and msg.src.id[:2] == "18"
+                and msg.src.id != HGI_DEV_ADDR.id
+                and msg.src.id != hgi_id
+            ):
+                # Foreign HGI as source — skip device creation, continue
+                # processing (the dst device will be created below)
+                pass
+            else:
+                # may: DeviceNotFoundError, but don't suppress
+                src_dev = gwy.device_registry.get_device(msg.src.id)
+                if msg.dst.id == msg.src.id:
+                    return True
 
         if not gwy.config.enable_eavesdrop:
             return True
 
-        hgi_id = gwy.hgi.id if gwy.hgi else None
         if dst_dev is None and msg.src.id != hgi_id:
             with contextlib.suppress(exc.DeviceNotFoundError):
                 gwy.device_registry.get_device(msg.dst.id)
@@ -743,6 +776,49 @@ def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     target.apply_state_update(event)
 
 
+def _route_2411_to_fan(gwy: Gateway, msg: Message) -> None:
+    """Route a 2411 parameter message to its FAN aggregate root.
+
+    Phase 2.95 removed the ``HvacVentilator._handle_msg`` override that
+    previously invoked ``_handle_2411_message`` (which sets
+    ``_supports_2411`` and stores the parameter) and
+    ``_handle_initialized_callback`` (which fires the ramses_cc entity
+    creation callback).  Without this routing, FAN devices never advertise
+    2411 support, so ramses_cc never creates the ~15 parameter ``number``
+    entities (comfort temperature, etc.) — see ramses_cc issue 851.
+
+    This re-wires the 2411 handling into the CQRS ingestion pipeline (where
+    issue 639 wants domain logic to live) instead of restoring the leaky
+    ``_handle_msg`` override.  ``_handle_2411_message`` reads
+    ``msg.payload`` directly, so it is invoked once per FAN target, outside
+    the per-payload loop in ``_cqrs_ingestion_engine``.
+    """
+    registry = getattr(gwy, "device_registry", None)
+    if registry is None:
+        return
+
+    candidates: list[Any] = []
+    src_dev = registry.device_by_id.get(msg.src.id)
+    dst_dev = registry.device_by_id.get(msg.dst.id)
+    if src_dev is not None:
+        candidates.append(src_dev)
+    if dst_dev is not None and dst_dev is not src_dev:
+        candidates.append(dst_dev)
+
+    for dev in candidates:
+        # Duck-type HvacVentilator: it carries _SLUG == FAN and the two
+        # handler methods.  Avoids a circular import of HvacVentilator.
+        if getattr(dev, "_SLUG", "") != DevType.FAN:
+            continue
+        handler = getattr(dev, "_handle_2411_message", None)
+        init_cb = getattr(dev, "_handle_initialized_callback", None)
+        if not callable(handler) or not callable(init_cb):
+            continue
+        with contextlib.suppress(AttributeError, TypeError, ValueError):
+            handler(msg)
+            init_cb()
+
+
 def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
     """Parallel ingestion engine to populate immutable CQRS read-models.
 
@@ -755,6 +831,13 @@ def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
 
     if not isinstance(msg.payload, (dict, list)):
         return
+
+    # 2411 parameter messages are handled by the FAN aggregate root directly
+    # (they set _supports_2411 and fire the initialized callback).  This runs
+    # before the per-payload loop because _handle_2411_message reads
+    # msg.payload as a whole.  See ramses_cc issue 851.
+    if msg.code == Code._2411:
+        _route_2411_to_fan(gwy, msg)
 
     payloads = msg.payload if isinstance(msg.payload, list) else [msg.payload]
 

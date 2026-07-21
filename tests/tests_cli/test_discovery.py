@@ -82,7 +82,7 @@ def mock_gateway() -> MagicMock:
 @pytest.mark.asyncio
 async def test_spawn_scripts_exec_cmd(mock_gateway: MagicMock) -> None:
     """Test spawning exec_cmd."""
-    kwargs = {EXEC_CMD: "RQ 01:123456 1F09 00"}
+    kwargs = {EXEC_CMD: "RQ --- 01:123456 --:------ 01:123456 1F09 00"}
     tasks = spawn_scripts(mock_gateway, **kwargs)
     assert len(tasks) == 1
     assert len(mock_gateway._engine._tasks) == 1
@@ -142,7 +142,7 @@ async def test_spawn_scripts_exec_scr_invalid(mock_gateway: MagicMock) -> None:
 @pytest.mark.asyncio
 async def test_execution_of_exec_cmd(mock_gateway: MagicMock) -> None:
     """Test execution of exec_cmd logic."""
-    kwargs = {EXEC_CMD: "RQ 01:123456 1F09 00"}
+    kwargs = {EXEC_CMD: "RQ --- 01:123456 --:------ 01:123456 1F09 00"}
     await exec_cmd(mock_gateway, **kwargs)
     mock_gateway.async_send_cmd.assert_awaited()
 

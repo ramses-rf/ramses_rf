@@ -17,7 +17,6 @@ from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from ..address import ALL_DEV_ADDR, HGI_DEV_ADDR, NON_DEV_ADDR
-from ..command import Command
 from ..const import (
     DEFAULT_GAP_DURATION,
     DEFAULT_NUM_REPEATS,
@@ -28,7 +27,7 @@ from ..const import (
     Code,
     Priority,
 )
-from ..dtos import PacketDTO
+from ..dtos import CommandDTO, PacketDTO
 from ..exceptions import (
     PacketInvalid,
     ProtocolError,
@@ -281,11 +280,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         """
         self._pause_writing = False
 
-    async def _send_impersonation_alert(self, cmd: Command) -> None:
+    async def _send_impersonation_alert(self, cmd: CommandDTO) -> None:
         """Allow the Protocol to send an impersonation alert (stub)."""
         return
 
-    def _patch_cmd_if_needed(self, cmd: Command) -> Command:
+    def _patch_cmd_if_needed(self, cmd: CommandDTO) -> CommandDTO:
         """Patch the command with the actual HGI ID if it uses the
         default placeholder.
 
@@ -296,20 +295,22 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         if (
             self.hgi_id
             and self._is_evofw3  # Only patch if using evofw3 (not HGI80)
-            and cmd.src.id == HGI_DEV_ADDR.id
+            and cmd.addr1 == HGI_DEV_ADDR.id
             and self.hgi_id != HGI_DEV_ADDR.id
         ):
             _LOGGER.debug(
                 f"Patching command with active HGI ID: swapped "
-                f"{HGI_DEV_ADDR.id} -> {self.hgi_id} for {cmd._hdr}"
+                f"{HGI_DEV_ADDR.id} -> {self.hgi_id} for {cmd.verb}|{cmd.code}"
             )
-            return cmd.clone_with_source(self.hgi_id)
+            import dataclasses
+
+            return dataclasses.replace(cmd, addr1=self.hgi_id)
 
         return cmd
 
     async def send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -351,7 +352,7 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         if qos and not self._context:
             _LOGGER.warning(f"{cmd} < QoS is currently disabled by this Protocol")
 
-        if cmd.src.id != self.hgi_id:  # Was HGI_DEV_ADDR.id
+        if cmd.addr1 != self.hgi_id:  # Was HGI_DEV_ADDR.id
             await self._send_impersonation_alert(cmd)
 
         if qos and qos.wait_for_reply and num_repeats:
@@ -370,7 +371,7 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
 
     async def _send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -621,7 +622,7 @@ class _DeviceIdFilterMixin(_BaseProtocol):
 
     async def send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -629,7 +630,9 @@ class _DeviceIdFilterMixin(_BaseProtocol):
         priority: Priority = Priority.DEFAULT,
         qos: QosParams | None = None,
     ) -> Packet:
-        if not self._is_wanted_addrs(cmd.src.id, cmd.dst.id, sending=True):
+        if not self._is_wanted_addrs(
+            cast(DeviceIdT, cmd.addr1), cast(DeviceIdT, cmd.addr2), sending=True
+        ):
             raise ProtocolError(f"Command excluded by device_id filter: {cmd}")
         return await super().send_cmd(
             cmd,

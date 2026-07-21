@@ -1,8 +1,7 @@
 """RAMSES RF - Schedule command intent to L3 payload translation."""
 
-from ramses_rf.commands.builders.helpers import resolve_addrs
+from ramses_rf.commands.builders.helpers import _check_idx, resolve_addrs
 from ramses_rf.commands.core import Command
-from ramses_tx.command.base import _check_idx
 from ramses_tx.const import DEFAULT_NUM_REPEATS, FA, RQ, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 

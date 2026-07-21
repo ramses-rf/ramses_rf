@@ -84,6 +84,7 @@ from ramses_rf.const import (
     SZ_WINDOW_OPEN,
     SZ_ZONE_IDX,
     Code,
+    DevType,
 )
 from ramses_rf.dispatcher import _get_dhw_zone_from_msg
 from ramses_rf.enums import Action
@@ -200,6 +201,41 @@ class StateProjector:
             finally:
                 self._queue.task_done()
 
+    def _route_2411_to_fan(self, msg: Message) -> None:
+        """Route a 2411 parameter message to its FAN aggregate root.
+
+        Mirrors ``dispatcher._route_2411_to_fan`` for the StateProjector
+        ingestion path.  Phase 2.95 removed the
+        ``HvacVentilator._handle_msg`` override that previously invoked
+        ``_handle_2411_message`` (sets ``_supports_2411`` and stores the
+        parameter) and ``_handle_initialized_callback`` (fires the
+        ramses_cc entity-creation callback).  Without this routing, FAN
+        devices never advertise 2411 support, so ramses_cc never creates
+        the ~15 parameter ``number`` entities.  See ramses_cc issue 851.
+        """
+        registry = getattr(self._gwy, "device_registry", None)
+        if registry is None:
+            return
+
+        candidates: list[Any] = []
+        src_dev = registry.device_by_id.get(msg.src.id)
+        dst_dev = registry.device_by_id.get(msg.dst.id)
+        if src_dev is not None:
+            candidates.append(src_dev)
+        if dst_dev is not None and dst_dev is not src_dev:
+            candidates.append(dst_dev)
+
+        for dev in candidates:
+            if getattr(dev, "_SLUG", "") != DevType.FAN:
+                continue
+            handler = getattr(dev, "_handle_2411_message", None)
+            init_cb = getattr(dev, "_handle_initialized_callback", None)
+            if not callable(handler) or not callable(init_cb):
+                continue
+            with contextlib.suppress(AttributeError, TypeError, ValueError):
+                handler(msg)
+                init_cb()
+
     def process_message_state(self, msg: Message) -> None:
         """Route valid inbound message envelopes to their respective
         engines.
@@ -213,6 +249,15 @@ class StateProjector:
             msg.payload, (dict, list)
         ):
             return
+
+        # 2411 parameter messages are owned by the FAN aggregate root: they
+        # set _supports_2411 and fire the initialized callback that ramses_cc
+        # uses to create the ~15 parameter number entities.  Phase 2.95 moved
+        # this out of HvacVentilator._handle_msg; it must be routed here for
+        # the StateProjector path to keep parity with the dispatcher path.
+        # See ramses_cc issue 851.
+        if msg.code == Code._2411:
+            self._route_2411_to_fan(msg)
 
         payloads = msg.payload if isinstance(msg.payload, list) else [msg.payload]
 
@@ -353,12 +398,11 @@ class StateProjector:
         if msg.code == Code._3EF0 and getattr(msg, "verb", "") == " I":
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev and not getattr(src_dev, "is_faked", False):
-                from ramses_tx import Command, Priority
-                from ramses_tx.const import RQ
-                from ramses_tx.typing import PayloadT
+                from ramses_rf.devices.helpers import build_rq_cmd
+                from ramses_tx import Priority
 
                 try:
-                    cmd = Command.from_attrs(RQ, msg.src.id, Code._3EF1, PayloadT("00"))
+                    cmd = build_rq_cmd(msg.src.id, Code._3EF1, "00")
                     self._gwy.send_cmd(cmd, priority=Priority.LOW)
                 except Exception as err:
                     _LOGGER.error(

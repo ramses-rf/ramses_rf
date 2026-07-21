@@ -24,13 +24,13 @@ from ramses_rf.const import (
     SZ_OEM_CODE,
     DevType,
 )
+from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.entity import Entity, class_by_attr
 from ramses_rf.exceptions import DeviceNotFaked, SchemaInconsistentError
 from ramses_rf.models import DemandState, PowerState, TemperatureState
 from ramses_rf.schemas import SZ_ALIAS, SZ_CLASS, SZ_FAKED
 from ramses_rf.topology import Child
-from ramses_tx import Command, Packet, Priority, QosParams
-from ramses_tx.typing import PayloadT
+from ramses_tx import CommandDTO, Packet, Priority, QosParams
 
 from ..messages import Message
 from ..protocol.ramses import CODES_BY_DEV_SLUG
@@ -193,12 +193,12 @@ class DeviceBase(Entity):
         """Configure initial discovery commands for the device."""
         pass
 
-    def _send_cmd(self, cmd: Command, **kwargs: Any) -> asyncio.Task[Any] | None:
+    def _send_cmd(self, cmd: CommandDTO, **kwargs: Any) -> asyncio.Task[Any] | None:
         """Send a command from this device."""
         if (
             isinstance(self, BatteryState)
             and not self.is_faked
-            and cmd.dst.id == self.id
+            and cmd.addr2 == self.id
         ):
             _LOGGER.info(f"{cmd} < Sending inadvisable for {self} (it has a battery)")
 
@@ -354,8 +354,11 @@ class DeviceInfo(DeviceBase):  # 10E0
         if self._SLUG not in CODES_BY_DEV_SLUG or RP in CODES_BY_DEV_SLUG[
             self._SLUG
         ].get(Code._10E0, {}):
-            cmd = Command.from_attrs(RQ, self.id, Code._10E0, PayloadT("00"))
-            self.discovery.add_cmd(cmd, 60 * 60 * 24)
+            self.discovery.add_cmd(
+                build_rq_cmd(self.id, Code._10E0, "00"),
+                60 * 60 * 24,
+                delay=60 * 60 * 6,
+            )
 
     async def device_info(self) -> dict[str, Any] | None:  # 10E0
         """Return the device specification and manufacturing data.
@@ -439,7 +442,7 @@ class Fakeable(DeviceBase):
 
     async def _async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         priority: Priority | None = None,
         qos: QosParams | None = None,
     ) -> Packet | None:
@@ -518,7 +521,7 @@ class Fakeable(DeviceBase):
         /,
         *,
         confirm_code: Code | None = None,
-        ratify_cmd: Command | None = None,
+        ratify_cmd: CommandDTO | None = None,
     ) -> tuple[Packet, Message, Packet, Packet | None]:
         """Start a binding and return the Accept, or raise an exception.
 

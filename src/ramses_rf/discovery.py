@@ -16,8 +16,9 @@ from datetime import UTC, datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, cast
 
 from ramses_rf.protocol.opentherm import OPENTHERM_MESSAGES
-from ramses_tx import Command, Packet
+from ramses_tx import CommandDTO, Packet
 from ramses_tx.const import I_, RP, Code
+from ramses_tx.typing import HeaderT
 
 from . import exceptions as exc
 from .helpers import schedule_task
@@ -179,7 +180,7 @@ class DiscoveryService:
 
     def add_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         interval: float,
         *,
         delay: float = 0,
@@ -188,7 +189,7 @@ class DiscoveryService:
         """Schedule a command to run periodically.
 
         :param cmd: The command to poll.
-        :type cmd: Command
+        :type cmd: CommandDTO
         :param interval: The polling interval in seconds.
         :type interval: float
         :param delay: The initial delay before the first poll, defaults to 0.
@@ -197,19 +198,20 @@ class DiscoveryService:
         :type timeout: float | None, optional
         :raises CommandInvalid: If the header is missing.
         """
-        if cmd.rx_header is None:
+        cmd_key = HeaderT(str(cmd))
+        if not cmd_key:
             raise exc.CommandInvalid(
-                f"cmd({cmd}): invalid (null) header not added to discovery"
+                f"cmd({cmd}): invalid command not added to discovery"
             )
 
-        if cmd.rx_header in self.cmds:
+        if cmd_key in self.cmds:
             _LOGGER.info(f"cmd({cmd}): duplicate header not added to discovery")
             return
 
         if delay:
             delay += random.uniform(0.05, 0.45)
 
-        self.cmds[cmd.rx_header] = {
+        self.cmds[cmd_key] = {
             _SZ_COMMAND: cmd,
             _SZ_INTERVAL: td(seconds=max(interval, self.MAX_CYCLE_SECS)),
             _SZ_LAST_PKT: None,

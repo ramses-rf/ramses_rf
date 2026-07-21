@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ramses_rf import Code, Command, Gateway, Message, Packet
+from ramses_rf import Code, Gateway, Message, Packet
 from ramses_rf.binding_fsm import (
     SZ_RESPONDENT,
     SZ_SUPPLICANT,
@@ -28,6 +28,7 @@ from ramses_rf.binding_fsm import (
 from ramses_rf.devices import Fakeable
 from ramses_rf.gateway import GatewayConfig
 from ramses_tx import Priority, QosParams
+from ramses_tx.dtos import CommandDTO
 from ramses_tx.protocol import PortProtocol
 
 from .virtual_rf import rf_factory
@@ -222,7 +223,7 @@ def _setup_fakeable_device(gwy: Gateway, device_id: str) -> Fakeable:
     if not getattr(fake_dev, "_binding_manager", None):
 
         async def _dispatcher(
-            cmd: Command,
+            cmd: CommandDTO,
             *,
             priority: Priority | None = None,
             qos: QosParams | None = None,
@@ -264,8 +265,12 @@ def _assert_l7_parity(msg: Message, cmd: Packet) -> None:
     """Assert that a received L7 Message matches a transmitted L3/L4 Packet."""
     assert msg.verb == cmd.verb
     assert str(msg.code) == str(cmd.code)
-    assert msg.src.id == cmd.src.id
-    assert msg.dst.id == cmd.dst.id
+    if isinstance(cmd, CommandDTO):
+        assert cmd.addr1 in (msg.src.id, msg.dst.id, "--:------")
+        assert cmd.addr2 in (msg.src.id, msg.dst.id, "--:------")
+    else:
+        assert msg.src.id == cmd.src.id
+        assert msg.dst.id == cmd.dst.id
     assert msg._dto.payload == cmd.payload
 
 
@@ -421,7 +426,9 @@ async def _test_flow_20x(
 
     confirm_code = pkt_flow_expected[_AFFIRM][48:52] or None
     if len(pkt_flow_expected) > _RATIFY:
-        ratify_cmd = Command(pkt_flow_expected[_RATIFY])
+        raw = pkt_flow_expected[_RATIFY]
+        clean_raw = raw[:46] + raw[46:].replace("-", "")
+        ratify_cmd = CommandDTO.from_cli(clean_raw)
     else:
         ratify_cmd = None
 
@@ -438,7 +445,10 @@ async def _test_flow_20x(
     supp_flow = supp_task.result()
 
     for i in range(len(pkt_flow_expected)):
-        expected_cmd = Command(pkt_flow_expected[i])
+        # We only want to remove hyphens in the payload, which is from character 46 onwards
+        raw = pkt_flow_expected[i]
+        clean_raw = raw[:46] + raw[46:].replace("-", "")
+        expected_cmd = CommandDTO.from_cli(clean_raw)
 
         r_obj = cast(Any, resp_flow[i])
         if isinstance(r_obj, Message):

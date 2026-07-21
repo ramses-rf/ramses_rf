@@ -9,7 +9,9 @@ from ramses_rf.address import Address
 from ramses_rf.commands.core import Command as Intent
 from ramses_rf.enums import Action
 from ramses_rf.exceptions import DeviceNotFaked
-from ramses_tx import Packet, Priority
+from ramses_tx import CommandDTO, Packet, Priority
+from ramses_tx.address import HGI_DEV_ADDR, NON_DEV_ADDR
+from ramses_tx.const import RQ
 from ramses_tx.typing import DeviceIdT
 
 
@@ -61,4 +63,30 @@ async def send_fake_intent(
         await device._gwy.dispatcher.send(
             intent, priority=priority, wait_for_reply=wait_for_reply
         ),
+    )
+
+
+def build_rq_cmd(device_id: str, code: str, payload: str = "00") -> CommandDTO:
+    """Build a standard RQ command for a specific device."""
+
+    addr1: str
+    addr2: str
+    addr3: str
+
+    if device_id == HGI_DEV_ADDR.id:
+        addr1 = HGI_DEV_ADDR.id
+        addr2 = NON_DEV_ADDR.id
+        addr3 = device_id
+    else:
+        addr1 = HGI_DEV_ADDR.id
+        addr2 = device_id
+        addr3 = NON_DEV_ADDR.id
+
+    return CommandDTO(
+        verb=RQ,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=code,
+        payload=payload,
     )

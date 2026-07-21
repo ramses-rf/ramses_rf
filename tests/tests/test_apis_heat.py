@@ -14,9 +14,8 @@ from ramses_rf.enums import Action
 from ramses_rf.helpers import shrink
 from ramses_rf.messages import Message
 from ramses_tx.address import HGI_DEV_ADDR
-from ramses_tx.command import Command
-from ramses_tx.command_legacy_shim import LegacyCommandShim
 from ramses_tx.const import SZ_TIMESTAMP
+from ramses_tx.dtos import CommandDTO as Command
 from ramses_tx.helpers import parse_fault_log_entry
 from ramses_tx.packet import Packet
 from ramses_tx.typing import DeviceIdT
@@ -29,18 +28,16 @@ def _get_schedule_fragment(
     total_frags: int | None,
     **kwargs: Any,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.GET_SCHEDULE_FRAGMENT,
-                data={
-                    "zone_idx": zone_idx,
-                    "frag_number": frag_number,
-                    "total_frags": total_frags if total_frags is not None else 0,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.GET_SCHEDULE_FRAGMENT,
+            data={
+                "zone_idx": zone_idx,
+                "frag_number": frag_number,
+                "total_frags": total_frags if total_frags is not None else 0,
+            },
         )
     )
 
@@ -56,22 +53,20 @@ def _put_system_log_entry(
     timestamp: dt | str | None = None,
     **kwargs: Any,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.PUT_FAULTLOG_ENTRY,
-                data={
-                    "fault_state": fault_state,
-                    "fault_type": fault_type,
-                    "device_class": device_class,
-                    "device_id": device_id,
-                    "domain_idx": domain_idx,
-                    "log_idx": _log_idx,
-                    "timestamp": timestamp,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.PUT_FAULTLOG_ENTRY,
+            data={
+                "fault_state": fault_state,
+                "fault_type": fault_type,
+                "device_class": device_class,
+                "device_id": device_id,
+                "domain_idx": domain_idx,
+                "log_idx": _log_idx,
+                "timestamp": timestamp,
+            },
         )
     )
 
@@ -86,21 +81,19 @@ def _set_mix_valve_params(
     pump_run_time: int = 15,
     **kwargs: Any,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.SET_MIX_VALVE_PARAMS,
-                data={
-                    "zone_idx": zone_idx,
-                    "max_flow_setpoint": max_flow_setpoint,
-                    "min_flow_setpoint": min_flow_setpoint,
-                    "valve_run_time": valve_run_time,
-                    "pump_run_time": pump_run_time,
-                    "boolean_cc": kwargs.pop("boolean_cc", 1),
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.SET_MIX_VALVE_PARAMS,
+            data={
+                "zone_idx": zone_idx,
+                "max_flow_setpoint": max_flow_setpoint,
+                "min_flow_setpoint": min_flow_setpoint,
+                "valve_run_time": valve_run_time,
+                "pump_run_time": pump_run_time,
+                "boolean_cc": kwargs.pop("boolean_cc", 1),
+            },
         )
     )
 
@@ -114,20 +107,18 @@ def _set_tpi_params(
     min_off_time: int = 5,
     proportional_band_width: float | None = None,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.SET_TPI_PARAMS,
-                data={
-                    "domain_id": domain_id or "00",
-                    "cycle_rate": cycle_rate,
-                    "min_on_time": min_on_time,
-                    "min_off_time": min_off_time,
-                    "proportional_band_width": proportional_band_width,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.SET_TPI_PARAMS,
+            data={
+                "domain_id": domain_id or "00",
+                "cycle_rate": cycle_rate,
+                "min_on_time": min_on_time,
+                "min_off_time": min_off_time,
+                "proportional_band_width": proportional_band_width,
+            },
         )
     )
 
@@ -138,17 +129,15 @@ def _set_system_mode(
     *,
     until: dt | str | None = None,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.SET_SYSTEM_MODE,
-                data={
-                    "system_mode": system_mode,
-                    "until": until,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.SET_SYSTEM_MODE,
+            data={
+                "system_mode": system_mode,
+                "until": until,
+            },
         )
     )
 
@@ -158,17 +147,15 @@ def _set_system_time(
     datetime: dt | str,
     is_dst: bool = False,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=HGI_DEV_ADDR,
-                dst=Address(ctl_id),
-                action=Action.SET_SYSTEM_TIME,
-                data={
-                    "datetime": datetime,
-                    "is_dst": is_dst,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=HGI_DEV_ADDR,
+            dst=Address(ctl_id),
+            action=Action.SET_SYSTEM_TIME,
+            data={
+                "datetime": datetime,
+                "is_dst": is_dst,
+            },
         )
     )
 
@@ -177,16 +164,14 @@ def _put_actuator_state(
     dev_id: DeviceIdT | str,
     modulation_level: float,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=Address(dev_id),
-                dst=Address(dev_id),
-                action=Action.PUT_ACTUATOR_STATE,
-                data={
-                    "modulation_level": modulation_level,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=Address(dev_id),
+            dst=Address(dev_id),
+            action=Action.PUT_ACTUATOR_STATE,
+            data={
+                "modulation_level": modulation_level,
+            },
         )
     )
 
@@ -199,18 +184,16 @@ def _put_actuator_cycle(
     *,
     cycle_countdown: int | None = None,
 ) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=Address(src_id),
-                dst=Address(dst_id),
-                action=Action.PUT_ACTUATOR_CYCLE,
-                data={
-                    "modulation_level": modulation_level,
-                    "actuator_countdown": actuator_countdown,
-                    "cycle_countdown": cycle_countdown,
-                },
-            )
+    return build_dto(
+        Intent(
+            src=Address(src_id),
+            dst=Address(dst_id),
+            action=Action.PUT_ACTUATOR_CYCLE,
+            data={
+                "modulation_level": modulation_level,
+                "actuator_countdown": actuator_countdown,
+                "cycle_countdown": cycle_countdown,
+            },
         )
     )
 
@@ -276,8 +259,8 @@ def _test_api_from_msg(api: Callable, msg: Message, pkt: Packet) -> Command:
 
     if msg.src.id == HGI_DEV_ADDR.id:
         # assert str(cmd) == str(pkt)
-        assert cmd._frame == pkt._frame
-    assert cmd.dst.id == pkt.dst.id
+        assert str(Packet._from_cmd(cmd)._frame) == pkt._frame
+    assert Packet._from_cmd(cmd).dst.id == pkt.dst.id
     assert cmd.verb == pkt.verb
     assert cmd.code == pkt.code
     # assert cmd.payload == pkt.payload
@@ -424,14 +407,12 @@ PUT_30C9_GOOD = (
 
 
 def put_sensor_temp(dev_id: str, temperature: float) -> Command:
-    return LegacyCommandShim.from_dto(
-        build_dto(
-            Intent(
-                src=Address(dev_id),
-                dst=Address(dev_id),
-                action=Action.PUT_SENSOR_TEMP,
-                data={"temperature": temperature},
-            )
+    return build_dto(
+        Intent(
+            src=Address(dev_id),
+            dst=Address(dev_id),
+            action=Action.PUT_SENSOR_TEMP,
+            data={"temperature": temperature},
         )
     )
 
@@ -502,8 +483,8 @@ def test_put_3ef1() -> None:  # NOTE: bespoke: params, ?payload
         )
 
         if msg.src.id != HGI_DEV_ADDR.id:
-            assert cmd.src.id == pkt.src.id
-        assert cmd.dst.id == pkt.dst.id
+            assert Packet._from_cmd(cmd).src.id == pkt.src.id
+        assert Packet._from_cmd(cmd).dst.id == pkt.dst.id
         assert cmd.verb == pkt.verb
         assert cmd.code == pkt.code
 

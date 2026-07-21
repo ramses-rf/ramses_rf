@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import cast
 
-from ramses_rf.commands.builders.helpers import resolve_addrs
+from ramses_rf.commands.builders.helpers import _check_idx, resolve_addrs
 from ramses_rf.commands.core import Command
 from ramses_tx.address import ALL_DEV_ADDR, dev_id_to_hex_id
-from ramses_tx.command.base import _check_idx
 from ramses_tx.const import (
     DEFAULT_NUM_REPEATS,
     DEV_TYPE_MAP,
