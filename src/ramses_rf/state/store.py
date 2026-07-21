@@ -33,7 +33,7 @@ from ramses_tx import RP, RQ, Code, Packet
 from ..exceptions import DatabaseQueryError
 from ..messages.base import Message
 from ..messages.core import Message as CoreMessage
-from ..protocol_schema import CODES_SCHEMA
+from ..protocol.ramses import CODES_SCHEMA
 from ..routing import StateHeader
 from ..sqlite_worker import PacketLogEntry, SQLiteWorker
 

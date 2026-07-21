@@ -441,7 +441,11 @@ class Message:
             # Fallback for legacy tests until they are updated
             is_controller = getattr(self.src, "_is_controller", True)
 
-        if self.src.type == self.dst.type and not is_controller:
+        if (
+            self.src.type == self.dst.type
+            and not is_controller
+            and self.src.type != DEV_TYPE_MAP.UFC
+        ):
             assert self._idx_val == "00", "What!! (BC)"
             return {}
 
