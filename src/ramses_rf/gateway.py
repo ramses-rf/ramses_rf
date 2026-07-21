@@ -176,8 +176,6 @@ class Gateway(GatewayLifecycle, GatewayInterface):
 
         # 1. Controller Knowledge Bridge
         def is_controller(device_id: str) -> bool:
-            if device_id.startswith("02:"):
-                return True
             dev = self._device_registry.device_by_id.get(DeviceIdT(device_id))
             if dev:
                 return getattr(dev, "_is_controller", True)
