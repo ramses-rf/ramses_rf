@@ -154,7 +154,7 @@ class Packet(Frame):
         if dtm is None:
             dtm = dt.now()
         frame = (
-            f"{cmd.verb} --- {cmd.addr1} {cmd.addr2} {cmd.addr3} {cmd.code} "
+            f"{cmd.verb.strip():>2} --- {cmd.addr1} {cmd.addr2} {cmd.addr3} {cmd.code} "
             f"{int(len(cmd.payload) / 2):03d} {cmd.payload}"
         )
         return cls.from_port(dtm, f"... {frame}")
