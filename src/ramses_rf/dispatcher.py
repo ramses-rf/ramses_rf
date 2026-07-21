@@ -83,7 +83,6 @@ from .protocol.ramses import (
     CODES_OF_HEAT_DOMAIN_ONLY,
     CODES_OF_HVAC_DOMAIN_ONLY,
 )
-from .protocol_schema import CODES_BY_DEV_SLUG
 from .systems.zones import DhwZone
 
 if TYPE_CHECKING:
