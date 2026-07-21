@@ -84,9 +84,8 @@ from ramses_rf.const import (
     SZ_WINDOW_OPEN,
     SZ_ZONE_IDX,
     Code,
-    DevType,
 )
-from ramses_rf.dispatcher import _get_dhw_zone_from_msg
+from ramses_rf.dispatcher import _get_dhw_zone_from_msg, _route_2411_to_fan
 from ramses_rf.enums import Action
 from ramses_rf.messages import Message
 from ramses_rf.models import (
@@ -204,37 +203,9 @@ class StateProjector:
     def _route_2411_to_fan(self, msg: Message) -> None:
         """Route a 2411 parameter message to its FAN aggregate root.
 
-        Mirrors ``dispatcher._route_2411_to_fan`` for the StateProjector
-        ingestion path.  Phase 2.95 removed the
-        ``HvacVentilator._handle_msg`` override that previously invoked
-        ``_handle_2411_message`` (sets ``_supports_2411`` and stores the
-        parameter) and ``_handle_initialized_callback`` (fires the
-        ramses_cc entity-creation callback).  Without this routing, FAN
-        devices never advertise 2411 support, so ramses_cc never creates
-        the ~15 parameter ``number`` entities.  See ramses_cc issue 851.
+        Delegates to the shared helper in ``dispatcher.py``.
         """
-        registry = getattr(self._gwy, "device_registry", None)
-        if registry is None:
-            return
-
-        candidates: list[Any] = []
-        src_dev = registry.device_by_id.get(msg.src.id)
-        dst_dev = registry.device_by_id.get(msg.dst.id)
-        if src_dev is not None:
-            candidates.append(src_dev)
-        if dst_dev is not None and dst_dev is not src_dev:
-            candidates.append(dst_dev)
-
-        for dev in candidates:
-            if getattr(dev, "_SLUG", "") != DevType.FAN:
-                continue
-            handler = getattr(dev, "_handle_2411_message", None)
-            init_cb = getattr(dev, "_handle_initialized_callback", None)
-            if not callable(handler) or not callable(init_cb):
-                continue
-            with contextlib.suppress(AttributeError, TypeError, ValueError):
-                handler(msg)
-                init_cb()
+        _route_2411_to_fan(self._gwy, msg)
 
     def process_message_state(self, msg: Message) -> None:
         """Route valid inbound message envelopes to their respective
@@ -257,7 +228,7 @@ class StateProjector:
         # the StateProjector path to keep parity with the dispatcher path.
         # See ramses_cc issue 851.
         if msg.code == Code._2411:
-            self._route_2411_to_fan(msg)
+            _route_2411_to_fan(self._gwy, msg)
 
         payloads = msg.payload if isinstance(msg.payload, list) else [msg.payload]
 
