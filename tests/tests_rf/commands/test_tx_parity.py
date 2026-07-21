@@ -369,6 +369,54 @@ def test_build_set_bypass_position(snapshot: Any) -> None:
     assert dto.payload == "00FF"
 
 
+def test_build_set_program_enabled_true(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("37:171871"),
+        dst=Address("32:155617"),
+        action=Action.SET_PROGRAM_ENABLED,
+        data={"enabled": True},
+    )
+    dto = build_dto(intent)
+    assert str(dto.verb) == " W"
+    assert str(dto.code) == "22B0"
+    assert dto.payload == "0005"
+
+
+def test_build_set_program_enabled_false(snapshot: Any) -> None:
+    intent = Intent(
+        src=Address("37:171871"),
+        dst=Address("32:155617"),
+        action=Action.SET_PROGRAM_ENABLED,
+        data={"enabled": False},
+    )
+    dto = build_dto(intent)
+    assert str(dto.verb) == " W"
+    assert str(dto.code) == "22B0"
+    assert dto.payload == "0006"
+
+
+def test_build_set_program_enabled_missing_raises() -> None:
+    intent = Intent(
+        src=Address("37:171871"),
+        dst=Address("32:155617"),
+        action=Action.SET_PROGRAM_ENABLED,
+        data={},
+    )
+    with pytest.raises(ValueError, match="Missing 'enabled'"):
+        build_dto(intent)
+
+
+def test_build_set_program_enabled_wrong_type_raises() -> None:
+    intent = Intent(
+        src=Address("37:171871"),
+        dst=Address("32:155617"),
+        action=Action.SET_PROGRAM_ENABLED,
+        data={"enabled": "yes"},
+    )
+    with pytest.raises(ValueError, match="must be a bool"):
+        build_dto(intent)
+
+
 def test_build_get_fan_param(snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),

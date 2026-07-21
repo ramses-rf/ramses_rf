@@ -20,6 +20,7 @@ from .models import (
     ScheduleState,
     StateUpdatedEvent,
     TemperatureState,
+    ZoneState,
 )
 from .state import EntityState
 
@@ -142,6 +143,8 @@ class _Entity:
             setattr(self, "opentherm_state", event.state)  # noqa: B010
         elif isinstance(event.state, HvacState) and hasattr(self, "hvac_state"):
             setattr(self, "hvac_state", event.state)  # noqa: B010
+        elif isinstance(event.state, ZoneState) and hasattr(self, "zone_state"):
+            setattr(self, "zone_state", event.state)  # noqa: B010
 
     def _send_cmd(self, cmd: CommandDTO, **kwargs: Any) -> asyncio.Task[Any] | None:
         """Proxy command sending to the Gateway.

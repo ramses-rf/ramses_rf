@@ -599,9 +599,12 @@ class DeviceRegistry:
         if getattr(dev, "_child_id", None) != FA:
             return
 
-        if old_parent.sensor is not None:
-            return  # system genuinely has DHW; BDR may truly be hotwater_valve
-
+        # Re-parent even if the DhwZone has a sensor — the FC binding
+        # (appliance_control) is a higher-confidence signal than the FA
+        # binding (hotwater_valve).  In issue 834, the DhwZone was created
+        # spuriously from the 000C HTG binding, and a 07: DHW sensor may
+        # have been auto-assigned even though the system has no DHW.
+        # See: https://github.com/ramses-rf/ramses_cc/issues/834
         _LOGGER.info(
             "RE-PARENTING: %s from DhwZone (hotwater_valve) to "
             "System (appliance_control)",

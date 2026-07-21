@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, NewType, TypeAlias
 
 from ramses_rf import exceptions as exc
 from ramses_rf.models import FaultLogState, StateUpdatedEvent
+from ramses_rf.parsers.helpers import parse_fault_log_entry
 from ramses_tx import Packet
 from ramses_tx.const import (
     SZ_LOG_ENTRY,
@@ -19,7 +20,6 @@ from ramses_tx.const import (
     FaultState,
     FaultType,
 )
-from ramses_tx.helpers import parse_fault_log_entry
 from ramses_tx.typing import DeviceIdT, PayloadT
 
 from ..enums import Action
