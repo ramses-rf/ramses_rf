@@ -9,14 +9,14 @@ import json
 import logging
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final
 
 from ramses_rf import exceptions as exc
 from ramses_rf.address import HGI_DEV_ADDR, Address
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import SZ_SCHEDULE, SZ_ZONE_IDX
-from ramses_rf.devices import Fakeable
+from ramses_rf.devices import Controller, Fakeable
 from ramses_rf.enums import Action
 from ramses_rf.protocol.opentherm import OTB_DATA_IDS
 from ramses_rf.protocol_schema import CODES_SCHEMA
@@ -143,7 +143,7 @@ async def get_faults(
     :param start: The index to start querying from.
     :param limit: The maximum number of fault entries to return.
     """
-    ctl = cast("Controller", gwy.device_registry.get_device(ctl_id))
+    ctl = gwy.device_registry.get_device(ctl_id, cls=Controller)
 
     try:
         if ctl.tcs:
@@ -159,7 +159,7 @@ async def get_schedule(gwy: Gateway, ctl_id: DeviceIdT, zone_idx: str) -> None:
     :param ctl_id: The device ID of the controller.
     :param zone_idx: The zone index string (e.g. "00" or "HW").
     """
-    ctl = cast("Controller", gwy.device_registry.get_device(ctl_id))
+    ctl = gwy.device_registry.get_device(ctl_id, cls=Controller)
     if not ctl.tcs:
         _LOGGER.error("get_schedule(): Controller has no TCS active.")
         return
@@ -182,7 +182,7 @@ async def set_schedule(gwy: Gateway, ctl_id: DeviceIdT, schedule: str) -> None:
     schedule_ = json.loads(schedule)
     zone_idx = schedule_[SZ_ZONE_IDX]
 
-    ctl = cast("Controller", gwy.device_registry.get_device(ctl_id))
+    ctl = gwy.device_registry.get_device(ctl_id, cls=Controller)
     if not ctl.tcs:
         _LOGGER.error("set_schedule(): Controller has no TCS active.")
         return

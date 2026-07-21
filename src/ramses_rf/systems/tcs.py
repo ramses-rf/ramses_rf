@@ -1490,9 +1490,11 @@ class System(StoredHw, Datetime, Logbook, SystemBase):
             dev_id := schema[SZ_SYSTEM].get(SZ_APPLIANCE_CONTROL)
         ):
             try:
-                self._app_cntrl = self._gwy.device_registry.get_device(
+                dev = self._gwy.device_registry.get_device(
                     dev_id, parent=self, child_id=FC
                 )
+                assert isinstance(dev, (BdrSwitch, OtbGateway))
+                self._app_cntrl = dev
             except (
                 DeviceNotFoundError,
                 SchemaInconsistentError,
