@@ -75,6 +75,7 @@ from .const import (
     Code,
     DevType,
 )
+from .devices.hvac_ventilators import HvacVentilator
 from .messages import Message
 from .models import StateUpdatedEvent, SystemState
 from .protocol.ramses import (
@@ -777,7 +778,7 @@ def _update_dhw_state(target: Any, p: dict[str, Any], msg: Message) -> None:
 
 
 def _route_2411_to_fan(gwy: Gateway, msg: Message) -> None:
-    """Route a 2411 parameter message to its FAN aggregate root.
+    """Route a 2411 parameter message to its HvacVentilator aggregate root.
 
     Phase 2.95 removed the ``HvacVentilator._handle_msg`` override that
     previously invoked ``_handle_2411_message`` (which sets
@@ -793,30 +794,35 @@ def _route_2411_to_fan(gwy: Gateway, msg: Message) -> None:
     ``msg.payload`` directly, so it is invoked once per FAN target, outside
     the per-payload loop in ``_cqrs_ingestion_engine``.
     """
+    if getattr(msg, "verb", "") == "RQ":
+        return
+
     registry = getattr(gwy, "device_registry", None)
     if registry is None:
         return
 
     candidates: list[Any] = []
-    src_dev = registry.device_by_id.get(msg.src.id)
-    dst_dev = registry.device_by_id.get(msg.dst.id)
-    if src_dev is not None:
-        candidates.append(src_dev)
-    if dst_dev is not None and dst_dev is not src_dev:
-        candidates.append(dst_dev)
+    if msg.src is not None:
+        src_dev = registry.device_by_id.get(msg.src.id)
+        if src_dev is not None:
+            candidates.append(src_dev)
+    if msg.dst is not None:
+        dst_dev = registry.device_by_id.get(msg.dst.id)
+        if dst_dev is not None and dst_dev not in candidates:
+            candidates.append(dst_dev)
 
     for dev in candidates:
-        # Duck-type HvacVentilator: it carries _SLUG == FAN and the two
-        # handler methods.  Avoids a circular import of HvacVentilator.
-        if getattr(dev, "_SLUG", "") != DevType.FAN:
+        if not isinstance(dev, HvacVentilator):
             continue
-        handler = getattr(dev, "_handle_2411_message", None)
-        init_cb = getattr(dev, "_handle_initialized_callback", None)
-        if not callable(handler) or not callable(init_cb):
-            continue
-        with contextlib.suppress(AttributeError, TypeError, ValueError):
-            handler(msg)
-            init_cb()
+        try:
+            dev._handle_2411_message(msg)
+            dev._handle_initialized_callback()
+        except Exception as err:
+            _LOGGER.error(
+                "Failed to route 2411 message to ventilator %s: %s",
+                dev.id,
+                err,
+            )
 
 
 def _cqrs_ingestion_engine(gwy: Gateway, msg: Message) -> None:
