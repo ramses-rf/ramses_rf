@@ -44,15 +44,16 @@ import logging
 from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime as dt
 from functools import wraps
-from time import perf_counter
+from time import perf_counter, time
 from typing import TYPE_CHECKING, Any, Final, cast
 
 from serial import Serial, SerialException
 
 from .. import exceptions as exc
-from ..command import Command
+from ..address import ALL_DEV_ADDR, HGI_DEV_ADDR, NON_DEV_ADDR
 from ..const import (
     DUTY_CYCLE_DURATION,
+    I_,
     MAX_DUTY_CYCLE_RATE,
     MIN_INTER_WRITE_GAP,
     SZ_ACTIVE_HGI,
@@ -60,8 +61,11 @@ from ..const import (
     Code,
 )
 from ..discovery import is_hgi80
+from ..dtos import CommandDTO
+from ..helpers import hex_from_str
 from ..packet import Packet
 from ..typing import ExceptionT, SerPortNameT
+from ..version import VERSION
 from .base import TransportConfig, _FullTransport
 from .helpers import _normalise, _str
 
@@ -223,7 +227,16 @@ class PortTransport(_FullTransport, _PortTransportAbstractor):  # type: ignore[m
             """Poll port with signatures, call connection_made() after
             first echo.
             """
-            sig = Command._puzzle()
+
+            payload = f"0010{int(time() * 1000):012X}{hex_from_str(f'v{VERSION}')}"[:48]
+            sig = CommandDTO(
+                verb=I_,
+                addr1=HGI_DEV_ADDR.id,
+                addr2=ALL_DEV_ADDR.id,
+                addr3=NON_DEV_ADDR.id,
+                code=Code._PUZZ,
+                payload=payload,
+            )
             self._extra[SZ_SIGNATURE] = sig.payload
 
             num_sends = 0

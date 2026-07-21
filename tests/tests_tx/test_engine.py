@@ -12,10 +12,9 @@ import pytest
 from ramses_rf.gateway import Gateway
 from ramses_rf.messages import ApplicationMessage
 from ramses_tx.address import HGI_DEV_ADDR
-from ramses_tx.command import Command
 from ramses_tx.config import EngineConfig
 from ramses_tx.const import Code, Priority
-from ramses_tx.dtos import PacketDTO
+from ramses_tx.dtos import CommandDTO as Command, PacketDTO
 from ramses_tx.engine import Engine
 
 
@@ -268,7 +267,7 @@ async def test_engine_drop_msg(
 
 @pytest.mark.asyncio
 async def test_engine_create_cmd() -> None:
-    # Engine wraps Command.from_attrs creation natively
+    # Engine wraps CommandDTO creation natively
     cmd = Engine.create_cmd("RQ", "18:006402", Code._1FC9, "00")
     assert isinstance(cmd, Command)
     assert cmd.code == "1FC9"
@@ -278,7 +277,16 @@ async def test_engine_create_cmd() -> None:
 @pytest.mark.asyncio
 async def test_engine_async_send_cmd(dummy_engine: Engine) -> None:
     # Sends pass through effectively to protocol.send_cmd
-    cmd = Command.from_attrs("RQ", "18:006402", Code._1FC9, "00")
+    from ramses_tx.dtos import CommandDTO
+
+    cmd = CommandDTO(
+        verb="RQ",
+        addr1="18:000730",
+        addr2="18:006402",
+        addr3="--:------",
+        code=Code._1FC9,
+        payload="00",
+    )
     dummy_engine._protocol.send_cmd = AsyncMock(return_value="mock_reply")
 
     reply = await dummy_engine.async_send_cmd(cmd, priority=Priority.HIGH)

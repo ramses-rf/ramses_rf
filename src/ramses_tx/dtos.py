@@ -77,5 +77,56 @@ class CommandDTO:
     addr3: str
     code: str
     payload: str
-    priority: int
-    num_repeats: int
+    priority: int = 1
+    num_repeats: int = 1
+
+    def __str__(self) -> str:
+        """Return the string representation of the frame to be transmitted."""
+        return (
+            f"{self.verb} --- {self.addr1} {self.addr2} {self.addr3} {self.code} "
+            f"{int(len(self.payload) / 2):03d} {self.payload}"
+        )
+
+    @classmethod
+    def from_cli(cls, cli_str: str) -> "CommandDTO":
+        """Parse a CLI string into a CommandDTO."""
+        verb = cli_str[:2]
+        parts = cli_str[2:].split()
+        if len(parts) > 0 and parts[0] == "---":
+            parts.pop(0)
+
+        addr1, addr2, addr3, code = parts[:4]
+        if len(parts) == 5:
+            payload = parts[4]
+        elif len(parts) >= 6:
+            payload = parts[5]
+        else:
+            payload = ""
+
+        return cls(
+            verb=verb,
+            addr1=addr1,
+            addr2=addr2,
+            addr3=addr3,
+            code=code,
+            payload=payload,
+        )
+
+    @property
+    def tx_header(self) -> str:
+        """Return the QoS header of this (request) packet."""
+        from .frame import pkt_header
+        from .packet import Packet
+
+        pkt = Packet._from_cmd(self)
+        return str(pkt_header(pkt))
+
+    @property
+    def rx_header(self) -> str | None:
+        """Return the QoS header of the expected Rx packet."""
+        from .frame import pkt_header
+        from .packet import Packet
+
+        pkt = Packet._from_cmd(self)
+        hdr = pkt_header(pkt, rx_header=True)
+        return str(hdr) if hdr else None

@@ -3,10 +3,9 @@
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command
 from ramses_rf.interfaces import GatewayInterface
-from ramses_tx import Command as LegacyCommand, Packet, Priority
+from ramses_tx import Packet, Priority
 from ramses_tx.const import DEFAULT_WAIT_FOR_REPLY
 from ramses_tx.dtos import CommandDTO
-from ramses_tx.typing import PayloadT
 
 
 class CommandDispatcher:
@@ -37,21 +36,8 @@ class CommandDispatcher:
         """
         dto: CommandDTO = build_dto(intent)
 
-        # TEMPORARY SHIM: We must construct a legacy `ramses_tx.Command`
-        # from the DTO because Gateway.async_send_cmd currently only
-        # accepts `ramses_tx.Command`.
-        # In PR 2, Gateway will accept CommandDTO directly.
-        legacy_cmd = LegacyCommand._from_attrs(
-            dto.verb,
-            dto.code,
-            PayloadT(dto.payload),
-            addr0=dto.addr1,
-            addr1=dto.addr2,
-            addr2=dto.addr3,
-        )
-
         return await self._gwy.async_send_cmd(
-            legacy_cmd,
+            dto,
             priority=priority if priority is not None else Priority(dto.priority),
             wait_for_reply=wait_for_reply,
         )

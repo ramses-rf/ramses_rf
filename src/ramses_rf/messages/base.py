@@ -10,8 +10,7 @@ from datetime import datetime as dt
 from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
 from ramses_rf.address import Address
-from ramses_tx.command import Command
-from ramses_tx.dtos import PacketDTO
+from ramses_tx import CommandDTO, PacketDTO
 from ramses_tx.models import DeviceId, RawPacket, TransportMessage
 from ramses_tx.typing import DeviceIdT
 
@@ -220,12 +219,12 @@ class Message:
 
     @classmethod
     def _from_cmd(
-        cls: type[_MessageT], cmd: Command, dtm: dt | None = None
+        cls: type[_MessageT], cmd: CommandDTO, dtm: dt | None = None
     ) -> _MessageT:
         """Create a Message (or subclass) from a Command.
 
         :param cmd: The command.
-        :type cmd: Command
+        :type cmd: CommandDTO
         :param dtm: Datetime overrides.
         :type dtm: dt | None
         :return: The generated message.

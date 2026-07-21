@@ -24,7 +24,7 @@ from .models import (
 from .state import EntityState
 
 if TYPE_CHECKING:
-    from ramses_tx import Command, Packet
+    from ramses_tx import CommandDTO, Packet
     from ramses_tx.typing import DeviceIdT, DevIndexT
 
     from .devices import Controller
@@ -143,11 +143,11 @@ class _Entity:
         elif isinstance(event.state, HvacState) and hasattr(self, "hvac_state"):
             setattr(self, "hvac_state", event.state)  # noqa: B010
 
-    def _send_cmd(self, cmd: Command, **kwargs: Any) -> asyncio.Task[Any] | None:
+    def _send_cmd(self, cmd: CommandDTO, **kwargs: Any) -> asyncio.Task[Any] | None:
         """Proxy command sending to the Gateway.
 
         :param cmd: The command to send.
-        :type cmd: Command
+        :type cmd: CommandDTO
         :param kwargs: Optional sending parameters (e.g., priority).
         :type kwargs: Any
         :returns: The corresponding asyncio Task or None.
@@ -161,14 +161,14 @@ class _Entity:
 
     async def _async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         priority: Priority | None = None,
         qos: QosParams | None = None,
     ) -> Packet | None:
         """Proxy asynchronous command sending to the Gateway.
 
         :param cmd: The command to send.
-        :type cmd: Command
+        :type cmd: CommandDTO
         :param priority: Transmission priority, defaults to None.
         :type priority: Priority | None, optional
         :param qos: Quality of Service parameters, defaults to None.

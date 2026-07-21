@@ -9,9 +9,8 @@ together.
 from __future__ import annotations
 
 import logging
-from typing import Final, TypeAlias
+from typing import Final, TypeAlias, cast
 
-from ..command import Command
 from ..const import (
     DEFAULT_DISABLE_QOS,
     DEFAULT_GAP_DURATION,
@@ -23,10 +22,11 @@ from ..const import (
     Code,
     Priority,
 )
+from ..dtos import CommandDTO
 from ..exceptions import ProtocolError, ProtocolSendFailed, ProtocolTimeoutError
 from ..interfaces import TransportInterface
 from ..packet import Packet
-from ..typing import MsgHandlerT, QosParams
+from ..typing import DeviceIdT, MsgHandlerT, QosParams
 from .base import DEFAULT_QOS, _DeviceIdFilterMixin
 from .fsm import ProtocolContext
 
@@ -88,7 +88,7 @@ class ReadProtocol(_DeviceIdFilterMixin):
 
     async def send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -97,7 +97,9 @@ class ReadProtocol(_DeviceIdFilterMixin):
         qos: QosParams | None = None,
     ) -> Packet:
         """Raise an exception as the Protocol cannot send Commands."""
-        raise NotImplementedError(f"{cmd._hdr}: < this Protocol is Read-Only")
+        raise NotImplementedError(
+            f"{cmd.verb}|{cmd.code}: < this Protocol is Read-Only"
+        )
 
 
 class PortProtocol(_DeviceIdFilterMixin):
@@ -206,22 +208,25 @@ class PortProtocol(_DeviceIdFilterMixin):
         if self._context:
             self._context.pkt_received(pkt)
 
-    async def _send_impersonation_alert(self, cmd: Command) -> None:
+    async def _send_impersonation_alert(self, cmd: CommandDTO) -> None:
         """Send a puzzle packet warning that impersonation is occurring."""
         if _DBG_DISABLE_IMPERSONATION_ALERTS:
             return
 
-        msg = f"{self}: Impersonating device: {cmd.src}, for pkt: {cmd.tx_header}"
+        msg = f"{self}: Impersonating device: {cmd.addr1}, for pkt: {str(cmd)}"
         if self._is_evofw3 is False:
             _LOGGER.error(f"{msg}, NB: non-evofw3 gateways can't impersonate!")
         else:
             _LOGGER.info(msg)
 
-        await self._send_cmd(Command._puzzle(msg_type="11", message=cmd.tx_header))
+        # Puzzle packet creation for impersonation alert was originally here
+        # It's omitted since LegacyCommandShim is removed; typically we don't
+        # need to send a puzzle packet just for logging, or we can send a custom DTO.
+        _LOGGER.warning("Impersonation puzzle packet sending is deprecated.")
 
     async def _send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -231,7 +236,7 @@ class PortProtocol(_DeviceIdFilterMixin):
     ) -> Packet:
         """Wrapper to send a Command with QoS (retries, until success or exception)."""
 
-        async def send_cmd(kmd: Command) -> None:
+        async def send_cmd(kmd: CommandDTO) -> None:
             """Wrapper for self._send_frame(cmd)."""
             await self._send_frame(
                 str(kmd), gap_duration=gap_duration, num_repeats=num_repeats
@@ -255,15 +260,15 @@ class PortProtocol(_DeviceIdFilterMixin):
         try:
             return await self._context.send_cmd(send_cmd, cmd, priority, qos)
         except ProtocolTimeoutError as err:
-            _LOGGER.warning(f"{self}: Send timed out for {cmd._hdr}: {err}")
+            _LOGGER.warning(f"{self}: Send timed out for {cmd.verb}|{cmd.code}: {err}")
             raise
         except ProtocolError as err:
-            _LOGGER.info(f"{self}: Failed to send {cmd._hdr}: {err}")
+            _LOGGER.info(f"{self}: Failed to send {cmd.verb}|{cmd.code}: {err}")
             raise
 
     async def send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -310,7 +315,9 @@ class PortProtocol(_DeviceIdFilterMixin):
         cmd = self._patch_cmd_if_needed(cmd)
 
         # Manual filter check to avoid calling super().send_cmd(), which fails
-        if not self._is_wanted_addrs(cmd.src.id, cmd.dst.id, sending=True):
+        if not self._is_wanted_addrs(
+            cast(DeviceIdT, cmd.addr1), cast(DeviceIdT, cmd.addr2), sending=True
+        ):
             raise ProtocolError(f"Command excluded by device_id filter: {cmd}")
 
         pkt = await self._send_cmd(

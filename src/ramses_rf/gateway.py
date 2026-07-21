@@ -12,7 +12,7 @@ from logging.handlers import QueueListener
 from typing import TYPE_CHECKING, Any, cast
 
 from ramses_rf.commands.dispatcher import CommandDispatcher
-from ramses_tx import I_, RP, Command, Engine, Packet
+from ramses_tx import I_, RP, CommandDTO, Engine, Packet
 from ramses_tx.const import (
     DEFAULT_GAP_DURATION,
     DEFAULT_MAX_RETRIES,
@@ -405,7 +405,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         code: Code,
         payload: PayloadT,
         **kwargs: Any,
-    ) -> Command:
+    ) -> CommandDTO:
         return Engine.create_cmd(
             verb,
             device_id,
@@ -416,7 +416,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
 
     def send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,
@@ -447,7 +447,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
 
     async def async_send_cmd(
         self,
-        cmd: Command,
+        cmd: CommandDTO,
         /,
         *,
         gap_duration: float = DEFAULT_GAP_DURATION,

@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .command import Command
     from .const import Priority
+    from .dtos import CommandDTO
     from .packet import Packet
     from .typing import QosParams
 
@@ -57,7 +57,7 @@ class ProtocolInterface(ABC):
     @abstractmethod
     async def send_cmd(
         self,
-        cmd: "Command",
+        cmd: "CommandDTO",
         /,
         *,
         qos: "QosParams | None" = None,
@@ -84,7 +84,7 @@ class StateMachineInterface(ABC):
     async def send_cmd(
         self,
         send_fnc: Any,
-        cmd: "Command",
+        cmd: "CommandDTO",
         priority: "Priority",
         qos: "QosParams",
     ) -> "Packet":

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from ramses_rf import Command, Gateway
+from ramses_rf import CommandDTO as Command, Gateway
 from ramses_rf.gateway import GatewayConfig
 from ramses_tx import exceptions as exc
 from ramses_tx.address import HGI_DEVICE_ID, Address
@@ -105,7 +105,7 @@ async def _test_gwy_device(gwy: Gateway, test_idx: int) -> None:
     cmd_str = TEST_CMDS[test_idx].replace(TST_ID_, gwy.hgi.id)
     # this is irrevelent for fake (virtual) gwys, as they been assigned this id
 
-    cmd = Command(cmd_str)
+    cmd = Command.from_cli(cmd_str)
     assert str(cmd) == cmd_str  # sanity check
 
     # a HGI80 (ti4310) will silently discard all frames that have addr0 != 18:000730
@@ -140,7 +140,7 @@ async def _test_gwy_device(gwy: Gateway, test_idx: int) -> None:
     # NOTE: both HGI80/evofw3 will swap out addr0 (only) for its own device_id
     # evofw3 will also patch src if it is the HGI placeholder (incl. --:------
     # which Command normalizes to 18:000730 when addr0 is 18:000730)
-    if cmd_str[7:16] == HGI_DEVICE_ID or (not is_hgi80 and cmd.src.id == HGI_DEVICE_ID):
+    if cmd_str[7:16] == HGI_DEVICE_ID:
         pkt_str = cmd_str[:7] + gwy.hgi.id + cmd_str[16:]
     else:
         pkt_str = cmd_str

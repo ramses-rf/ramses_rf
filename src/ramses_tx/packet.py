@@ -18,9 +18,8 @@ from ramses_rf.protocol.opentherm import (
 )
 from ramses_rf.protocol.ramses import CODES_SCHEMA, SZ_LIFESPAN
 
-from .command import Command
 from .const import I_, RP, RQ, W_, Code, VerbT
-from .dtos import PacketDTO
+from .dtos import CommandDTO, PacketDTO
 from .exceptions import PacketInvalid
 from .frame import Frame
 from .logger import getLogger  # overridden logger.getLogger
@@ -150,11 +149,15 @@ class Packet(Frame):
         return parts[0], parts[1], parts[2]
 
     @classmethod
-    def _from_cmd(cls, cmd: Command, dtm: dt | None = None) -> Packet:
-        """Create a Packet from a Command."""
+    def _from_cmd(cls, cmd: CommandDTO, dtm: dt | None = None) -> Packet:
+        """Create a Packet from a CommandDTO."""
         if dtm is None:
             dtm = dt.now()
-        return cls.from_port(dtm, f"... {cmd._frame}")
+        frame = (
+            f"{cmd.verb} --- {cmd.addr1} {cmd.addr2} {cmd.addr3} {cmd.code} "
+            f"{int(len(cmd.payload) / 2):03d} {cmd.payload}"
+        )
+        return cls.from_port(dtm, f"... {frame}")
 
     def to_dto(self) -> PacketDTO:
         """Serialize the packet to a structured DTO object."""

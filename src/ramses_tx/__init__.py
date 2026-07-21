@@ -11,7 +11,6 @@ from logging.handlers import QueueListener
 from typing import TYPE_CHECKING, Any
 
 from .address import ALL_DEV_ADDR, ALL_DEVICE_ID, NON_DEV_ADDR, NON_DEVICE_ID, Address
-from .command import CODE_API_MAP, Command
 from .const import (
     DEV_ROLE_MAP,
     DEV_TYPE_MAP,
@@ -35,6 +34,7 @@ from .const import (
     ZoneRole,
 )
 from .discovery import is_hgi80
+from .dtos import CommandDTO, PacketDTO
 from .engine import Engine
 from .logger import set_pkt_logging
 from .packet import PKT_LOGGER, Packet
@@ -71,7 +71,6 @@ __all__ = [
     "NON_DEV_ADDR",
     "NON_DEVICE_ID",
     #
-    "CODE_API_MAP",
     "DEV_ROLE_MAP",
     "DEV_TYPE_MAP",
     "ZON_ROLE_MAP",
@@ -94,8 +93,9 @@ __all__ = [
     #
     "Address",
     "Code",
-    "Command",
+    "CommandDTO",
     "Packet",
+    "PacketDTO",
     "Priority",
     "QosParams",
     #

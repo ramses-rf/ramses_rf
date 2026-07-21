@@ -62,16 +62,8 @@ from ramses_rf.schemas import (
     SZ_UFH_SYSTEM,
 )
 from ramses_rf.topology import Parent
-from ramses_tx import (
-    DEV_ROLE_MAP,
-    DEV_TYPE_MAP,
-    ZON_ROLE_MAP,
-    Command,
-    DeviceIdT,
-    Priority,
-)
-from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.typing import PayDictT, PayloadT
+from ramses_tx import DEV_ROLE_MAP, DEV_TYPE_MAP, ZON_ROLE_MAP, DeviceIdT, Priority
+from ramses_tx.typing import PayDictT
 
 from ..messages import Message
 from .faultlog import FaultLog
@@ -182,17 +174,17 @@ class SystemBase(Parent, Entity):  # 3B00 (multi-relay)
             f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
             f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
         ):
-            cmd = Command.from_attrs(RQ, self.ctl.id, Code._000C, PayloadT(payload))
+            from ramses_rf.devices.helpers import build_rq_cmd
+
+            cmd = build_rq_cmd(self.ctl.id, Code._000C, payload)
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_TPI_PARAMS,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_TPI_PARAMS,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60 * 6, delay=5)
@@ -468,9 +460,9 @@ class MultiZone(SystemBase):  # 0005 (+/- 000C?)
         super()._setup_discovery_cmds()
 
         for zone_type in list(ZON_ROLE_MAP.HEAT_ZONES) + [ZON_ROLE_MAP.SEN]:
-            cmd = Command.from_attrs(
-                RQ, self.id, Code._0005, PayloadT(f"00{zone_type}")
-            )
+            from ramses_rf.devices.helpers import build_rq_cmd
+
+            cmd = build_rq_cmd(self.id, Code._0005, f"00{zone_type}")
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
     async def _eavesdrop_zone_sensors(self, msg: Message, prev: Message | None) -> None:
@@ -828,7 +820,9 @@ class ScheduleSync(SystemBase):  # 0006 (+/- 0404?)
         """Configure discovery commands for schedules."""
         super()._setup_discovery_cmds()
 
-        cmd = Command.from_attrs(RQ, self.id, Code._0006, PayloadT("00"))
+        from ramses_rf.devices.helpers import build_rq_cmd
+
+        cmd = build_rq_cmd(self.id, Code._0006, "00")
         self.discovery.add_cmd(cmd, 60 * 5, delay=5)
 
     def _handle_msg(self, msg: Message) -> None:  # NOTE: active
@@ -948,14 +942,12 @@ class Language(SystemBase):  # 0100
         """Configure discovery for system language."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_LANGUAGE,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_LANGUAGE,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=60 * 15)
@@ -1003,7 +995,9 @@ class Logbook(SystemBase):  # 0418
         """Configure discovery for the fault log."""
         super()._setup_discovery_cmds()
 
-        cmd = Command.from_attrs(RQ, self.id, Code._0418, PayloadT("000000"))
+        from ramses_rf.devices.helpers import build_rq_cmd
+
+        cmd = build_rq_cmd(self.id, Code._0418, "000000")
         self.discovery.add_cmd(cmd, 60 * 5, delay=5)
         task = asyncio.create_task(self.get_faultlog())
         self._gwy.add_task(task)
@@ -1101,11 +1095,13 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             # f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
             # f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
         ):
-            cmd = Command.from_attrs(RQ, self.id, Code._000C, PayloadT(payload))
+            from ramses_rf.devices.helpers import build_rq_cmd
+
+            cmd = build_rq_cmd(self.id, Code._000C, payload)
             self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1119,7 +1115,7 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             delay=5,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1133,7 +1129,7 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             delay=10,
         )
         self.discovery.add_cmd(
-            LegacyCommandShim.from_dto(
+            (
                 build_dto(
                     Intent_(
                         src=HGI_DEV_ADDR,
@@ -1204,6 +1200,32 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
             self._dhw._handle_msg(msg)
         return self._dhw
 
+    def _remove_dhw_zone(self) -> bool:
+        """Remove the DhwZone from this system if it is empty.
+
+        A DhwZone is considered empty when it has no sensor, no hotwater
+        valve, no heating valve, and no remaining children.  This is used
+        during re-parenting (e.g. when a BDR is promoted from
+        ``hotwater_valve`` to ``appliance_control``) to clean up a
+        spurious DhwZone that was created by a lower-confidence binding.
+
+        :returns: ``True`` if the DhwZone was removed, ``False`` if it
+            was retained because it still has children.
+        :rtype: bool
+        """
+        if not self._dhw:
+            return False
+
+        if (
+            self._dhw.sensor is None
+            and self._dhw.hotwater_valve is None
+            and self._dhw.heating_valve is None
+            and not self._dhw.childs
+        ):
+            self._dhw = None  # type: ignore[assignment]
+            return True
+        return False
+
     @property
     def dhw(self) -> DhwZone | None:
         """Return the DHW zone instance."""
@@ -1256,14 +1278,12 @@ class SysMode(SystemBase):  # 2E04
         """Configure discovery for the system mode."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_MODE,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_MODE,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 5, delay=5)
@@ -1299,14 +1319,12 @@ class SysMode(SystemBase):  # 2E04
         :returns: The packet containing the command payload.
         :rtype: Packet
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.SET_SYSTEM_MODE,
-                    data={"system_mode": system_mode, "until": until},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.SET_SYSTEM_MODE,
+                data={"system_mode": system_mode, "until": until},
             )
         )
         return await self._gwy.async_send_cmd(
@@ -1343,14 +1361,12 @@ class Datetime(SystemBase):  # 313F
         """Configure discovery for system time."""
         super()._setup_discovery_cmds()
 
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_TIME,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
             )
         )
         self.discovery.add_cmd(cmd, 60 * 60, delay=0)
@@ -1378,14 +1394,12 @@ class Datetime(SystemBase):  # 313F
         :returns: The system datetime, or None if unavailable.
         :rtype: dt | None
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_SYSTEM_TIME,
-                    data={},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.GET_SYSTEM_TIME,
+                data={},
             )
         )
         pkt = await self._gwy.async_send_cmd(cmd, wait_for_reply=True)
@@ -1400,14 +1414,12 @@ class Datetime(SystemBase):  # 313F
         :returns: The packet containing the command payload.
         :rtype: Packet
         """
-        cmd = LegacyCommandShim.from_dto(
-            build_dto(
-                Intent_(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.SET_SYSTEM_TIME,
-                    data={"datetime": dtm},
-                )
+        cmd = build_dto(
+            Intent_(
+                src=HGI_DEV_ADDR,
+                dst=Address(self.id),
+                action=Action.SET_SYSTEM_TIME,
+                data={"datetime": dtm},
             )
         )
         return await self._gwy.async_send_cmd(cmd, priority=Priority.HIGH)

@@ -10,8 +10,8 @@
 # - pip list | grep -E 'pre-commit|ruff|mypy|types-|voluptuous|pytest|hatch'
 
 # used for development (linting)
-  prek == 0.4.8                                 # latest, same as ramses_cc
-  ruff >= 0.15.21                               # HA uses 0.15.5 ! also in: pre-commit-config.yaml
+  prek == 0.4.10                                 # latest, same as ramses_cc
+  ruff >= 0.15.22                               # HA uses 0.15.5 ! also in: pre-commit-config.yaml
 
 # used for development (typing)
   mypy >= 2.3.0                                 # HA uses  1.19.0a4 !
@@ -27,7 +27,7 @@
   pytest-sugar >= 1.1.1                          # HA uses 1.0.0
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
   PyYAML                                         # required for tests/tests/test_vol_schema import
-  syrupy >= 5.5.1                                # HA uses 5.0.0 - 07/02/2026 - 2026.2.1
+  syrupy >= 5.5.3                                # HA uses 5.0.0 - 07/02/2026 - 2026.2.1
 
 # used for build/deploy
   hatch >= 1.17.1

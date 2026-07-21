@@ -12,7 +12,6 @@ from ramses_rf.const import (
     DEV_ROLE_MAP,
     FA,
     FC,
-    RQ,
     SZ_DOMAIN_ID,
     SZ_HEAT_DEMAND,
     SZ_RELAY_DEMAND,
@@ -24,15 +23,14 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
+from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.entity import Entity
 from ramses_rf.enums import Action
 from ramses_rf.helpers import shrink
 from ramses_rf.models import DeviceTraits
 from ramses_rf.schemas import SCH_TCS, SZ_CIRCUITS
 from ramses_rf.topology import Child, Parent
-from ramses_tx import Command
-from ramses_tx.command_legacy_shim import LegacyCommandShim
-from ramses_tx.typing import DeviceIdT, DevIndexT, PayloadT
+from ramses_tx.typing import DeviceIdT, DevIndexT
 
 from .dev_base import DeviceHeat
 
@@ -72,8 +70,9 @@ class Controller(DeviceHeat):  # CTL (01):
 
         if not self.is_faked:
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, Code._2E04, PayloadT("00")),
-                60 * 60,  # Poll every 60 minutes after initial startup query
+                build_rq_cmd(self.id, Code._2E04, "00"),
+                60 * 60 * 24,
+                delay=60 * 60,
             )
 
     def _handle_msg(self, msg: Message) -> None:
@@ -126,11 +125,11 @@ class Programmer(Controller):  # PRG (23):
         if not self.is_faked:
             # PRGs respond to RP for 1090, 10A0, 3EF1
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, Code._1090, PayloadT("00")),
+                build_rq_cmd(self.id, Code._1090, "00"),
                 60 * 60 * 6,  # every 6 hours
             )
             self.discovery.add_cmd(
-                Command.from_attrs(RQ, self.id, Code._10A0, PayloadT("00")),
+                build_rq_cmd(self.id, Code._10A0, "00"),
                 60 * 60 * 6,
             )
 
@@ -181,41 +180,34 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
 
         # Only RPs are: 0001, 0005/000C, 10E0, 000A/2309 & 22D0
 
-        cmd = Command.from_attrs(
-            RQ, self.id, Code._0005, PayloadT(f"00{DEV_ROLE_MAP.UFH}")
-        )
+        cmd = build_rq_cmd(self.id, Code._0005, f"00{DEV_ROLE_MAP.UFH}")
         self.discovery.add_cmd(cmd, 60 * 60 * 24)
 
         # TODO: this needs work
         # if discover_flag & Discover.PARAMS:  # only 2309 has any potential?
         for ufc_idx in getattr(self, "circuit_by_id", {}):
-            cmd = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_ZONE_CONFIG,
-                        data={"zone_idx": ufc_idx},
-                    )
+            cmd = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_ZONE_CONFIG,
+                    data={"zone_idx": ufc_idx},
                 )
             )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)
 
-            cmd = LegacyCommandShim.from_dto(
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_ZONE_SETPOINT,
-                        data={"zone_idx": ufc_idx},
-                    )
+            cmd = build_dto(
+                Intent(
+                    src=HGI_DEV_ADDR,
+                    dst=Address(self.id),
+                    action=Action.GET_ZONE_SETPOINT,
+                    data={"zone_idx": ufc_idx},
                 )
             )
             self.discovery.add_cmd(cmd, 60 * 60 * 6)
 
         for ufc_idx in range(8):
-            payload = PayloadT(f"{ufc_idx:02X}{DEV_ROLE_MAP.UFH}")
-            cmd = Command.from_attrs(RQ, self.id, Code._000C, payload)
+            cmd = build_rq_cmd(self.id, Code._000C, f"{ufc_idx:02X}{DEV_ROLE_MAP.UFH}")
             self.discovery.add_cmd(cmd, 60 * 60 * 24)
 
     def _handle_msg(self, msg: Message) -> None:
@@ -240,9 +232,7 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
                     self.circuit_by_id[ufh_idx] = {SZ_ZONE_IDX: None}
                 # FIXME: this causing tests to fail when read-only protocol
                 # elif SZ_ZONE_IDX not in self.circuit_by_id[ufh_idx]:
-                #     cmd = Command.from_attrs(
-                #         RQ, self.ctl.id, Code._000C, f"{ufh_idx}{DEV_ROLE_MAP.UFH}"
-                #     )
+                #     cmd = build_rq_cmd(self.ctl.id, Code._000C, f"{ufh_idx}{DEV_ROLE_MAP.UFH}")
                 #     self._send_cmd(cmd)
 
         elif msg.code == Code._0008:  # relay_demand
