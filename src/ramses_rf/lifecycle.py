@@ -128,7 +128,7 @@ class GatewayLifecycle:
         # the TopologyBuilder pipeline will never emit a BIND_DEVICE event for it.
         if self.config.hgi_id:
             with contextlib.suppress(DeviceNotFoundError):
-                self.device_registry.get_device(cast(DeviceIdT, self.config.hgi_id))
+                self.device_registry.get_device(DeviceIdT(self.config.hgi_id))
 
         if cached_packets:
             await self._restore_cached_packets(cached_packets)
@@ -146,7 +146,7 @@ class GatewayLifecycle:
                     if hasattr(self.config.engine, "hgi_id"):
                         self.config.engine.hgi_id = hgi_str
                 with contextlib.suppress(DeviceNotFoundError):
-                    self.device_registry.get_device(cast(DeviceIdT, hgi_str))
+                    self.device_registry.get_device(DeviceIdT(hgi_str))
 
         self.config.disable_discovery = disable_discovery
 

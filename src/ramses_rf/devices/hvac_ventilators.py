@@ -583,10 +583,8 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             src_id,
         )
 
-        from typing import cast
-
         intent = Intent(
-            src=Address(cast(DeviceIdT, src_id)),
+            src=Address(DeviceIdT(src_id)),
             dst=Address(self.id),
             action=Action.SET_FAN_MODE,
             data={"fan_mode": fan_mode, "scheme": self._scheme or "orcon"},

@@ -4,6 +4,12 @@ import math
 
 from ramses_rf.commands.builders.helpers import resolve_addrs
 from ramses_rf.commands.core import Command
+from ramses_rf.parsers.helpers import (
+    air_quality_code,
+    capability_bits,
+    fan_info_flags,
+    fan_info_to_byte,
+)
 from ramses_rf.protocol.ramses import (
     _22F1_SCHEMES,
     _2411_PARAMS_SCHEMA,
@@ -15,15 +21,7 @@ from ramses_rf.protocol.ramses import (
 from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.const import DEFAULT_NUM_REPEATS, I_, RQ, SZ_MINUTES, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
-from ramses_tx.helpers import (
-    air_quality_code,
-    capability_bits,
-    fan_info_flags,
-    fan_info_to_byte,
-    hex_from_double,
-    hex_from_percent,
-    hex_from_temp,
-)
+from ramses_tx.helpers import hex_from_double, hex_from_percent, hex_from_temp
 
 _22F1_MODE_MAX: dict[str, str | None] = {
     "itho": "04",

@@ -9,7 +9,7 @@ together.
 from __future__ import annotations
 
 import logging
-from typing import Final, TypeAlias, cast
+from typing import Final, TypeAlias
 
 from ..const import (
     DEFAULT_DISABLE_QOS,
@@ -316,7 +316,7 @@ class PortProtocol(_DeviceIdFilterMixin):
 
         # Manual filter check to avoid calling super().send_cmd(), which fails
         if not self._is_wanted_addrs(
-            cast(DeviceIdT, cmd.addr1), cast(DeviceIdT, cmd.addr2), sending=True
+            DeviceIdT(cmd.addr1), DeviceIdT(cmd.addr2), sending=True
         ):
             raise ProtocolError(f"Command excluded by device_id filter: {cmd}")
 

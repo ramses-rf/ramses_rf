@@ -389,9 +389,9 @@ class UfhCircuit(Child, Entity):  # FIXME
         # FIXME: gwy.message_store entities must know their parent device ID
         # and their own idx
         self._z_id = ufc.id
-        self._z_idx = cast("DevIndexT", ufh_idx)
+        self._z_idx = DevIndexT(ufh_idx)
 
-        self.id: DeviceIdT = cast("DeviceIdT", f"{ufc.id}_{ufh_idx}")
+        self.id: DeviceIdT = DeviceIdT(f"{ufc.id}_{ufh_idx}")
 
         self.ufc: UfhController = ufc
         self._child_id = ufh_idx
