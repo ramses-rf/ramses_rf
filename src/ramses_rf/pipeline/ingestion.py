@@ -86,6 +86,7 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
+from ramses_rf.dispatcher import _get_dhw_zone_from_msg
 from ramses_rf.enums import Action
 from ramses_rf.messages import Message
 from ramses_rf.models import (
@@ -377,35 +378,20 @@ class StateProjector:
 
             # Route DHW opcodes (1260/10A0/1F41) to the DhwZone.
             # These payloads carry no zone_idx/domain_id, so the block above
-            # misses the DhwZone.  1260 is sent by the DhwSensor (or relayed
-            # by the Controller as an RP); 10A0/1F41 are sent by the
-            # Controller.  All of these expose a ``tcs`` attribute whose
-            # ``dhw`` is the DhwZone.  The appliance_control (OTB) also emits
-            # 10A0/1260 with different semantics (CH setpoint / null temp), so
-            # it must be excluded to avoid clobbering the DHW read-models.
-            # Without this, the CQRS read-models (temp_state/dhw_state) on the
-            # DhwZone are never hydrated and the ramses_cc water_heater entity
-            # shows no current/target temperature.
+            # misses the DhwZone.  The shared helper in dispatcher.py
+            # encapsulates the routing logic (src_slug check, OTB exclusion).
             # See: https://github.com/ramses-rf/ramses_cc/issues/843
-            if msg.code in (Code._1260, Code._10A0, Code._1F41) and src_dev:
-                src_slug = getattr(src_dev, "_SLUG", "")
-                if msg.code == Code._1260:
-                    is_dhw_src = src_slug in ("DHW", "CTL")
-                else:  # 10A0 / 1F41 are owned by the Controller
-                    is_dhw_src = src_slug == "CTL"
-                if is_dhw_src:
-                    tcs = getattr(src_dev, "tcs", None)
-                    dhw = getattr(tcs, "dhw", None) if tcs is not None else None
-                    if dhw is not None:
-                        try:
-                            self._update_dhw_state(dhw, p, msg)
-                            self._update_temperature_state(dhw, p, msg)
-                        except Exception as err:
-                            _LOGGER.error(
-                                "CQRS extraction failed for DHW %s: %s",
-                                dhw.id,
-                                err,
-                            )
+            dhw = _get_dhw_zone_from_msg(msg, src_dev)
+            if dhw is not None:
+                try:
+                    self._update_dhw_state(dhw, p, msg)
+                    self._update_temperature_state(dhw, p, msg)
+                except Exception as err:
+                    _LOGGER.error(
+                        "CQRS extraction failed for DHW %s: %s",
+                        dhw.id,
+                        err,
+                    )
 
         # --- CQRS Reactor Hooks ---
         # Automate the legacy Actuator discovery query (3EF1) in response to 3EF0 (I)
