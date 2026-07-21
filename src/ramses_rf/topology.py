@@ -24,11 +24,26 @@ entities, such as the association between a Zone and its Actuators.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from . import exceptions as exc
 from .const import F9, FA, FC, FF, SZ_ACTUATORS, SZ_SENSOR
 from .schemas import SZ_CIRCUITS
+
+
+@runtime_checkable
+class _HasTcs(Protocol):
+    tcs: Parent | None
+
+
+@runtime_checkable
+class _HasZones(Protocol):
+    _max_zones: int
+
+    def get_dhw_zone(self) -> Parent: ...
+
+    def get_htg_zone(self, zone_idx: str) -> Parent: ...
+
 
 if TYPE_CHECKING:
     from ramses_tx.typing import DeviceIdT
@@ -281,20 +296,25 @@ class Child:
             child_id = FF
 
         if parent_class == "Controller":
-            parent = cast(Any, parent).tcs
-            parent_class = parent.__class__.__name__
-            _TRACE.info(f"SUB-CONTROLLER: {self} shifted parent to {parent_class}")
+            if isinstance(parent, _HasTcs) and parent.tcs is not None:
+                parent = parent.tcs
+                parent_class = parent.__class__.__name__
+                _TRACE.info(f"SUB-CONTROLLER: {self} shifted parent to {parent_class}")
+            else:
+                raise exc.SchemaInconsistentError(
+                    f"{self}: controller parent tcs cannot be None"
+                )
 
         if parent_class in ("Evohome", "System") and child_id:
             if child_id in (F9, FA):
-                parent = cast(Any, parent).get_dhw_zone()
-                parent_class = parent.__class__.__name__
-                _TRACE.info(f"DHW SHIFT: {self} shifted parent to {parent_class}")
+                if isinstance(parent, _HasZones):
+                    parent = parent.get_dhw_zone()
+                    parent_class = parent.__class__.__name__
+                    _TRACE.info(f"DHW SHIFT: {self} shifted parent to {parent_class}")
             elif (
-                hasattr(parent, "_max_zones")
-                and int(child_id, 16) < cast(Any, parent)._max_zones
+                isinstance(parent, _HasZones) and int(child_id, 16) < parent._max_zones
             ):
-                parent = cast(Any, parent).get_htg_zone(child_id)
+                parent = parent.get_htg_zone(child_id)
                 parent_class = parent.__class__.__name__
                 _TRACE.info(f"ZONE SHIFT: {self} shifted parent to {parent_class}")
 

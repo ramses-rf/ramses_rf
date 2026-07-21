@@ -45,7 +45,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from datetime import datetime as dt
 from functools import wraps
 from time import perf_counter, time
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final
 
 from serial import Serial, SerialException
 
@@ -64,7 +64,7 @@ from ..discovery import is_hgi80
 from ..dtos import CommandDTO
 from ..helpers import hex_from_str
 from ..packet import Packet
-from ..typing import ExceptionT, SerPortNameT
+from ..typing import SerPortNameT
 from ..version import VERSION
 from .base import TransportConfig, _FullTransport
 from .helpers import _normalise, _str
@@ -348,14 +348,14 @@ class PortTransport(_FullTransport, _PortTransportAbstractor):  # type: ignore[m
         try:
             self._write(data)
         except SerialException as err:
-            self._abort(cast(Any, exc.TransportSerialError(err)))
+            self._abort(exc.TransportSerialError(err))
             return
 
     def _write(self, data: bytes) -> None:
         """Perform the actual write to the serial port."""
         self.serial.write(data)
 
-    def _abort(self, exc: ExceptionT) -> None:  # type: ignore[override]
+    def _abort(self, exc: Exception) -> None:  # type: ignore[override]
         """Abort the transport."""
         super()._abort(exc)
 
