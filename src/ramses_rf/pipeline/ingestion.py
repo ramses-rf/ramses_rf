@@ -339,6 +339,12 @@ class StateProjector:
                 if zone:
                     try:
                         self._update_zone_state(zone, p, msg)
+                        # 2309/2349 also carry a setpoint that the Zone's
+                        # `setpoint` property reads from temp_state.  Without
+                        # this, the zone climate entity's target_temperature
+                        # stays None (issue 843).
+                        if msg.code in (Code._2309, Code._2349):
+                            self._update_temperature_state(zone, p, msg)
                     except Exception as err:
                         _LOGGER.error(
                             "CQRS extraction failed for zone %s: %s",
@@ -804,7 +810,14 @@ class StateProjector:
             if hasattr(target, "apply_state_update"):
                 target.apply_state_update(event)
 
-        if msg.code in (Code._30C9, Code._1260, Code._0002, Code._12C0):
+        if msg.code in (
+            Code._30C9,
+            Code._1260,
+            Code._0002,
+            Code._12C0,
+            Code._2309,
+            Code._2349,
+        ):
             updates: dict[str, Any] = {}
             if SZ_TEMPERATURE in p:
                 # Legacy Parity: Physical sensors only track their own local sensor readings.
@@ -1007,13 +1020,33 @@ class StateProjector:
             target.apply_state_update(event)
 
     def _update_zone_state(self, target: Any, p: dict[str, Any], msg: Message) -> None:
-        """Translate zone configuration opcodes into ZoneState."""
-        if msg.code != Code._0004:
-            return
+        """Translate zone configuration opcodes into ZoneState.
 
+        Handles:
+        - 0004 (zone_name): updates zone_state.name
+        - 2349 (zone_mode): updates zone_state.mode, setpoint, until
+        - 2309 (setpoint): updates zone_state.setpoint
+        """
         updates: dict[str, Any] = {}
-        if SZ_NAME in p:
-            updates[SZ_NAME] = str(p[SZ_NAME])
+
+        if msg.code == Code._0004:
+            if SZ_NAME in p:
+                updates[SZ_NAME] = str(p[SZ_NAME])
+
+        elif msg.code == Code._2349:
+            if SZ_MODE in p:
+                updates[SZ_MODE] = p[SZ_MODE]
+            if SZ_SETPOINT in p:
+                updates[SZ_SETPOINT] = p[SZ_SETPOINT]
+            if SZ_UNTIL in p:
+                updates[SZ_UNTIL] = p[SZ_UNTIL]
+
+        elif msg.code == Code._2309:
+            if SZ_SETPOINT in p:
+                updates[SZ_SETPOINT] = p[SZ_SETPOINT]
+
+        else:
+            return
 
         if not updates:
             return
@@ -1024,7 +1057,6 @@ class StateProjector:
 
         current_state = getattr(target, "zone_state", None) or ZoneState()
         new_state = dataclasses.replace(current_state, **updates)
-        target.zone_state = new_state
 
         event = StateUpdatedEvent(
             entity_id=getattr(target, "id", "unknown"),
@@ -1034,3 +1066,5 @@ class StateProjector:
         )
         if hasattr(target, "apply_state_update"):
             target.apply_state_update(event)
+        else:
+            target.zone_state = new_state  # noqa: B010

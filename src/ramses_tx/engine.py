@@ -19,9 +19,12 @@ from .const import (
     DEFAULT_NUM_REPEATS,
     DEFAULT_SEND_TIMEOUT,
     DEFAULT_WAIT_FOR_REPLY,
+    I_,
     SZ_ACTIVE_HGI,
+    W_,
     Code,
     Priority,
+    VerbT,
 )
 from .dtos import CommandDTO, PacketDTO
 from .packet import Packet
@@ -332,6 +335,12 @@ class Engine:
         from_id: str | None = None,
         seqn: str | None = None,
     ) -> CommandDTO:
+        # Normalise plain-string verbs to VerbT so that the frame is formatted
+        # correctly (e.g. "W" → " W").  The old Command._from_attrs did this;
+        # the migration to CommandDTO dropped it, causing malformed frames
+        # that the HGI80 silently drops (issue 835).
+        verb = I_ if verb == "I" else W_ if verb == "W" else verb
+
         addr1 = from_id or HGI_DEV_ADDR.id
 
         if device_id == addr1:
