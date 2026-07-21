@@ -81,9 +81,17 @@ class CommandDTO:
     num_repeats: int = 1
 
     def __str__(self) -> str:
-        """Return the string representation of the frame to be transmitted."""
+        """Return the string representation of the frame to be transmitted.
+
+        The verb is stripped and right-justified to 2 characters to match the
+        RF protocol format expected by the HGI80 (e.g. ``" W"`` not ``"W"``).
+        Without this normalisation, verbs passed as plain strings (e.g. from
+        the ramses_cc send_packet service) produce malformed frames that the
+        HGI80 silently drops — no echo, causing a 20s QoS timeout.
+        """
+        verb = f"{str(self.verb).strip():>2}"
         return (
-            f"{self.verb} --- {self.addr1} {self.addr2} {self.addr3} {self.code} "
+            f"{verb} --- {self.addr1} {self.addr2} {self.addr3} {self.code} "
             f"{int(len(self.payload) / 2):03d} {self.payload}"
         )
 
