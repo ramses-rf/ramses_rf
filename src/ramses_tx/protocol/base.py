@@ -14,7 +14,7 @@ import re
 from collections import deque
 from collections.abc import Callable
 from datetime import datetime as dt, timedelta as td
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final
 
 from ..address import ALL_DEV_ADDR, HGI_DEV_ADDR, NON_DEV_ADDR
 from ..const import (
@@ -515,9 +515,9 @@ class _DeviceIdFilterMixin(_BaseProtocol):
     def hgi_id(self) -> DeviceIdT:
         """Get the ID of the HGI handling the comms."""
         if not self._transport:
-            return cast("DeviceIdT", self._known_hgi or HGI_DEV_ADDR.id)
+            return DeviceIdT(self._known_hgi or HGI_DEV_ADDR.id)
         hgi = self._transport.get_extra_info(SZ_ACTIVE_HGI)
-        return cast("DeviceIdT", hgi or self._known_hgi or HGI_DEV_ADDR.id)
+        return DeviceIdT(hgi or self._known_hgi or HGI_DEV_ADDR.id)
 
     def _set_active_hgi(self, dev_id: DeviceIdT, by_signature: bool = False) -> None:
         """Set the Active Gateway (HGI) device_id.
@@ -631,7 +631,7 @@ class _DeviceIdFilterMixin(_BaseProtocol):
         qos: QosParams | None = None,
     ) -> Packet:
         if not self._is_wanted_addrs(
-            cast(DeviceIdT, cmd.addr1), cast(DeviceIdT, cmd.addr2), sending=True
+            DeviceIdT(cmd.addr1), DeviceIdT(cmd.addr2), sending=True
         ):
             raise ProtocolError(f"Command excluded by device_id filter: {cmd}")
         return await super().send_cmd(

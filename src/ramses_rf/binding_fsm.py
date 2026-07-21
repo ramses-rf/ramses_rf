@@ -18,7 +18,15 @@ from ramses_rf.address import Address
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command as Intent
 from ramses_rf.enums import Action
-from ramses_tx import ALL_DEVICE_ID, CommandDTO, DevType, Priority, QosParams
+from ramses_tx import (
+    ALL_DEVICE_ID,
+    NON_DEVICE_ID,
+    CommandDTO,
+    DevType,
+    Priority,
+    QosParams,
+)
+from ramses_tx.typing import DeviceIdT
 
 from . import exceptions as exc
 from .messages import Message
@@ -657,14 +665,9 @@ class BindStateBase:
                 # For 1FC9, addr3 is often the actual destination or equal to src
                 dst = cmd._pkt._addrs[2].id
         else:
-            from typing import cast
-
-            from ramses_tx.address import NON_DEVICE_ID
-            from ramses_tx.typing import DeviceIdT
-
             addrs = [a for a in (cmd.addr1, cmd.addr2, cmd.addr3) if a != NON_DEVICE_ID]
-            src = cast(DeviceIdT, addrs[0] if addrs else NON_DEVICE_ID)
-            dst = cast(DeviceIdT, addrs[1] if len(addrs) > 1 else src)
+            src = DeviceIdT(addrs[0] if addrs else NON_DEVICE_ID)
+            dst = DeviceIdT(addrs[1] if len(addrs) > 1 else src)
 
         if phase == BindPhase.TENDER:
             return cmd.verb == I_ and dst in (src, ALL_DEVICE_ID)

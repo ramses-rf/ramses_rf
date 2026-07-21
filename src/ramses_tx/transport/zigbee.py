@@ -9,7 +9,7 @@ import logging
 import math
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final
 from urllib.parse import parse_qs, urlparse
 
 from .. import exceptions as exc
@@ -199,7 +199,7 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
             await self._bind_and_configure()
 
             self._extra[SZ_ACTIVE_HGI] = self._ieee
-            self._make_connection(gwy_id=cast(DeviceIdT, self._ieee))
+            self._make_connection(gwy_id=DeviceIdT(str(self._ieee)))
             _LOGGER.info(
                 "Zigbee transport ready: ieee=%s cluster=0x%04x attr=0x%04x",
                 self._ieee,
