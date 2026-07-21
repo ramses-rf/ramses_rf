@@ -78,11 +78,11 @@ from .const import (
 from .messages import Message
 from .models import StateUpdatedEvent, SystemState
 from .protocol.ramses import (
+    CODES_BY_DEV_SLUG,
     CODES_OF_HEAT_DOMAIN,
     CODES_OF_HEAT_DOMAIN_ONLY,
     CODES_OF_HVAC_DOMAIN_ONLY,
 )
-from .protocol_schema import CODES_BY_DEV_SLUG
 
 if TYPE_CHECKING:
     from .gateway import Gateway
