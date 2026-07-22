@@ -9,7 +9,10 @@ from typing import Any, cast
 from ramses_rf.const import (
     I_,
     RQ,
+    SZ_ACCEPT,
+    SZ_CONFIRM,
     SZ_DOMAIN_ID,
+    SZ_OFFER,
     SZ_UFH_IDX,
     SZ_ZONE_IDX,
     SZ_ZONE_TYPE,
@@ -22,7 +25,8 @@ from ramses_rf.enums import TopologyAction
 from ramses_rf.messages.core import Message
 from ramses_rf.models import TopologyChangedEvent
 from ramses_rf.protocol.ramses import CODES_ONLY_FROM_CTL, HVAC_KLASS_BY_VC_PAIR
-from ramses_tx import DeviceIdT
+from ramses_tx import ALL_DEV_ADDR, DeviceIdT
+from ramses_tx.address import hex_id_to_dev_id
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,8 +56,12 @@ class TopologyBuilder:
 
         :param emit_event_cb: Callback to emit topology events back
             onto the central event bus or directly to the registry.
+        :type emit_event_cb: Callable[[TopologyChangedEvent], None]
         :param enable_eavesdrop: If False, heuristic class promotions
             are disabled. Explicit bindings (e.g., 000C) still process.
+        :type enable_eavesdrop: bool
+        :returns: None
+        :rtype: None
         """
         self._emit = emit_event_cb
         self._enable_eavesdrop = enable_eavesdrop
@@ -73,6 +81,7 @@ class TopologyBuilder:
         # as each rule independently yields its own isolated events.
         self._rules: list[Callable[[Message], None]] = [
             self._evaluate_evohome_rules,
+            self._evaluate_rf_bind_rules,
             self._evaluate_zone_binding_rules,
             self._evaluate_directed_telemetry_rules,
             self._evaluate_ufh_rules,
@@ -92,6 +101,9 @@ class TopologyBuilder:
         """Ingest a message and evaluate it against all registered rules.
 
         :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         for rule in self._rules:
             try:
@@ -111,6 +123,11 @@ class TopologyBuilder:
 
         Seamlessly bridges `core.Message` data structures whether they
         contain a single dictionary or an array of payloads.
+
+        :param msg: The message containing payload data.
+        :type msg: Message
+        :returns: List of extracted payload dictionaries or items.
+        :rtype: list[Any]
         """
         raw: Any = msg.data
         if isinstance(raw, dict):
@@ -125,6 +142,11 @@ class TopologyBuilder:
         Historically, entities intercepted CODES_ONLY_FROM_CTL to
         dynamically promote themselves to Controllers. We now extract
         that logic into this explicit, trackable rule.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -137,9 +159,115 @@ class TopologyBuilder:
             )
             self._emit(event)
 
-    def _evaluate_zone_binding_rules(self, msg: Message) -> None:
-        """Evaluate 000C and heuristic packets to bind actuators to zones."""
+    def _evaluate_rf_bind_rules(self, msg: Message) -> None:
+        """Evaluate 1FC9 (rf_bind) frames to extract device bindings.
 
+        Intercepts 1FC9 offers, accepts, and confirms, decoding
+        positional binding payload chunks to emit BIND_DEVICE and
+        CREATE_CONTROLLER topology events.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
+        """
+        if msg.header.code != Code._1FC9:
+            return
+
+        pkt = getattr(msg, "_pkt", None)
+        payload_hex: str = getattr(pkt, "payload", "") if pkt else ""
+        if not payload_hex or len(payload_hex) in (2, 4) or len(payload_hex) % 12 != 0:
+            return
+
+        if msg.header.verb == I_ and msg.dst.id in (msg.src.id, ALL_DEV_ADDR.id):
+            bind_phase = SZ_OFFER
+        elif msg.header.verb == W_ and msg.src is not msg.dst:
+            bind_phase = SZ_ACCEPT
+        elif msg.header.verb == I_:
+            bind_phase = SZ_CONFIRM
+        else:
+            bind_phase = None
+
+        if bind_phase is None:
+            return
+
+        # Always trigger controller creation if source or destination is a controller
+        if msg.src.id.startswith("01:"):
+            self._emit(
+                TopologyChangedEvent(
+                    action=TopologyAction.CREATE_CONTROLLER,
+                    device_id=msg.src.id,
+                    causation="Rule_1FC9_Controller_Source",
+                )
+            )
+
+        if msg.dst.id.startswith("01:"):
+            self._emit(
+                TopologyChangedEvent(
+                    action=TopologyAction.CREATE_CONTROLLER,
+                    device_id=msg.dst.id,
+                    causation="Rule_1FC9_Controller_Target",
+                )
+            )
+
+        for i in range(0, len(payload_hex), 12):
+            chunk = payload_hex[i : i + 12]
+            domain_id_hex = chunk[:2]
+            opcode_hex = chunk[2:6]
+            bound_dev_id = hex_id_to_dev_id(chunk[6:12])
+
+            if bound_dev_id.startswith("01:"):
+                self._emit(
+                    TopologyChangedEvent(
+                        action=TopologyAction.CREATE_CONTROLLER,
+                        device_id=bound_dev_id,
+                        causation="Rule_1FC9_Controller_Payload",
+                    )
+                )
+
+            parent_id: DeviceIdT
+            child_id: DeviceIdT
+
+            if bind_phase == SZ_ACCEPT:
+                parent_id = msg.dst.id
+                child_id = msg.src.id
+            elif bind_phase == SZ_CONFIRM:
+                parent_id = msg.src.id
+                child_id = (
+                    msg.dst.id
+                    if msg.dst.id not in ("--:------", ALL_DEV_ADDR.id)
+                    else bound_dev_id
+                )
+            else:  # SZ_OFFER
+                parent_id = msg.src.id
+                child_id = bound_dev_id
+
+            self._emit(
+                TopologyChangedEvent(
+                    action=TopologyAction.BIND_DEVICE,
+                    parent_id=parent_id,
+                    child_id=child_id,
+                    metadata={
+                        "domain_id": domain_id_hex,
+                        "opcode": opcode_hex,
+                        "phase": bind_phase,
+                    },
+                    causation=f"Rule_1FC9_Binding_{bind_phase.capitalize()}",
+                )
+            )
+
+    def _evaluate_zone_binding_rules(self, msg: Message) -> None:
+        """Evaluate 000C and heuristic packets to bind actuators to zones.
+
+        Processes explicit 000C configuration broadcasts from
+        Controllers (01) to extract device roles and bind child devices to
+        specific zone indices or domain IDs.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
+        """
         # EXPLICIT BINDING: Controllers (01) broadcasting 000C device maps
         if msg.header.code == Code._000C and getattr(msg.src, "type", None) == "01":
             for p in self._get_payloads(msg):
@@ -220,6 +348,11 @@ class TopologyBuilder:
         Devices (TRVs, Thermostats, DHW sensors) explicitly declare their
         topological relationships by broadcasting telemetry (e.g., 30C9,
         3150, 1060, 1260) directly to their parent Controller (01).
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -305,6 +438,11 @@ class TopologyBuilder:
         the individual circuits to their corresponding zones.
         Note: This is explicit configuration data, not a heuristic,
         so it is processed regardless of the enable_eavesdrop flag.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         is_ufc_src = getattr(msg.src, "type", None) == "02"
         is_ufc_dst = getattr(msg.dst, "type", None) == "02"
@@ -381,7 +519,13 @@ class TopologyBuilder:
         """Evaluate rules specific to Ventilation and HVAC.
 
         HVAC devices share prefixes (e.g., 32: can be a Fan, CO2, etc.).
-        Therefore, we promote classes dynamically using the central protocol schema.
+        Therefore, we promote classes dynamically using the central
+        protocol schema.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -433,6 +577,11 @@ class TopologyBuilder:
 
         OpenTherm Bridges exclusively use 3220. DHW sensors are deduced
         via 1260 and 10A0 packets.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -462,9 +611,15 @@ class TopologyBuilder:
     def _evaluate_heating_prefix_rules(self, msg: Message) -> None:
         """Evaluate passive heuristics based purely on hardware prefixes.
 
-        Legacy architecture automatically promoted generic devices into specific
-        heating domain subtypes (e.g., TRV, UFC, BDR) the moment their address
-        was observed anywhere in the packet (src, dst, or embedded in payload).
+        Legacy architecture automatically promoted generic devices into
+        specific heating domain subtypes (e.g., TRV, UFC, BDR) the
+        moment their address was observed anywhere in the packet (src, dst,
+        or embedded in payload).
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -495,11 +650,11 @@ class TopologyBuilder:
                 self._emit(event)
 
     def _evaluate_appliance_control_sync_rules(self, msg: Message) -> None:
-        """Evaluate direct configuration syncs to map the System Relay.
+        """Evaluate direct configuration syncs to map System Relay.
 
         :param msg: The immutable Message L7 envelope to evaluate.
         :type msg: Message
-        :return: None
+        :returns: None
         :rtype: None
         """
         if not self._enable_eavesdrop:
@@ -527,11 +682,16 @@ class TopologyBuilder:
                 self._emit(event)
 
     def _evaluate_appliance_eavesdrop_rules(self, msg: Message) -> None:
-        """Evaluate the legacy passive eavesdropping of the System Relay.
+        """Evaluate legacy passive eavesdropping of System Relay.
 
-        # TODO: PARITY FLAW - This replicates legacy `eavesdrop_appliance_control`.
-        It relies on fragile assumptions regarding typical message flows
-        (e.g., 3220, 3EF0, 3B00) between the Controller and the Heat Relay.
+        Replicates legacy eavesdrop_appliance_control logic based on
+        message flows (e.g., 3220, 3EF0, 3B00) between Controller and Heat
+        Relay.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -581,18 +741,28 @@ class TopologyBuilder:
             self._emit(event)
 
     def _evaluate_zone_sensor_matching_rules(self, msg: Message) -> None:
-        """Evaluate the legacy collision-abstention temperature matching."""
+        """Evaluate legacy collision-abstention temperature matching.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
+        """
         # DISABLED FOR PARITY: This legacy heuristic is highly prone to false
         # positives and cross-zone contamination (e.g., binding TRVs to wrong
         # zones). It is intentionally bypassed here to ensure schema parity.
         return
 
     def _evaluate_zone_type_eavesdrop_rules(self, msg: Message) -> None:
-        """Evaluate the legacy passive promotion of zone classes.
+        """Evaluate legacy passive promotion of zone classes.
 
-        # TODO: PARITY FLAW - This replicates `eavesdrop_zone_type` from `zones.py`.
-        It arbitrarily maps zones to VAL, ELE, RAD, or UFH based purely on
-        telemetry packet signatures.
+        Replicates eavesdrop_zone_type from zones.py, mapping zones to
+        VAL, ELE, RAD, or UFH based on telemetry packet signatures.
+
+        :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -641,6 +811,9 @@ class TopologyBuilder:
         """Evaluate broadcast telemetry for heuristic sensor correlation.
 
         :param msg: The immutable Message L7 envelope to evaluate.
+        :type msg: Message
+        :returns: None
+        :rtype: None
         """
         if not self._enable_eavesdrop:
             return
@@ -686,13 +859,14 @@ class TopologyBuilder:
     def _evaluate_implicit_binding_rules(self, msg: Message) -> None:
         """Evaluate implicit bindings from directed controller polls.
 
-        If a Controller (01:) explicitly sends a direct command (RQ, W) to a
-        heating device (e.g., 04: TRV, 00: Zone Sensor, 08: Relay), it implies
-        the controller believes that device belongs to its network.
+        If a Controller (01:) explicitly sends a direct command (RQ, W)
+        to a heating device (e.g., 04: TRV, 00: Zone Sensor, 08: Relay),
+        it implies the controller believes that device belongs to its
+        network.
 
         :param msg: The immutable Message L7 envelope to evaluate.
         :type msg: Message
-        :return: None
+        :returns: None
         :rtype: None
         """
         if not self._enable_eavesdrop:
@@ -729,7 +903,7 @@ class TopologyBuilder:
         self._emit(event)
 
     def _evaluate_third_address_broadcast_rules(self, msg: Message) -> None:
-        """Evaluate bindings from the third address field of broadcasts.
+        """Evaluate bindings from 3rd address field of broadcasts.
 
         Many heating devices broadcast telemetry (I ---) to no particular
         address (--:------), but explicitly declare their parent
@@ -737,7 +911,7 @@ class TopologyBuilder:
 
         :param msg: The immutable Message L7 envelope to evaluate.
         :type msg: Message
-        :return: None
+        :returns: None
         :rtype: None
         """
         if not self._enable_eavesdrop:
