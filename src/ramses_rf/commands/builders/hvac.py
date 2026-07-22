@@ -1,38 +1,35 @@
 """RAMSES RF - HVAC and ventilation command intent to L3 payload translation."""
 
 import math
+import struct
 
 from ramses_rf.commands.builders.helpers import resolve_addrs
 from ramses_rf.commands.core import Command
+from ramses_rf.models.hvac_schemas import (
+    _22F1_MODE_MAX,
+    _22F1_SCHEMES,
+    _2411_PARAMS_SCHEMA,
+)
 from ramses_rf.parsers.helpers import (
     air_quality_code,
     capability_bits,
     fan_info_flags,
     fan_info_to_byte,
 )
-from ramses_rf.protocol.ramses import (
-    _22F1_SCHEMES,
-    _2411_PARAMS_SCHEMA,
-    SZ_DATA_TYPE,
-    SZ_MAX_VALUE,
-    SZ_MIN_VALUE,
-    SZ_PRECISION,
-)
 from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.const import DEFAULT_NUM_REPEATS, I_, RQ, SZ_MINUTES, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.helpers import hex_from_double, hex_from_percent, hex_from_temp
 
-_22F1_MODE_MAX: dict[str, str | None] = {
-    "itho": "04",
-    "nuaire": "0A",
-    "vasco": "06",
-    "orcon": "07",
-}
-
 
 def build_put_co2_level(intent: Command) -> CommandDTO:
-    """Translate a PUT_CO2_LEVEL intent into a CommandDTO."""
+    """Translate a PUT_CO2_LEVEL intent into a CommandDTO.
+
+    :param intent: The command intent containing 'co2_level'.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    """
     co2_level = intent.get("co2_level")
     payload = f"00{hex_from_double(co2_level)}"
     addr1, addr2, addr3 = resolve_addrs(intent.src, intent.src)
@@ -49,7 +46,13 @@ def build_put_co2_level(intent: Command) -> CommandDTO:
 
 
 def build_put_indoor_humidity(intent: Command) -> CommandDTO:
-    """Translate a PUT_INDOOR_HUMIDITY intent into a CommandDTO."""
+    """Translate a PUT_INDOOR_HUMIDITY intent into a CommandDTO.
+
+    :param intent: The command intent containing 'indoor_humidity'.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    """
     indoor_humidity = intent.get("indoor_humidity")
     payload = "00" + hex_from_percent(indoor_humidity, high_res=False)
     addr1, addr2, addr3 = resolve_addrs(intent.src, intent.src)
@@ -66,7 +69,14 @@ def build_put_indoor_humidity(intent: Command) -> CommandDTO:
 
 
 def build_set_fan_mode(intent: Command) -> CommandDTO:
-    """Translate a SET_FAN_MODE intent into a CommandDTO."""
+    """Translate a SET_FAN_MODE intent into a CommandDTO.
+
+    :param intent: The command intent containing 'fan_mode' and related parameters.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    :raises ValueError: If the fan mode or scheme is not valid.
+    """
     fan_mode = intent.get("fan_mode")
     scheme = intent.get("scheme", "orcon")
     seqn = intent.get("seqn")
@@ -101,9 +111,20 @@ def build_set_fan_mode(intent: Command) -> CommandDTO:
         mode_max = _22F1_MODE_MAX.get(scheme)
 
     if legacy_format or not mode_max:
-        payload = f"{idx}{mode}"
+        payload_bytes = struct.pack(
+            ">BB",  # >BB: 2 bytes
+            int(idx, 16),  #   B: Zone/Domain index
+            int(mode, 16),  #   B: Fan mode
+        )
     else:
-        payload = f"{idx}{mode}{mode_max}"
+        payload_bytes = struct.pack(
+            ">BBB",  # >BBB: 3 bytes
+            int(idx, 16),  #    B: Zone/Domain index
+            int(mode, 16),  #    B: Fan mode
+            int(mode_max, 16),  #    B: Maximum supported mode
+        )
+
+    payload = payload_bytes.hex().upper()
 
     if intent.src.id and seqn:
         # Actually in intent world, src is always there, but seqn is custom
@@ -137,21 +158,35 @@ def build_set_fan_mode(intent: Command) -> CommandDTO:
 
 
 def build_set_bypass_position(intent: Command) -> CommandDTO:
-    """Translate a SET_BYPASS_POSITION intent into a CommandDTO."""
+    """Translate a SET_BYPASS_POSITION intent into a CommandDTO.
+
+    :param intent: The command intent containing 'bypass_position' or 'bypass_mode'.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    :raises ValueError: If both bypass_position and bypass_mode are provided, or if the mode is invalid.
+    """
     bypass_position = intent.get("bypass_position")
     bypass_mode = intent.get("bypass_mode")
 
-    if bypass_mode and bypass_position is not None:
-        raise ValueError(
-            "bypass_mode and bypass_position are mutually exclusive, "
-            "both cannot be provided, and neither is OK"
-        )
-    elif bypass_position is not None:
-        pos = f"{int(bypass_position * 200):02X}"
-    elif bypass_mode:
-        pos = {"auto": "FF", "off": "00", "on": "C8"}[bypass_mode]
-    else:
-        pos = "FF"
+    match bypass_mode, bypass_position:
+        case mode, pos if mode and pos is not None:
+            raise ValueError(
+                "bypass_mode and bypass_position are mutually exclusive, "
+                "both cannot be provided"
+            )
+        case _, pos if pos is not None:
+            pos_str = f"{int(pos * 200):02X}"
+        case "auto", None:
+            pos_str = "FF"
+        case "off", None:
+            pos_str = "00"
+        case "on", None:
+            pos_str = "C8"
+        case None, None:
+            pos_str = "FF"
+        case mode, None:
+            raise ValueError(f"Invalid bypass_mode: {mode}")
 
     addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
     return CommandDTO(
@@ -160,38 +195,45 @@ def build_set_bypass_position(intent: Command) -> CommandDTO:
         addr2=addr2,
         addr3=addr3,
         code=Code._22F7,
-        payload=f"00{pos}",
+        payload=f"00{pos_str}",
         priority=Priority.DEFAULT,
         num_repeats=DEFAULT_NUM_REPEATS,
     )
 
 
 def build_set_fan_param(intent: Command) -> CommandDTO:
-    """Translate a SET_FAN_PARAM intent into a CommandDTO."""
+    """Translate a SET_FAN_PARAM intent into a CommandDTO.
+
+    :param intent: The command intent containing 'param_id' and 'value'.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    :raises ValueError: If the parameter ID or value is invalid according to the device schema.
+    """
     param_id = intent.get("param_id", "")
     value = intent.get("value")
 
     try:
-        param_id = param_id.strip().upper()
-        if len(param_id) != 2:
+        param_id_stripped = param_id.strip().upper()
+        if len(param_id_stripped) != 2:
             raise ValueError("Parameter ID must be exactly 2 hexadecimal characters")
-        int(param_id, 16)
+        param_id_int = int(param_id_stripped, 16)
     except ValueError as err:
         raise ValueError(
             f"Invalid parameter ID: '{param_id}'. "
             "Must be a 2-digit hexadecimal value (00-FF)"
         ) from err
 
-    if (param_schema := _2411_PARAMS_SCHEMA.get(param_id)) is None:
+    if (param_schema := _2411_PARAMS_SCHEMA.get(param_id_stripped)) is None:
         raise ValueError(
-            f"Unknown parameter ID: '{param_id}'. "
+            f"Unknown parameter ID: '{param_id_stripped}'. "
             "This parameter is not defined in the device schema"
         )
 
-    min_val = param_schema[SZ_MIN_VALUE]
-    max_val = param_schema[SZ_MAX_VALUE]
-    precision = param_schema.get(SZ_PRECISION, 1.0)
-    data_type = param_schema.get(SZ_DATA_TYPE, "00")
+    min_val = param_schema.min_val
+    max_val = param_schema.max_val
+    precision = param_schema.precision
+    data_type = param_schema.data_type
 
     try:
         if isinstance(value, float) and not math.isfinite(value):
@@ -200,92 +242,79 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
                 "Must be a finite number"
             )
 
-        if str(data_type) == "01":  # %
-            value_scaled = int(round(float(value) / precision))
-            min_val_scaled = int(round(float(min_val) / precision))
-            max_val_scaled = int(round(float(max_val) / precision))
-            precision_scaled = int(round(float(precision) * 10))
-            trailer = "0032"
-            if not min_val_scaled <= value_scaled <= max_val_scaled:
+        match str(data_type):
+            case "01":  # %
+                value_scaled = int(round(float(value) / precision))
+                min_val_scaled = int(round(float(min_val) / precision))
+                max_val_scaled = int(round(float(max_val) / precision))
+                precision_scaled = int(round(float(precision) * 10))
+                trailer_bytes = b"\x00\x32"
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise ValueError(
+                        f"Parameter {param_id}: Value {value_scaled / 10}% "
+                        f"is out of allowed range ({min_val_scaled / 10}% "
+                        f"to {max_val_scaled / 10}%)"
+                    )
+            case "0F":  # %
+                value_scaled = int(round((float(value) / 100.0) / float(precision)))
+                min_val_scaled = int(round(float(min_val) / float(precision)))
+                max_val_scaled = int(round(float(max_val) / float(precision)))
+                precision_scaled = int(round(float(precision) * 200))
+                trailer_bytes = b"\x00\x32"
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise ValueError(
+                        f"Parameter {param_id}: Value {value_scaled / 2}% "
+                        f"is out of allowed range ({min_val_scaled / 2}% "
+                        f"to {max_val_scaled / 2}%)"
+                    )
+            case "92":  # °C
+                value_rounded = round(float(value) * 10) / 10
+                value_scaled = int(value_rounded * 100)
+                min_val_scaled = int(float(min_val) * 100)
+                max_val_scaled = int(float(max_val) * 100)
+                precision_scaled = int(float(precision) * 100)
+                trailer_bytes = b"\x00\x01"
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    raise ValueError(
+                        f"Parameter {param_id}: "
+                        f"Temperature {value_scaled / 100:.1f}°C is out of "
+                        f"allowed range ({min_val_scaled / 100:.1f}°C to "
+                        f"{max_val_scaled / 100:.1f}°C)"
+                    )
+            case "00" | "10" | "20" | "90":
+                value_scaled = int(float(value))
+                min_val_scaled = int(float(min_val))
+                max_val_scaled = int(float(max_val))
+                precision_scaled = 1
+                trailer_bytes = b"\x00\x01"
+                if not min_val_scaled <= value_scaled <= max_val_scaled:
+                    unit = SZ_MINUTES if data_type == "00" else ""
+                    raise ValueError(
+                        f"Parameter {param_id}: Value {value_scaled}"
+                        f"{' ' + unit if unit else ''} is out of allowed "
+                        f"range ({min_val_scaled} to {max_val_scaled}"
+                        f"{' ' + unit if unit else ''})"
+                    )
+            case _:
                 raise ValueError(
-                    f"Parameter {param_id}: Value {value_scaled / 10}% "
-                    f"is out of allowed range ({min_val_scaled / 10}% "
-                    f"to {max_val_scaled / 10}%)"
+                    f"Parameter {param_id}: Invalid data type '{data_type}'. "
+                    "Must be one of '00', '01', '0F', '10', '20', '90', or '92'"
                 )
-        elif str(data_type) == "0F":  # %
-            value_scaled = int(round((float(value) / 100.0) / float(precision)))
-            min_val_scaled = int(round(float(min_val) / float(precision)))
-            max_val_scaled = int(round(float(max_val) / float(precision)))
-            precision_scaled = int(round(float(precision) * 200))
-            trailer = "0032"
-            if not min_val_scaled <= value_scaled <= max_val_scaled:
-                raise ValueError(
-                    f"Parameter {param_id}: Value {value_scaled / 2}% "
-                    f"is out of allowed range ({min_val_scaled / 2}% "
-                    f"to {max_val_scaled / 2}%)"
-                )
-        elif str(data_type) == "92":  # °C
-            value_rounded = round(float(value) * 10) / 10
-            value_scaled = int(value_rounded * 100)
-            min_val_scaled = int(float(min_val) * 100)
-            max_val_scaled = int(float(max_val) * 100)
-            precision_scaled = int(float(precision) * 100)
-            trailer = "0001"
-            if not min_val_scaled <= value_scaled <= max_val_scaled:
-                raise ValueError(
-                    f"Parameter {param_id}: "
-                    f"Temperature {value_scaled / 100:.1f}°C is out of "
-                    f"allowed range ({min_val_scaled / 100:.1f}°C to "
-                    f"{max_val_scaled / 100:.1f}°C)"
-                )
-        elif (
-            (str(data_type) == "00")
-            or (str(data_type) == "10")
-            or (str(data_type) == "20")
-            or (str(data_type) == "90")
-        ):
-            value_scaled = int(float(value))
-            min_val_scaled = int(float(min_val))
-            max_val_scaled = int(float(max_val))
-            precision = 1
-            precision_scaled = int(precision)
-            trailer = "0001"
-            if not min_val_scaled <= value_scaled <= max_val_scaled:
-                unit = SZ_MINUTES if data_type == "00" else ""
-                raise ValueError(
-                    f"Parameter {param_id}: Value {value_scaled}"
-                    f"{' ' + unit if unit else ''} is out of allowed "
-                    f"range ({min_val_scaled} to {max_val_scaled}"
-                    f"{' ' + unit if unit else ''})"
-                )
-        else:
-            raise ValueError(
-                f"Parameter {param_id}: Invalid data type '{data_type}'. "
-                "Must be one of '00', '01', '0F', '10', '20', '90', or '92'"
-            )
 
-        leading = "00"
-        param_id_hex = f"{int(param_id, 16):04X}"
-
-        data_type_hex = f"00{data_type}"
-        value_hex = f"{value_scaled:08X}"
-        min_hex = f"{min_val_scaled:08X}"
-        max_hex = f"{max_val_scaled:08X}"
-        precision_hex = f"{precision_scaled:08X}"
-
-        payload = (
-            f"{leading}"
-            f"{param_id_hex}"
-            f"{data_type_hex}"
-            f"{value_hex}"
-            f"{min_hex}"
-            f"{max_hex}"
-            f"{precision_hex}"
-            f"{trailer}"
+        payload_bytes = struct.pack(
+            ">B H BB i i i i 2s",
+            0x00,  # >B: Leading zero byte
+            param_id_int,  #  H: Parameter ID (2 bytes)
+            0x00,  #  B: Data type padding
+            int(data_type, 16),  #  B: Data type ID
+            value_scaled,  #  i: Current value (4 bytes)
+            min_val_scaled,  #  i: Minimum allowed value (4 bytes)
+            max_val_scaled,  #  i: Maximum allowed value (4 bytes)
+            precision_scaled,  #  i: Precision scalar (4 bytes)
+            trailer_bytes,  # 2s: Trailer (2 bytes)
         )
-        payload = "".join(payload)
+        payload = payload_bytes.hex().upper()
 
-        # W_, addr0=src_id, addr1=fan_id, addr2=NON_DEV_ADDR
         return CommandDTO(
             verb=W_,
             addr1=intent.src.id,
@@ -302,7 +331,14 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
 
 
 def build_get_fan_param(intent: Command) -> CommandDTO:
-    """Translate a GET_FAN_PARAM intent into a CommandDTO."""
+    """Translate a GET_FAN_PARAM intent into a CommandDTO.
+
+    :param intent: The command intent containing 'param_id'.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
+    :raises ValueError: If the parameter ID is missing, incorrectly formatted, or invalid.
+    """
     param_id = intent.get("param_id")
     if param_id is None:
         raise ValueError("Parameter ID cannot be None")
@@ -344,7 +380,13 @@ def build_get_fan_param(intent: Command) -> CommandDTO:
 
 
 def build_get_hvac_fan_31da(intent: Command) -> CommandDTO:
-    """Translate a GET_HVAC_FAN_31DA intent into a CommandDTO."""
+    """Translate a GET_HVAC_FAN_31DA intent into a CommandDTO.
+
+    :param intent: The command intent containing various HVAC state parameters.
+    :type intent: Command
+    :returns: A populated CommandDTO containing a serialized state payload.
+    :rtype: CommandDTO
+    """
     hvac_id = intent.get("hvac_id")
     bypass_position = intent.get("bypass_position")
     air_quality = intent.get("air_quality")
@@ -453,7 +495,9 @@ def build_set_program_enabled(intent: Command) -> CommandDTO:
 
     :param intent: The SET_PROGRAM_ENABLED intent. It is expected to
         contain ``enabled`` (bool) in its data dictionary.
-    :return: A populated CommandDTO.
+    :type intent: Command
+    :returns: A populated CommandDTO.
+    :rtype: CommandDTO
     :raises ValueError: If ``enabled`` is missing or not a bool.
     """
     enabled = intent.get("enabled")

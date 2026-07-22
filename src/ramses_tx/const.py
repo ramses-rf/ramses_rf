@@ -8,16 +8,9 @@ library to decode and encode RAMSES-II protocol packets.
 from __future__ import annotations
 
 import re
-from datetime import timedelta as td
 from enum import EnumCheck, IntEnum, StrEnum, verify
 from types import SimpleNamespace
 from typing import Any, Final, Literal, NoReturn
-
-# Pre-allocated timedelta objects for high-performance lifespan & timeout evaluations
-TD_SECS_000: Final[td] = td(seconds=0)
-TD_SECS_360: Final[td] = td(seconds=360)
-TD_MINS_060: Final[td] = td(minutes=60)
-TD_DAYS_001: Final[td] = td(minutes=60 * 24)
 
 __dev_mode__ = False  # NOTE: this is const.py
 DEV_MODE = __dev_mode__
