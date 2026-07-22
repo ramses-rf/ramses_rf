@@ -15,19 +15,7 @@ import orjson
 
 from . import exceptions as exc
 from .address import ALL_DEV_ADDR, NON_DEV_ADDR, Address, pkt_addrs
-from .const import (
-    I_,
-    RAW_LINE_REGEX,
-    RP,
-    RQ,
-    TD_DAYS_001,
-    TD_MINS_060,
-    TD_SECS_000,
-    TD_SECS_360,
-    W_,
-    Code,
-    VerbT,
-)
+from .const import I_, RAW_LINE_REGEX, RP, RQ, W_, Code, VerbT
 from .dtos import CommandDTO, PacketDTO
 from .logger import getLogger
 from .typing import HeaderT, PayloadT
@@ -805,42 +793,3 @@ def pkt_header(pkt: Packet, /, rx_header: bool = False) -> HeaderT | None:
         return HeaderT(f"{header}|{pkt._ctx}" if isinstance(pkt._ctx, str) else header)
     except AssertionError:
         return HeaderT(header)
-
-
-def pkt_lifespan(pkt: Packet) -> td:
-    """Return the duration before packet state payload data expires.
-
-    :param pkt: Packet instance to evaluate
-    :type pkt: Packet
-    :returns: Timedelta duration before packet expires
-    :rtype: td
-    """
-    if pkt.verb in (RQ, W_):
-        return TD_SECS_000
-
-    if pkt.code in (Code._0005, Code._000C):
-        return TD_DAYS_001
-
-    if pkt.code == Code._0006:
-        return TD_MINS_060
-
-    if pkt.code == Code._0404:  # 0404 tombstoned by incremented 0006
-        return TD_DAYS_001
-
-    if pkt.code == Code._000A and pkt._has_array:
-        return TD_MINS_060  # sends I /1h
-
-    if pkt.code == Code._10E0:  # but: what if valid pkt with a corrupt src_id
-        return TD_DAYS_001
-
-    if pkt.code == Code._1F09:  # sends I /sync_cycle
-        # can't do better than 300s with reading the payload
-        return TD_SECS_360 if pkt.verb == I_ else TD_SECS_000
-
-    if pkt.code == Code._1FC9 and pkt.verb == RP:
-        return TD_DAYS_001  # TODO: check other verbs, they seem variable
-
-    if pkt.code in (Code._2309, Code._30C9) and pkt._has_array:  # sends I /sync_cycle
-        return TD_SECS_360
-
-    return TD_MINS_060  # applies to lots of HVAC packets

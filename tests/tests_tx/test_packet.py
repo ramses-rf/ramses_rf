@@ -5,8 +5,9 @@ from datetime import datetime as dt, timedelta as td
 
 import pytest
 
+from ramses_rf.pipeline.lifespan import pkt_lifespan
 from ramses_tx.exceptions import PacketInvalid
-from ramses_tx.packet import Packet, pkt_lifespan
+from ramses_tx.packet import Packet
 
 # Constants for testing frames
 DTM = dt(2023, 1, 1, 12, 0, 0)

@@ -27,7 +27,7 @@ from ramses_tx.exceptions import PacketInvalid, ProtocolSendFailed
 from ramses_tx.schemas import SZ_BLOCK_LIST, SZ_ENFORCE_KNOWN_LIST, SZ_KNOWN_LIST
 from ramses_tx.typing import PayloadT
 
-from .config import GatewayConfig as GatewayConfig
+from .config import GatewayConfig as GatewayConfig, strip_and_map_schema
 from .const import Code, VerbT
 from .devices import DeviceFilter, DeviceRegistry, HgiGateway, device_factory
 from .dispatcher import detect_array_fragment, process_msg
@@ -138,7 +138,10 @@ class Gateway(GatewayLifecycle, GatewayInterface):
                 "for routine use (there be dragons here)"
             )
 
-        self._schema: dict[str, Any] = SCH_GLOBAL_SCHEMAS(self._gwy_config.schema or {})
+        schema_in = self._gwy_config.schema or {}
+        self._schema: dict[str, Any] = SCH_GLOBAL_SCHEMAS(
+            strip_and_map_schema(schema_in)
+        )
 
         self._tcs: Evohome | None = None
 
