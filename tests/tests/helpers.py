@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """RAMSES RF - a RAMSES-II protocol decoder & analyser."""
 
+import asyncio
 import json
 import re
 import warnings
@@ -256,8 +257,17 @@ async def load_test_gwy(dir_name: Path, **kwargs: Any) -> Gateway:
     # automatically. We simply need to wait for the transport to finish
     # reading the file.
     # We pause discovery/sending during replay to avoid side effects.
-    # until packet log is EOF
     await gwy._engine._protocol.wait_for_connection_lost()
+
+    dispatcher = getattr(gwy, "dispatcher", None)
+    if dispatcher:
+        if hasattr(dispatcher, "discovery_queue"):
+            await dispatcher.discovery_queue.join()
+        if hasattr(dispatcher, "ssot_queue"):
+            await dispatcher.ssot_queue.join()
+        if hasattr(dispatcher, "binding_fsm_queue"):
+            await dispatcher.binding_fsm_queue.join()
+    await asyncio.sleep(0.01)
 
     # Ensure all packets from the log are written to the DB before returning
     # This is critical for tests using the StorageWorker

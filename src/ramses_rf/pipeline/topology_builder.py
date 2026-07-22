@@ -467,7 +467,7 @@ class TopologyBuilder:
             # falsely flagged and dropped by the strict parser before they can
             # be routed.
             event_promote = TopologyChangedEvent(
-                action=TopologyAction.PROMOTE_CLASS,
+                action=TopologyAction.UPDATE_DEVICE_CLASS,
                 device_id=ufc_id,
                 metadata={"device_class": DevType.UFC},
                 causation="Rule_UFH_Communication_Promotion",
@@ -550,7 +550,7 @@ class TopologyBuilder:
             if msg.src.id != "--:------" and getattr(msg.src, "type", None) != "01":
                 self._emit(
                     TopologyChangedEvent(
-                        action=TopologyAction.PROMOTE_CLASS,
+                        action=TopologyAction.UPDATE_DEVICE_CLASS,
                         device_id=msg.src.id,
                         metadata={"device_class": dev_class},
                         causation="Rule_HVAC_Signature_Source",
@@ -565,7 +565,7 @@ class TopologyBuilder:
             ):
                 self._emit(
                     TopologyChangedEvent(
-                        action=TopologyAction.PROMOTE_CLASS,
+                        action=TopologyAction.UPDATE_DEVICE_CLASS,
                         device_id=msg.dst.id,
                         metadata={"device_class": dev_class},
                         causation="Rule_HVAC_Signature_Target",
@@ -589,7 +589,7 @@ class TopologyBuilder:
         # Prefix Guard: Prevent cross-promotion (e.g., OTB sending 1260)
         if msg.header.code == Code._3220 and getattr(msg.src, "type", None) == "10":
             event = TopologyChangedEvent(
-                action=TopologyAction.PROMOTE_CLASS,
+                action=TopologyAction.UPDATE_DEVICE_CLASS,
                 device_id=msg.src.id,
                 metadata={"device_class": DevType.OTB},
                 causation="Rule_OTB_3220_Signature",
@@ -601,7 +601,7 @@ class TopologyBuilder:
             and getattr(msg.src, "type", None) == "07"
         ):
             event = TopologyChangedEvent(
-                action=TopologyAction.PROMOTE_CLASS,
+                action=TopologyAction.UPDATE_DEVICE_CLASS,
                 device_id=msg.src.id,
                 metadata={"device_class": DevType.DHW},
                 causation="Rule_DHW_Signature",
@@ -642,7 +642,7 @@ class TopologyBuilder:
         for addr in addrs:
             if getattr(addr, "type", None) in prefix_map:
                 event = TopologyChangedEvent(
-                    action=TopologyAction.PROMOTE_CLASS,
+                    action=TopologyAction.UPDATE_DEVICE_CLASS,
                     device_id=addr.id,
                     metadata={"device_class": prefix_map[addr.type]},
                     causation="Rule_Heating_Prefix_Heuristic",

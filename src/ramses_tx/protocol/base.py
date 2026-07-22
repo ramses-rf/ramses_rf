@@ -428,7 +428,12 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
                 :return: True if the packet is within the pending
                     window.
                 """
-                return bool(p.dtm + td(seconds=int(p.payload[2:6], 16) / 10) > dt_now())
+                p_dtm = (
+                    p.dtm.replace(tzinfo=None) if p.dtm.tzinfo is not None else p.dtm
+                )
+                now = dt_now()
+                now_dtm = now.replace(tzinfo=None) if now.tzinfo is not None else now
+                return bool(p_dtm + td(seconds=int(p.payload[2:6], 16) / 10) > now_dtm)
 
             self._tracked_sync_cycles = deque(
                 p

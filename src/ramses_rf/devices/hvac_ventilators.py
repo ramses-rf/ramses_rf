@@ -86,11 +86,6 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
         if not hasattr(self, "hvac_state"):
             self.hvac_state = HvacState()
 
-    def _post_class_promote(self) -> None:
-        """Initialize state when promoted from a generic HVAC device."""
-        if not hasattr(self, "hvac_state"):
-            self.hvac_state = HvacState()
-
     def _setup_discovery_cmds(self) -> None:
         """Set up the discovery commands for the filter change sensor."""
         super()._setup_discovery_cmds()
@@ -151,11 +146,6 @@ class RfsGateway(DeviceHvac):  # RFS: (spIDer gateway)
 
         self._child_id = "hv"  # NOTE: domain_id
 
-    def _post_class_promote(self) -> None:
-        """Initialize state when promoted from a generic HVAC device."""
-        if not hasattr(self, "hvac_state"):
-            self.hvac_state = HvacState()
-
 
 class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
     """The FAN (ventilation) class.
@@ -208,11 +198,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         self.__dict__.setdefault("_bound_devices", {})
         if not hasattr(self, "hvac_state"):
             self.hvac_state = HvacState()
-
-    def _post_class_promote(self) -> None:
-        """Initialize FAN state when promoted from a generic HVAC device."""
-        super()._post_class_promote()
-        self._init_fan_state()
 
     def set_initialized_callback(self, callback: Callable[[], None] | None) -> None:
         """Set a callback to be executed when the next message (any) is

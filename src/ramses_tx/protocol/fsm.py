@@ -375,9 +375,14 @@ class ProtocolContext(StateMachineInterface):
             def is_imminent(p: Packet) -> bool:
                 lower = td(seconds=0.010 * 0.8)
                 upper = lower + td(seconds=0.084)
+                p_dtm = (
+                    p.dtm.replace(tzinfo=None) if p.dtm.tzinfo is not None else p.dtm
+                )
+                now = dt_now()
+                now_dtm = now.replace(tzinfo=None) if now.tzinfo is not None else now
                 return bool(
                     lower
-                    < (p.dtm + td(seconds=int(p.payload[2:6], 16) / 10) - dt_now())
+                    < (p_dtm + td(seconds=int(p.payload[2:6], 16) / 10) - now_dtm)
                     < upper
                 )
 

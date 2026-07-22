@@ -65,7 +65,7 @@ async def test_topology_builder_trv_implicit_binding() -> None:
 
     # Verify the Prefix Heuristic fired
     promote_event = next(
-        e for e in emitted_events if e.action == TopologyAction.PROMOTE_CLASS
+        e for e in emitted_events if e.action == TopologyAction.UPDATE_DEVICE_CLASS
     )
     assert promote_event.device_id == "04:111111"
 
@@ -95,7 +95,7 @@ async def test_device_registry_topology_ingestion() -> None:
 
     # 2. Arrange: The Events (Simulating the output from TopologyBuilder)
     event_1 = TopologyChangedEvent(
-        action=TopologyAction.PROMOTE_CLASS,
+        action=TopologyAction.UPDATE_DEVICE_CLASS,
         device_id="04:111111",
         metadata={"device_class": "TRV"},
         causation="Rule_Heating_Prefix_Heuristic",
