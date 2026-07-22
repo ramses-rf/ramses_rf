@@ -438,11 +438,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
             self._tracked_sync_cycles.append(pkt)
 
         if _DBG_FORCE_LOG_PACKETS:
-            _LOGGER.warning(f"Recv'd: {pkt._rssi} {pkt}")
+            _LOGGER.warning(f"Recv'd: {pkt.rssi} {pkt}")
         elif _LOGGER.getEffectiveLevel() > logging.DEBUG:
-            _LOGGER.info(f"Recv'd: {pkt._rssi} {pkt}")
+            _LOGGER.info(f"Recv'd: {pkt.rssi} {pkt}")
         else:
-            _LOGGER.debug(f"Recv'd: {pkt._rssi} {pkt}")
+            _LOGGER.debug(f"Recv'd: {pkt.rssi} {pkt}")
 
         self._pkt_received(pkt)
 

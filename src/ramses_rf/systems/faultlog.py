@@ -263,7 +263,7 @@ class FaultLog:  # 0418
         pkt.payload = PayloadT(f"0000{idx}B0000000000000000000007FFFFF7000000000")
 
         # NOTE: must now reset pkt payload, and its header
-        pkt._repr = pkt._hdr_ = pkt._ctx_ = pkt._idx_ = None  # type: ignore[assignment]
+        pkt._repr = pkt._hdr_ = pkt._ctx_ = pkt._idx_ = None
         pkt._frame = pkt._frame[:50] + idx + pkt._frame[52:]
 
         msg = Message._from_pkt(pkt)

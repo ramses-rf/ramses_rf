@@ -88,12 +88,17 @@ def test_packet_constructors() -> None:
     assert pkt_dict.rssi == "045"
     assert pkt_dict.comment == "my comment"
 
-    # Test from_file
+    # Test canonical from_raw_line factory
+    pkt_line = Packet.from_raw_line(DTM, VALID_FRAME_I)
+    assert pkt_line.rssi == "045"
+    assert pkt_line.verb == " I"
+
+    # Test from_file (delegates to from_raw_line)
     pkt_file_valid = Packet.from_file(dtm_str, VALID_FRAME_I)
     assert pkt_file_valid.rssi == "045"
     assert pkt_file_valid.verb == " I"
 
-    # Test from_port
+    # Test from_port (delegates to from_raw_line)
     pkt_port = Packet.from_port(DTM, VALID_FRAME_I)
     assert pkt_port.rssi == "045"
 
@@ -137,6 +142,22 @@ def test_packet_dto_serialization() -> None:
 
     assert restored_pkt.dtm == DTM.astimezone()
     assert restored_pkt.rssi == "045"  # Automatically padded back to 3 chars
+    assert restored_pkt.verb == " I"
+    assert restored_pkt._frame == pkt._frame
+
+
+def test_to_json_from_json_parity() -> None:
+    """Test serializing a Packet to JSON via orjson and deserializing it back."""
+    pkt = Packet.from_raw_line(DTM, VALID_FRAME_I)
+
+    # 1. Test to_json (Serialization to bytes)
+    json_bytes = pkt.to_json()
+    assert isinstance(json_bytes, bytes)
+
+    # 2. Test from_json (Deserialization back to Packet)
+    restored_pkt = Packet.from_json(json_bytes)
+    assert restored_pkt.dtm == DTM.astimezone()
+    assert restored_pkt.rssi == "045"
     assert restored_pkt.verb == " I"
     assert restored_pkt._frame == pkt._frame
 

@@ -32,7 +32,7 @@ async def assert_stack_state(
 
     assert port_transport._this_pkt and port_transport._this_pkt.code == Code._PUZZ
     if hasattr(port_transport._this_pkt, "addr1"):
-        assert port_transport._this_pkt.addr1 == GWY_ID
+        assert port_transport._this_pkt.addr1.id == GWY_ID
     else:
         assert port_transport._this_pkt.src.id == GWY_ID
     assert port_transport._prev_pkt is None

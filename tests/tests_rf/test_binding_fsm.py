@@ -261,7 +261,7 @@ async def assert_context_state(
 # ### TESTS ############################################################################
 
 
-def _assert_l7_parity(msg: Message, cmd: Packet) -> None:
+def _assert_l7_parity(msg: Message, cmd: Packet | CommandDTO) -> None:
     """Assert that a received L7 Message matches a transmitted L3/L4 Packet."""
     assert msg.verb == cmd.verb
     assert str(msg.code) == str(cmd.code)

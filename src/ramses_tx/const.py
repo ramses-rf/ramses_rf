@@ -8,9 +8,16 @@ library to decode and encode RAMSES-II protocol packets.
 from __future__ import annotations
 
 import re
+from datetime import timedelta as td
 from enum import EnumCheck, IntEnum, StrEnum, verify
 from types import SimpleNamespace
 from typing import Any, Final, Literal, NoReturn
+
+# Pre-allocated timedelta objects for high-performance lifespan & timeout evaluations
+TD_SECS_000: Final[td] = td(seconds=0)
+TD_SECS_360: Final[td] = td(seconds=360)
+TD_MINS_060: Final[td] = td(minutes=60)
+TD_DAYS_001: Final[td] = td(minutes=60 * 24)
 
 __dev_mode__ = False  # NOTE: this is const.py
 DEV_MODE = __dev_mode__
@@ -746,7 +753,7 @@ DTM_LONG_REGEX = re.compile(
 )  # 2020-11-30T13:15:00.123456
 DTM_TIME_REGEX = re.compile(r"[0-2]\d:[0-5]\d:[0-5]\d\.\d{3} ?")  # 13:15:00.123
 
-# Used by packet structure validators
+# Used by Packet.from_raw_line to validate unparsed ASCII line structures
 r = r"(-{3}|\d{3}|\.{3})"  # RSSI, '...' was used by an older version of evofw3
 v = r"( I|RP|RQ| W)"  # verb
 d = r"(-{2}:-{6}|\d{2}:\d{6})"  # device ID
@@ -754,9 +761,8 @@ c = r"[0-9A-F]{4}"  # code
 l = r"\d{3}"  # length # noqa: E741
 p = r"([0-9A-F]{2}){1,48}"  # payload
 
-# DEVICE_ID_REGEX = re.compile(f"^{d}$")
-COMMAND_REGEX = re.compile(f"^{v} {r} {d} {d} {d} {c} {l} {p}$")
-MESSAGE_REGEX = re.compile(f"^{r} {v} {r} {d} {d} {d} {c} {l} {p}$")
+RAW_LINE_REGEX = re.compile(f"^{v} {r} {d} {d} {d} {c} {l} {p}$")
+COMMAND_REGEX = RAW_LINE_REGEX  # Backward-compatibility alias
 
 
 # Used by 0418/system_fault parser
