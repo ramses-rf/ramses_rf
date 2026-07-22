@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
 
-from ramses_rf.address import Address
+from ramses_rf.address import Address, id_to_address
 from ramses_tx import CommandDTO, PacketDTO
 from ramses_tx.models import DeviceId, RawPacket, TransportMessage
 from ramses_tx.typing import DeviceIdT
@@ -151,13 +151,13 @@ class Message:
         addr3 = dto.addr3 if dto.addr3 else "--:------"
 
         self._addrs: tuple[Address, Address, Address] = (
-            Address(DeviceIdT(addr1)),
-            Address(DeviceIdT(addr2)),
-            Address(DeviceIdT(addr3)),
+            id_to_address(DeviceIdT(addr1)),
+            id_to_address(DeviceIdT(addr2)),
+            id_to_address(DeviceIdT(addr3)),
         )
 
         valid = [a for a in self._addrs if a.id != "--:------"]
-        self.src: Address = valid[0] if valid else Address(DeviceIdT("--:------"))
+        self.src: Address = valid[0] if valid else id_to_address(DeviceIdT("--:------"))
         self.dst: Address = valid[1] if len(valid) > 1 else self.src
 
         # Initialize attributes before parsing to prevent AttributeError
