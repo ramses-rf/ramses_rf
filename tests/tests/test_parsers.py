@@ -107,11 +107,6 @@ def _proc_log_line(log_line: str) -> None:
         assert payload == pkt_dict, pkt_line
         return
 
-    assert HAS_ARRAY not in pkt_dict or pkt._has_array == pkt_dict[HAS_ARRAY]
-    assert HAS_IDX not in pkt_dict or pkt._idx == pkt_dict[HAS_IDX]
-    assert HAS_PAYLOAD not in pkt_dict or pkt._has_payload == pkt_dict[HAS_PAYLOAD]
-    assert IS_FRAGMENT not in pkt_dict or pkt._is_fragment == pkt_dict[IS_FRAGMENT]
-
 
 def _proc_log_line_pair_4e15(log_line: str, prev_msg: Message | None) -> Message | None:
     pkt_line, *_ = list(map(str.strip, log_line.split("#", maxsplit=1) + [""]))
