@@ -77,8 +77,16 @@ class Temperature(DeviceHeat):  # 30C9
         # Update local state immediately so the temperature is available
         # even if the RF command times out (e.g. faked devices on a simulator)
         self.temp_state = dataclasses.replace(self.temp_state, temperature=value)
+        # Determine the zone_idx from the parent zone (if bound) so that
+        # UFH zone sensors emit 30C9 with the correct zone_idx.  Without
+        # this, the fake always sends idx 00 and the UFC ignores it.
+        zone_idx = "00"
+        if self._parent is not None and hasattr(self._parent, "idx"):
+            zone_idx = self._parent.idx
         return await send_fake_intent(
-            self, Action.PUT_SENSOR_TEMP, {"temperature": value}
+            self,
+            Action.PUT_SENSOR_TEMP,
+            {"temperature": value, "zone_idx": zone_idx},
         )
 
     async def status(self) -> dict[str, Any]:
