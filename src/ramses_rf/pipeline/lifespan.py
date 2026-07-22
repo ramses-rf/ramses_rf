@@ -31,7 +31,8 @@ def pkt_lifespan(pkt: Packet) -> td:
         case Code._0006:
             return TD_MINS_060
 
-        case Code._000A if pkt._has_array:
+        # pkt._len > 3 checks if the packet has an array
+        case Code._000A if pkt._len > 3:
             return TD_MINS_060  # sends I /1h
 
         case Code._1F09:
@@ -41,7 +42,8 @@ def pkt_lifespan(pkt: Packet) -> td:
         case Code._1FC9 if pkt.verb == RP:
             return TD_DAYS_001  # TODO: check other verbs, they seem variable
 
-        case Code._2309 | Code._30C9 if pkt._has_array:
+        # pkt._len > 3 checks if the packet has an array
+        case Code._2309 | Code._30C9 if pkt._len > 3:
             return TD_SECS_360  # sends I /sync_cycle
 
         case _:

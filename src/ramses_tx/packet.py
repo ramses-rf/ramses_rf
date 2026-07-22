@@ -48,7 +48,6 @@ class Packet:
     _ctx_: str | bool | None
     _hdr_: HeaderT | None
     _idx_: str | bool | None
-    _has_array_: bool | None
     _repr: str | None
     _lifespan: bool | td
 
@@ -101,7 +100,6 @@ class Packet:
             self._ctx_ = None
             self._hdr_ = None
             self._idx_ = None
-            self._has_array_ = None
             self._repr = None
             self._lifespan = False
             return
@@ -138,7 +136,6 @@ class Packet:
         self._ctx_ = None
         self._hdr_ = None
         self._idx_ = None
-        self._has_array_ = None
         self._repr = None
         self._lifespan = False
 
@@ -260,7 +257,6 @@ class Packet:
         pkt._ctx_ = None
         pkt._hdr_ = None
         pkt._idx_ = None
-        pkt._has_array_ = None
         pkt._repr = None
         pkt._lifespan = False
 
@@ -531,20 +527,6 @@ class Packet:
         res = self._ctx
         self._idx_ = res if isinstance(res, str) else False
         return self._idx_
-
-    @property
-    def _has_array(self) -> bool | None:
-        """Return True if payload length indicates an array structure.
-
-        :returns: Boolean flag or None
-        :rtype: bool | None
-        """
-        if self._has_array_ is not None:
-            return self._has_array_
-
-        if self.code in (Code._000A, Code._2309, Code._30C9):
-            return self._len > 3
-        return False
 
     @property
     def _has_payload(self) -> bool:

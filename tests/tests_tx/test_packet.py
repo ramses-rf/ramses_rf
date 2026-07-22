@@ -217,8 +217,7 @@ def test_pkt_lifespan(monkeypatch: pytest.MonkeyPatch) -> None:
     valid_000a = "045  I --- 01:145038 --:------ 01:145038 000A 006 001122334455"
     pkt_000a = Packet(DTM, valid_000a)
 
-    # Set the internal property cache to safely bypass deeper array schema detection
-    monkeypatch.setattr(pkt_000a, "_has_array_", True)
+    # The internal property cache was removed in Phase 3.1; length logic applies natively
     assert pkt_lifespan(pkt_000a) == td(minutes=60)
 
 
