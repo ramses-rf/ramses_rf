@@ -2,6 +2,7 @@
 
 import math
 import struct
+from typing import Final
 
 from ramses_rf.commands.builders.helpers import resolve_addrs
 from ramses_rf.commands.core import Command
@@ -20,6 +21,23 @@ from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.const import DEFAULT_NUM_REPEATS, I_, RQ, SZ_MINUTES, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.helpers import hex_from_double, hex_from_percent, hex_from_temp
+
+# Command 2411 payload binary layout (Big-Endian):
+#   Offset  Format  Len  Description                    Sample Hex
+#   --------------------------------------------------------------
+#   +0      >B      1B   Leading zero byte            : 00
+#   +1       H      2B   Parameter ID                 : 00 0A
+#   +3       B      1B   Padding byte                 : 00
+#   +4       B      1B   Data type ID                 : 10
+#   +5       i      4B   Current value (int32)        : 00 00 00 05
+#   +9       i      4B   Minimum value (int32)        : 00 00 00 00
+#   +13      i      4B   Maximum value (int32)        : 00 00 00 64
+#   +17      i      4B   Precision scalar (int32)     : 00 00 00 01
+#   +21     2s      2B   Trailer bytes                : 00 01
+#   --------------------------------------------------------------
+#   Field-spaced hex : 00 000A 00 10 00000005 00000000 00000064 00000001 0001
+#   Payload hex      : 00000A0010000000050000000000000064000000010001
+CODE_2411_FAN_PARAM_STRUCT: Final[str] = ">BHBBiiii2s"
 
 
 def build_put_co2_level(intent: Command) -> CommandDTO:
@@ -290,25 +308,8 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
                     "Must be one of '00', '01', '0F', '10', '20', '90', or '92'"
                 )
 
-        # Command 2411 payload binary layout (Big-Endian):
-        #   Offset  Format  Len  Description                    Sample Hex
-        #   --------------------------------------------------------------
-        #   +0      >B      1B   Leading zero byte            : 00
-        #   +1       H      2B   Parameter ID                 : 00 0A
-        #   +3       B      1B   Padding byte                 : 00
-        #   +4       B      1B   Data type ID                 : 10
-        #   +5       i      4B   Current value (int32)        : 00 00 00 05
-        #   +9       i      4B   Minimum value (int32)        : 00 00 00 00
-        #   +13      i      4B   Maximum value (int32)        : 00 00 00 64
-        #   +17      i      4B   Precision scalar (int32)     : 00 00 00 01
-        #   +21     2s      2B   Trailer bytes                : 00 01
-        #   --------------------------------------------------------------
-        #   Field-spaced hex : 00 000A 00 10 00000005 00000000 00000064 00000001 0001
-        #   Payload hex      : 00000A0010000000050000000000000064000000010001
-        param_2411_struct = ">B H B B i i i i 2s"
-
         payload_bytes = struct.pack(
-            param_2411_struct,
+            CODE_2411_FAN_PARAM_STRUCT,
             0x00,
             param_id_int,
             0x00,
