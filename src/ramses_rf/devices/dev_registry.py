@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast, overload
 
 from ramses_rf.address import Address, is_valid_dev_id
 from ramses_rf.config import GatewayConfig
-from ramses_rf.const import FA, FC, SZ_DEVICES
+from ramses_rf.const import DEV_TYPE_MAP, FA, FC, SZ_DEVICES
 from ramses_rf.devices.dev_base import DeviceHeat, DeviceHvac, Fakeable
 from ramses_rf.enums import TopologyAction
 from ramses_rf.exceptions import (
@@ -80,7 +80,7 @@ class DeviceRegistry:
             TopologyAction, Callable[[TopologyChangedEvent], None]
         ] = {
             TopologyAction.BIND_DEVICE: self._handle_bind_device,
-            TopologyAction.PROMOTE_CLASS: self._handle_promote_class,
+            TopologyAction.UPDATE_DEVICE_CLASS: self._handle_update_device_traits,
             TopologyAction.CREATE_CONTROLLER: self._handle_create_controller,
             TopologyAction.CREATE_CIRCUIT: self._handle_create_circuit,
             TopologyAction.UPDATE_TRAITS: self._handle_update_traits,
@@ -255,99 +255,32 @@ class DeviceRegistry:
                     f"Bound {event.child_id} to {parent.id} via {event.causation}"
                 )
 
-    def _handle_promote_class(self, event: TopologyChangedEvent) -> None:
-        """Safely instantiate a promoted class and migrate state."""
+    def _handle_update_device_traits(self, event: TopologyChangedEvent) -> None:
+        """Update SSOT configuration known_list when new device class traits are discovered."""
         if not event.device_id or not event.metadata:
             return
 
         new_class_slug_raw = str(event.metadata.get("device_class"))
-        slug_map = {
-            "HUM": "rh_sensor",
-            "REM": "switch",
-            "CO2": "co2_sensor",
-            "FAN": "ventilator",
-        }
         dict_key = new_class_slug_raw.split(".")[-1]
-        new_class_slug = slug_map.get(dict_key, new_class_slug_raw)
+        try:
+            new_class_slug = DEV_TYPE_MAP[dict_key]
+            if new_class_slug in DEV_TYPE_MAP:  # e.g. "04"
+                new_class_slug = DEV_TYPE_MAP[new_class_slug]
+        except (KeyError, TypeError):
+            new_class_slug = new_class_slug_raw
 
         if not new_class_slug:
             return
 
-        # 1. ALWAYS update the configuration known_list first
-        # This structurally resolves early-packet race conditions via the SSOT.
-        # Keep a backup of old traits for rollback.
+        # Update the configuration traits in the SSOT
         old_traits_dict = dict(self._config.known_list.get(event.device_id, {}))
-
-        # Update the configuration traits safely
         traits_dict = dict(old_traits_dict)
         if old_traits_dict.get("class") != new_class_slug:
             traits_dict["class"] = new_class_slug
             self._config.known_list[event.device_id] = traits_dict
-
-        old_dev = self.device_by_id.get(event.device_id)
-        if not old_dev:
-            # Device doesn't exist yet, but the SSOT is updated. get_device()
-            # will naturally instantiate it with the correct class shortly.
-            return
-
-        if getattr(old_dev, "_SLUG", None) == new_class_slug:
-            return
-
-        _TRACE.info(
-            f"PROMOTING CLASS: {event.device_id} from "
-            f"{getattr(old_dev, '_SLUG', 'None')} to {new_class_slug}"
-        )
-
-        # 2. Proceed with dynamic substitution ONLY if the device already exists in
-        # memory. Pop the old device from the tracking dictionaries to allow the
-        # factory to safely call _add_device during __init__ without raising a
-        # SchemaInconsistentError
-        self.device_by_id.pop(event.device_id, None)
-        self.devices = [d for d in self.devices if d.id != event.device_id]
-
-        try:
-            # Instantiate the new strict device class via the factory
-            traits = DeviceTraits.from_dict(traits_dict)
-            new_dev = self._device_factory_cb(old_dev.addr, None, traits)
-            if hasattr(new_dev, "_post_class_promote"):
-                new_dev._post_class_promote()
-            new_dev._setup_discovery_cmds()
-
-            # FORCE IT BACK IN: In case the factory doesn't auto-register
-            if new_dev.id not in self.device_by_id:
-                self._add_device(new_dev)
-
-            # Migrate essential topological state ONLY if a parent existed
-            if old_parent := getattr(old_dev, "_parent", None):
-                old_child_id = getattr(old_dev, "_child_id", None)
-                was_sensor = False
-                if old_parent:
-                    was_sensor = (
-                        getattr(old_parent, "_sensor", None) == old_dev
-                        or getattr(old_parent, "_dhw_sensor", None) == old_dev
-                    )
-                new_dev._apply_topology_link(
-                    old_parent, child_id=old_child_id, is_sensor=was_sensor
-                )
-
-            if hasattr(old_dev, "temp_state") and hasattr(new_dev, "temp_state"):
-                new_dev.temp_state = old_dev.temp_state
-            if hasattr(old_dev, "demand_state") and hasattr(new_dev, "demand_state"):
-                new_dev.demand_state = old_dev.demand_state
-
-            _LOGGER.info(
-                f"Promoted {event.device_id} to {new_class_slug} via {event.causation}"
+            _TRACE.info(
+                f"UPDATED SSOT TRAITS: {event.device_id} class -> {new_class_slug} via {event.causation}"
             )
-        except Exception as err:
-            _TRACE.error(f"PROMOTE EXCEPTION: Rollback on {event.device_id}: {err}")
-            # Rollback on failure: pop the failed new_dev out first
-            self.device_by_id.pop(event.device_id, None)
-            self.devices = [d for d in self.devices if d.id != event.device_id]
-            self._add_device(old_dev)
-
-            # Revert the traits dictionary
-            self._config.known_list[event.device_id] = old_traits_dict
-            raise
 
     def _handle_create_controller(self, event: TopologyChangedEvent) -> None:
         """Instruct a device to initialize its Evohome TCS."""
@@ -707,10 +640,10 @@ class DeviceRegistry:
                 or d.id in self._config.mac_filter_list
             ):
                 traits = await d.traits()
-                result[d.id] = cast(
-                    DeviceTraitsT,
-                    {k: traits.get(k) for k in (SZ_CLASS, SZ_ALIAS, SZ_FAKED)},
-                )
+                dev_traits = {k: traits.get(k) for k in (SZ_CLASS, SZ_ALIAS, SZ_FAKED)}
+                if ssot_class := self._config.known_list.get(d.id, {}).get("class"):
+                    dev_traits[SZ_CLASS] = ssot_class
+                result[d.id] = cast(DeviceTraitsT, dev_traits)
         return cast(DeviceListT, result)
 
     async def params(self) -> dict[str, Any]:

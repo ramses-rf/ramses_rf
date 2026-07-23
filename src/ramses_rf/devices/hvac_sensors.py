@@ -64,11 +64,6 @@ class HvacSensorBase(DeviceHvac):
         if not hasattr(self, "hvac_state"):
             self.hvac_state = HvacState()
 
-    def _post_class_promote(self) -> None:
-        """Initialize state when promoted from a generic HVAC device."""
-        if not hasattr(self, "hvac_state"):
-            self.hvac_state = HvacState()
-
     @property
     def heartbeat_timeout(self) -> td:
         """Return the timeout before the device is considered unavailable.

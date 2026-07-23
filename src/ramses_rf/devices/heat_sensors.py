@@ -112,10 +112,6 @@ class DhwSensor(DhwTemperature, BatteryState, Fakeable):  # DHW (07): 10A0, 1260
 
         self._child_id = FA  # NOTE: domain_id
 
-    def _post_class_promote(self) -> None:
-        """Initialize DHW state when promoted in-place from a generic device."""
-        self.__dict__.setdefault("_child_id", FA)
-
     async def initiate_binding_process(
         self,
     ) -> tuple[Packet, Message, Packet, Packet | None]:

@@ -59,12 +59,6 @@ class Controller(DeviceHeat):  # CTL (01):
         self.tcs: Evohome | None = None  # TODO: = self?
         self._make_tcs_controller(**kwargs)  # NOTE: must create_from_schema first
 
-    def _post_class_promote(self) -> None:
-        """Initialize CTL state when promoted in-place from a generic device."""
-        self.__dict__.setdefault("tcs", None)
-        if not self.tcs:
-            self._make_tcs_controller()
-
     def _setup_discovery_cmds(self) -> None:
         super()._setup_discovery_cmds()
 
@@ -170,10 +164,6 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
     def _init_ufh_state(self) -> None:
         """Initialize UFH-specific instance attributes (idempotent)."""
         self.__dict__.setdefault("circuit_by_id", {f"{i:02X}": {} for i in range(8)})
-
-    def _post_class_promote(self) -> None:
-        """Initialize UFH state when promoted in-place from a generic device."""
-        self._init_ufh_state()
 
     def _setup_discovery_cmds(self) -> None:
         super()._setup_discovery_cmds()

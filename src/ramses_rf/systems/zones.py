@@ -498,6 +498,7 @@ class Zone(ZoneSchedule):
         self._sensor: Device | None = None
         self.actuators: list[Device] = []
         self.actuator_by_id: dict[DeviceIdT, Device] = {}
+        self._heating_type: str | None = None
 
     def _update_schema(self, **schema: Any) -> None:
         """Update a heating zone with new schema attrs.
@@ -537,15 +538,15 @@ class Zone(ZoneSchedule):
                     f"Not a known zone class (for {self}): {zone_type}"
                 )
 
-            if self._SLUG is not None:
+            current_slug = self._SLUG or self._heating_type
+            if current_slug is not None and klass != current_slug:
                 raise exc.SystemSchemaInconsistent(
-                    f"{self} changed zone class: from {self._SLUG} to {klass}"
+                    f"{self} changed zone class: from {current_slug} to {klass}"
                 )
 
-            self.__class__ = cast("type[Zone]", ZONE_CLASS_BY_SLUG[klass])
-            _LOGGER.debug("Promoted a Zone: %s (%s)", self.id, self.__class__)
-
-            self._setup_discovery_cmds()
+            self._heating_type = klass
+            if self._SLUG is None and klass in ZONE_CLASS_BY_SLUG:
+                self.__class__ = cast("type[Zone]", ZONE_CLASS_BY_SLUG[klass])
 
         # if schema.get(SZ_CLASS) == ZON_ROLE_MAP[ZON_ROLE.ACT]:
         #     schema.pop(SZ_CLASS)
@@ -684,9 +685,10 @@ class Zone(ZoneSchedule):
     @property
     def heating_type(self) -> str | None:
         """Get the type of the zone/DHW (e.g. electric_zone, stored_dhw)."""
-        if self._SLUG is None:
+        slug = self._SLUG or self._heating_type
+        if slug is None:
             return None
-        return cast(str, ZON_ROLE_MAP[self._SLUG])
+        return cast(str, ZON_ROLE_MAP[slug])
 
     async def name(self) -> str | None:  # 0004
         """Get the name of the zone."""
@@ -1080,14 +1082,13 @@ def zone_factory(
 
         # NOTE: for now, zones are always promoted after instantiation
 
-        # a specified zone class always takes precedence (even if it
-        # is wrong)...
-        # if cls := ZONE_CLASS_BY_SLUG.get(schema.get(SZ_CLASS)):
-        #     _LOGGER.debug(
-        #         f"Using an explicitly-defined zone class for: "
-        #         f"{ctl_addr}_{idx} ({cls})"
-        #     )
-        #     return cls
+        if (sz_cls := schema.get(SZ_CLASS)) and (
+            cls := ZONE_CLASS_BY_SLUG.get(str(sz_cls))
+        ):
+            _LOGGER.debug(
+                f"Using an explicitly-defined zone class for: {ctl_addr}_{idx} ({cls})"
+            )
+            return cls
 
         # or, is it a DHW zone, derived from the zone idx...
         if idx == "HW":

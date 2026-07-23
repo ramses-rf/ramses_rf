@@ -192,7 +192,7 @@ async def test_fan_promotion_race_condition() -> None:
     fan_id = "32:111111"
 
     event = TopologyChangedEvent(
-        action=TopologyAction.PROMOTE_CLASS,
+        action=TopologyAction.UPDATE_DEVICE_CLASS,
         device_id=fan_id,
         metadata={"device_class": "FAN"},
         causation="test_eavesdrop",

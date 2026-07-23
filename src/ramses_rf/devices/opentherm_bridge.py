@@ -7,7 +7,7 @@ from datetime import timedelta as td
 from typing import Any, Final, Literal
 
 from ramses_rf.const import FC, HEARTBEAT_TIMEOUT_OTB, Code, DevType
-from ramses_rf.models import DemandState, DeviceTraits, OpenThermState, TemperatureState
+from ramses_rf.models import DeviceTraits, OpenThermState
 from ramses_tx import CommandDTO, Priority
 from ramses_tx.const import (
     SZ_BOILER_OUTPUT_TEMP,
@@ -118,17 +118,6 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         self.opentherm_state = OpenThermState()
 
         self._child_id = FC  # NOTE: domain_id
-
-    def _post_class_promote(self) -> None:
-        """Initialize OTB state when promoted in-place from a generic device."""
-        self.__dict__.setdefault("_child_id", FC)
-
-        if not hasattr(self, "temp_state"):
-            self.temp_state = TemperatureState()
-        if not hasattr(self, "demand_state"):
-            self.demand_state = DemandState()
-        if not hasattr(self, "opentherm_state"):
-            self.opentherm_state = OpenThermState()
 
     @property
     def heartbeat_timeout(self) -> td:

@@ -75,7 +75,7 @@ class TopologyChangedEvent:
 
     # -- Entity Identifiers (Populated based on the Action) --
 
-    # Used for single-device actions (e.g., PROMOTE_CLASS, UPDATE_TRAITS)
+    # Used for single-device actions (e.g., UPDATE_DEVICE_CLASS, UPDATE_TRAITS)
     device_id: DeviceIdT | None = None
 
     # Used together for structural relationship actions (e.g., BIND_DEVICE)
