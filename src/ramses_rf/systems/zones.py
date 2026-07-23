@@ -46,12 +46,13 @@ from ramses_rf.schemas import (
     SZ_SENSOR,
 )
 from ramses_rf.topology import Child, Parent
+from ramses_rf.typing import InnerScheduleT, OuterScheduleT
 from ramses_tx import Packet
 from ramses_tx.exceptions import ProtocolSendFailed, ProtocolTimeoutError
 from ramses_tx.typing import HeaderT, PayDictT
 
 from ..messages import Message
-from .schedule import InnerScheduleT, OuterScheduleT, Schedule
+from .schedule import Schedule
 
 if TYPE_CHECKING:
     from ramses_tx import Packet
