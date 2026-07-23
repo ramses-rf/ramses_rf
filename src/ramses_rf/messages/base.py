@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime as dt
-from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar, cast
 
 from ramses_rf.address import Address, id_to_address
 from ramses_tx import CommandDTO, PacketDTO
@@ -73,6 +73,11 @@ class _LegacyPktShim:
         self._msg = msg
         self._dto = msg._dto
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, _LegacyPktShim):
+            return self._msg == other._msg
+        return False
+
     @property
     def _ctx(self) -> Any:
         """Legacy context bridge."""
@@ -89,6 +94,8 @@ class _LegacyPktShim:
 
         Calculates the frame string dynamically from the L7 properties.
         """
+        if hasattr(self, "_override_frame"):
+            return self._override_frame
         seqn = self._msg.seqn if self._msg.seqn else "---"
         addr1 = self._msg._addrs[0].id
         addr2 = self._msg._addrs[1].id
@@ -97,6 +104,29 @@ class _LegacyPktShim:
             f"{self._msg.verb} {seqn} {addr1} {addr2} {addr3} "
             f"{self._msg.code} {self._msg.len:03d} {self._dto.payload}"
         )
+
+    @_frame.setter
+    def _frame(self, value: str) -> None:
+        self._override_frame = value
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Delegate attribute setting to underlying DTO if not on shim."""
+        if name in ("_msg", "_dto", "_override_frame"):
+            object.__setattr__(self, name, value)
+        else:
+            try:
+                setattr(self._dto, name, value)
+            except (AttributeError, TypeError):
+                object.__setattr__(self, name, value)
+
+    @property
+    def _idx(self) -> str | bool:
+        """Legacy payload index bridge."""
+        return self._dto.payload[:2] if self._dto.payload else "00"
+
+    def to_dto(self) -> PacketDTO:
+        """Legacy DTO bridge."""
+        return self._dto
 
     def __getattr__(self, name: str) -> Any:
         """Delegate all other attributes to the underlying DTO.
@@ -215,6 +245,10 @@ class Message:
         :return: The generated message.
         :rtype: Message
         """
+        if isinstance(pkt, Message):
+            return cast(_MessageT, pkt)
+        if hasattr(pkt, "_msg") and isinstance(pkt._msg, Message):
+            return cast(_MessageT, pkt._msg)
         return cls(pkt.to_dto())
 
     @classmethod

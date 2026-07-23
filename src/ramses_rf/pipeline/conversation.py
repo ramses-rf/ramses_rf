@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, Final
 
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command
-from ramses_tx import RP
+from ramses_tx import RP, Packet
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.exceptions import ProtocolSendFailed, ProtocolTimeoutError
 
@@ -25,6 +26,8 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_RPLY_TIMEOUT: Final[float] = 1.0
 MAX_RETRY_LIMIT: Final[int] = 3
+
+SendCallbackT = Callable[[CommandDTO], Awaitable[Packet]]
 
 
 @dataclass
@@ -70,6 +73,7 @@ class ConversationManager:
         *,
         default_timeout: float = DEFAULT_RPLY_TIMEOUT,
         max_retries: int = MAX_RETRY_LIMIT,
+        send_func: SendCallbackT | None = None,
     ) -> None:
         """Initialise the ConversationManager.
 
@@ -79,10 +83,13 @@ class ConversationManager:
         :type default_timeout: float
         :param max_retries: Maximum number of retries before failing.
         :type max_retries: int
+        :param send_func: Callback for physical RF transmission retries.
+        :type send_func: SendCallbackT | None
         """
         self._loop = loop or asyncio.get_event_loop()
         self.default_timeout = default_timeout
         self.max_retries = max_retries
+        self._send_func = send_func
         self._pending: dict[str, PendingConversation] = {}
 
     @property
@@ -190,6 +197,15 @@ class ConversationManager:
                 pending.retry_count,
                 pending.max_retries,
             )
+            if self._send_func is not None:
+                try:
+                    await self._send_func(pending.dto)
+                except Exception as err:
+                    _LOGGER.warning(
+                        "Failed to re-send DTO during retry for %s: %s",
+                        key,
+                        err,
+                    )
             # Re-schedule timeout
             self._schedule_timeout(key, pending)
         else:

@@ -48,10 +48,9 @@ async def test_live_gateway_conversation_manager_integration(
     )
 
     # Act
-    pkt = await gwy.dispatcher.send(intent, wait_for_reply=True)
+    send_task = asyncio.create_task(gwy.dispatcher.send(intent, wait_for_reply=True))
+    await asyncio.sleep(0.01)
 
-    # Assert
-    assert pkt == mock_packet
     assert gwy.conversation_manager.pending_count == 1
 
     # Simulate inbound RP response processing via real Packet & Message parsing
@@ -60,7 +59,10 @@ async def test_live_gateway_conversation_manager_integration(
     reply_msg = Message._from_pkt(rp_pkt)
 
     gwy.conversation_manager.process_msg(reply_msg)
+    pkt = await send_task
 
+    # Assert
+    assert pkt == reply_msg._pkt
     assert gwy.conversation_manager.pending_count == 0
 
     await gwy.stop()
@@ -82,7 +84,8 @@ async def test_live_dispatcher_process_msg_routes_to_conversation_manager(
         data={"zone_idx": "00", "setpoint": 21.0},
     )
 
-    await gwy.dispatcher.send(intent, wait_for_reply=True)
+    send_task = asyncio.create_task(gwy.dispatcher.send(intent, wait_for_reply=True))
+    await asyncio.sleep(0.01)
     assert gwy.conversation_manager.pending_count == 1
 
     rp_frame = "000 RP --- 01:078710 18:000730 --:------ 2309 003 000834"
@@ -91,6 +94,7 @@ async def test_live_dispatcher_process_msg_routes_to_conversation_manager(
 
     # Act
     await process_msg(gwy, reply_msg)
+    await send_task
 
     # Assert
     assert gwy.conversation_manager.pending_count == 0

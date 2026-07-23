@@ -189,7 +189,10 @@ class Gateway(GatewayLifecycle, GatewayInterface):
 
         # 2. Instantiate L7 Command Dispatcher and ConversationManager
         self._dispatcher = CommandDispatcher(self)
-        self._conversation_manager = ConversationManager(loop=loop)
+        self._conversation_manager = ConversationManager(
+            loop=loop,
+            send_func=lambda dto: self.async_send_cmd(dto, wait_for_reply=False),
+        )
 
     def __repr__(self) -> str:
         if not self._engine.ser_name:
