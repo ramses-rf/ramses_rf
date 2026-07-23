@@ -122,7 +122,7 @@ class Address:
         return f"{(int(dev_type) << 18) + int(device_id[-6:]):0>6X}"
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=2048)
 def id_to_address(device_id: DeviceIdT) -> Address:
     """Factory method to cache & return device Address from device ID."""
     return Address(device_id=device_id)
@@ -165,7 +165,7 @@ def hex_id_to_dev_id(device_hex: str, friendly_id: bool = False) -> DeviceIdT:
     return DeviceIdT(f"{dev_type}:{_tmp & 0x03FFFF:06d}")
 
 
-@lru_cache(maxsize=128)
+@lru_cache(maxsize=2048)
 def is_valid_dev_id(value: str, dev_class: None | str = None) -> bool:
     """Return True if a device_id is valid."""
 
@@ -175,7 +175,7 @@ def is_valid_dev_id(value: str, dev_class: None | str = None) -> bool:
     return not _DBG_DISABLE_DEV_HVAC or value.split(":", 1)[0] in DEV_TYPE_MAP
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=2048)
 def pkt_addrs(
     addr_fragment: str,
 ) -> tuple[Address, Address, Address, Address, Address]:

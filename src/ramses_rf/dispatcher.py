@@ -260,8 +260,8 @@ def instantiate_devices(gwy: Gateway, msg: Message) -> bool:
 
         # Eavesdrop: Instantiate implicitly referenced devices (e.g., parent
         # controller in addr2)
-        if hasattr(msg._pkt, "_addrs"):
-            for addr in msg._pkt._addrs:
+        if (addrs := getattr(msg._pkt, "_addrs", None)) is not None:
+            for addr in addrs:
                 if addr.id not in (msg.src.id, getattr(msg.dst, "id", None)):
                     with contextlib.suppress(exc.DeviceNotFoundError):
                         gwy.device_registry.get_device(addr.id)
@@ -400,11 +400,12 @@ def _resolve_logical_targets(
     targets = []
     src_dev = gwy.device_registry.device_by_id.get(msg.src.id)
     dst_dev = gwy.device_registry.device_by_id.get(msg.dst.id)
+    tcs = getattr(src_dev, "tcs", None) if src_dev else None
 
     # 1. Fault logs strictly target the TCS (if it exists) or the source device
     if msg.code == "0418":
-        if src_dev and hasattr(src_dev, "tcs") and src_dev.tcs:
-            targets.append(getattr(src_dev.tcs, "faultlog", src_dev))
+        if tcs:
+            targets.append(getattr(tcs, "faultlog", src_dev))
         elif src_dev:
             targets.append(src_dev)
         return targets
@@ -427,37 +428,32 @@ def _resolve_logical_targets(
         if (
             dst_dev
             and (
-                hasattr(dst_dev, "apply_state_update") or hasattr(dst_dev, "hvac_state")
+                getattr(dst_dev, "apply_state_update", None) is not None
+                or getattr(dst_dev, "hvac_state", None) is not None
             )
             and dst_dev not in targets
         ):
             targets.append(dst_dev)
 
     # 4. Virtual twins (Zones) get updates if explicitly addressed by idx.
-    if "zone_idx" in p and src_dev and hasattr(src_dev, "tcs") and src_dev.tcs:
-        if zone := src_dev.tcs.zone_by_idx.get(p["zone_idx"]):
+    if "zone_idx" in p and tcs:
+        if zone := tcs.zone_by_idx.get(p["zone_idx"]):
             if zone not in targets:
                 targets.append(zone)
 
     # 5. Domain twins (TCS, DHW) get updates.
-    if "domain_id" in p and src_dev and hasattr(src_dev, "tcs") and src_dev.tcs:
+    if "domain_id" in p and tcs:
         domain_id = p["domain_id"]
-        if domain_id == "FC" and src_dev.tcs not in targets:
-            targets.append(src_dev.tcs)
-        elif domain_id in ("FA", "F9") and hasattr(src_dev.tcs, "dhw"):
-            if src_dev.tcs.dhw not in targets:
-                targets.append(src_dev.tcs.dhw)
+        if domain_id == "FC" and tcs not in targets:
+            targets.append(tcs)
+        elif domain_id in ("FA", "F9") and getattr(tcs, "dhw", None) is not None:
+            if tcs.dhw not in targets:
+                targets.append(tcs.dhw)
 
     # 6. System-level opcodes (2E04/0100/313F) target the TCS directly.
     #    These packets have no domain_id/zone_idx, so steps 4/5 miss them.
-    if (
-        msg.code in (Code._2E04, Code._0100, Code._313F)
-        and src_dev
-        and hasattr(src_dev, "tcs")
-        and src_dev.tcs
-        and src_dev.tcs not in targets
-    ):
-        targets.append(src_dev.tcs)
+    if msg.code in (Code._2E04, Code._0100, Code._313F) and tcs and tcs not in targets:
+        targets.append(tcs)
 
     # 7. DHW opcodes (1260/10A0/1F41) carry no domain_id/zone_idx, so steps
     #    4/5 miss the DhwZone.  Route them via the shared helper.
@@ -471,7 +467,8 @@ def _resolve_logical_targets(
 
 def _update_temperature_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     """Translate temperature data into a frozen StateUpdatedEvent."""
-    if not hasattr(target, "temp_state"):
+    temp_state = getattr(target, "temp_state", None)
+    if temp_state is None:
         return
 
     updates: dict[str, Any] = {}
@@ -506,7 +503,8 @@ def _update_temperature_state(target: Any, p: dict[str, Any], msg: Message) -> N
 
 def _update_demand_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     """Translate demand data into a frozen StateUpdatedEvent."""
-    if not hasattr(target, "demand_state"):
+    demand_state = getattr(target, "demand_state", None)
+    if demand_state is None:
         return
 
     updates: dict[str, Any] = {}
@@ -546,7 +544,7 @@ def _update_faultlog_state(target: Any, p: dict[str, Any], msg: Message) -> None
     :return: None
     :rtype: None
     """
-    if msg.code != "0418" or not hasattr(target, "state"):
+    if msg.code != "0418" or getattr(target, "state", None) is None:
         return
     if type(target.state).__name__ != "FaultLogState":
         return
@@ -591,7 +589,8 @@ def _update_system_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     :param p: The parsed message payload dictionary.
     :param msg: The immutable Message L7 envelope.
     """
-    if not hasattr(target, "system_state"):
+    system_state = getattr(target, "system_state", None)
+    if system_state is None:
         return
 
     updates: dict[str, Any] = {}
@@ -640,7 +639,8 @@ def _update_hvac_state(target: Any, p: dict[str, Any], msg: Message) -> None:
     if getattr(target, "_SLUG", "") in ("CTL", "BDR", "TRV", "OTB", "UFC", "DHW"):
         return
 
-    if not hasattr(target, "hvac_state"):
+    hvac_state = getattr(target, "hvac_state", None)
+    if hvac_state is None:
         return
 
     from ramses_rf import quirks
@@ -905,14 +905,18 @@ def route_payload(gwy: Gateway, msg: Message) -> None:
         if msg.dst.id != msg.src.id and dst_dev is not None:
             devices.append(dst_dev)
 
-        if src_dev and hasattr(src_dev, SZ_DEVICES) and src_dev.devices:
-            for d in src_dev.devices:
+        src_dev_devices = getattr(src_dev, SZ_DEVICES, None) if src_dev else None
+        if src_dev_devices:
+            for d in src_dev_devices:
                 if d.id != msg.src.id and d not in devices:
                     devices.append(d)
 
     # Add Eavesdropping Correlation Routing
-    if gwy.config.enable_eavesdrop and hasattr(msg._pkt, "_addrs"):
-        for addr in msg._pkt._addrs:
+    if (
+        gwy.config.enable_eavesdrop
+        and (addrs := getattr(msg._pkt, "_addrs", None)) is not None
+    ):
+        for addr in addrs:
             if addr.id != msg.src.id and addr.id != getattr(msg.dst, "id", None):
                 if dev := gwy.device_registry.device_by_id.get(addr.id):
                     if dev not in devices:

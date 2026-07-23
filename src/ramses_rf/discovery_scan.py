@@ -114,13 +114,36 @@ _HVAC_PARENT_INFERENCE_CODES: frozenset[str] = frozenset(
 
 # TPI loop codes broadcast by a BDR (13:) or OTB (10:) acting as the
 # appliance_control (boiler relay).  These are sent as I broadcasts at
-# the TPI cycle rate (usu. 6x/hr).  A DHW valve relay does NOT send
-# 3B00/3EF0 — it uses a separate control path.  This is the same
-# signature ramses_rf's eavesdrop_appliance_control (tcs.py) watches for
-# to identify the system relay.  See issue 834: a BDR sending these
-# codes must be classified as appliance_control (FC domain), not as a
-# hotwater_valve.
+# the TPI cycle rate (usu. 6x/hr).  This is the same signature
+# ramses_rf's eavesdrop_appliance_control (tcs.py) watches for to
+# identify the system relay.
+#
+# IMPORTANT (issue 834 comment 5044906835): a DHW valve relay
+# (hotwater_valve) ALSO broadcasts 3B00/3EF0 -- both relays participate
+# in TPI loops.  Therefore these codes alone are NOT sufficient to
+# classify a device as appliance_control.  The 000C binding table is
+# the authoritative source:
+#   - 000C with role 0F (APP) -> domain FC (appliance_control)
+#   - 000C with role 0E (HTG) -> domain FA (hotwater_valve)
+# The 3B00/3EF0 heuristic is used only as a fallback hint when no 000C
+# binding has been seen yet, and is overridden when a 000C binding
+# arrives.
 _APPLIANCE_CONTROL_CODES: frozenset[str] = frozenset({"3B00", "3EF0"})
+
+# 000C payload roles that map to domain IDs (not zone indices).
+# See ramses_tx/const.py DEV_ROLE_MAP and parsers/heating.py
+# complex_idx.
+#   payload[2:4] == "0E" (HTG) -> FA (hotwater_valve) if index == "00",
+#                                 F9 if "01"
+#   payload[2:4] == "0F" (APP) -> FC (appliance_control)
+#   payload[2:4] == "0D" (DHW) -> FA (dhw_sensor) if index == "00",
+#                                 F9 if "01"
+_000C_ROLE_HTG = "0E"  # hotwater_valve / heating_valve
+_000C_ROLE_APP = "0F"  # appliance_control
+_000C_ROLE_DHW = "0D"  # dhw_sensor
+_000C_DOMAIN_ROLES: frozenset[str] = frozenset(
+    {_000C_ROLE_HTG, _000C_ROLE_APP, _000C_ROLE_DHW}
+)
 
 # 32: is unambiguous — always a FAN. A FAN sends 22F1 (which maps to REM in
 # HVAC_KLASS_BY_VC_PAIR) but is still a FAN, so the prefix must win.
@@ -312,11 +335,21 @@ class DiscoveryScan:
             _extract_zone_idx(dto.payload) if code in _ZONE_BINDING_CODES else None
         )
 
-        # Detect appliance_control signal: a BDR/OTB broadcasting 3B00/3EF0
-        # as I is the boiler relay (FC domain).  See issue 834.
-        domain_id = (
-            "FC" if _is_appliance_control_signal(src, code, verb, True) else None
-        )
+        # Extract domain_id (FC/FA/F9) -- the authoritative source is
+        # the 000C binding table.  The 3B00/3EF0 TPI broadcast is only
+        # a fallback hint (both appliance_control and hotwater_valve
+        # relays send these codes).
+        # See issue 834 comment 5044906835.
+        domain_id: str | None = None
+        is_authoritative_domain = False
+        if code == "000C" and dto.payload:
+            domain_id = _extract_domain_id_from_000c(dto.payload)
+            if domain_id:
+                is_authoritative_domain = True
+        if not domain_id:
+            domain_id = (
+                "FC" if _is_appliance_control_signal(src, code, verb, True) else None
+            )
 
         # Process each address in the packet
         # src: high-confidence (device is actively sending)
@@ -328,6 +361,7 @@ class DiscoveryScan:
                 rssi=rssi,
                 zone_idx=zone_idx,
                 domain_id=domain_id,
+                is_authoritative_domain=is_authoritative_domain,
                 is_src=True,
                 dst=dst,
             )
@@ -368,6 +402,7 @@ class DiscoveryScan:
         rssi: float | None,
         zone_idx: str | None,
         domain_id: str | None = None,
+        is_authoritative_domain: bool = False,
         is_src: bool,
         dst: str | None,
         src: str | None = None,
@@ -493,10 +528,16 @@ class DiscoveryScan:
                             zone_idx,
                             dev.bound_to,
                         )
-                # Appliance_control signal for known devices too (issue 834):
-                # a known BDR may not have been seen broadcasting 3B00/3EF0
-                # before it was accepted, so capture the domain_id now.
-                if domain_id and is_src and dev.domain_id != domain_id:
+                # Domain_id update (issue 834): an authoritative 000C
+                # binding overrides any previous hint; a 3B00/3EF0 hint
+                # only applies if no domain_id is set yet.
+                if (
+                    domain_id
+                    and is_src
+                    and _should_update_domain_id(
+                        dev.domain_id, domain_id, is_authoritative_domain
+                    )
+                ):
                     dev.domain_id = domain_id
                     dev.confidence = "high"
                     self._dirty = True
@@ -531,9 +572,18 @@ class DiscoveryScan:
                 if dst and _is_valid_address(dst) and dst != dev_id:
                     dev.bound_to = dst
                 dev.confidence = "high"  # binding telemetry = high confidence
-            # Appliance_control signal: a BDR/OTB broadcasting 3B00/3EF0 as
-            # I is the boiler relay (FC domain).  See issue 834.
-            if domain_id and is_src and not is_hgi:
+            # Domain_id from 000C binding (authoritative) or 3B00/3EF0
+            # (hint).  See issue 834: a 000C FA binding must override a
+            # previous 3B00/3EF0 FC hint (the BDR is hotwater_valve, not
+            # appliance_control).
+            if (
+                domain_id
+                and is_src
+                and not is_hgi
+                and _should_update_domain_id(
+                    dev.domain_id, domain_id, is_authoritative_domain
+                )
+            ):
                 dev.domain_id = domain_id
                 dev.confidence = "high"
             # HVAC topology inference: a FAN (32:) sending a directed packet
@@ -604,9 +654,17 @@ class DiscoveryScan:
                 dev.confidence = "high"
                 changed = True
 
-        # Update appliance_control domain (BDR/OTB broadcasting 3B00/3EF0).
-        # See issue 834: this distinguishes a boiler relay from a DHW valve.
-        if domain_id and is_src and not is_hgi and dev.domain_id != domain_id:
+        # Update domain_id (issue 834): an authoritative 000C binding
+        # overrides a previous 3B00/3EF0 hint; a hint only applies
+        # if no domain_id is set yet.
+        if (
+            domain_id
+            and is_src
+            and not is_hgi
+            and _should_update_domain_id(
+                dev.domain_id, domain_id, is_authoritative_domain
+            )
+        ):
             dev.domain_id = domain_id
             dev.confidence = "high"
             changed = True
@@ -893,18 +951,54 @@ def _extract_zone_idx(payload: str) -> str | None:
     return idx
 
 
+def _should_update_domain_id(
+    current: str | None,
+    new: str | None,
+    is_authoritative: bool,
+) -> bool:
+    """Decide whether to update a device's domain_id.
+
+    An authoritative 000C binding always wins -- it overrides any
+    previous value (including a 3B00/3EF0 FC hint that was set before
+    the 000C binding arrived).  A non-authoritative 3B00/3EF0 hint
+    only applies if the device has no domain_id yet (None).
+
+    See issue 834 comment 5044906835: a BDR hotwater_valve broadcasting
+    3B00/3EF0 gets domain_id=FC from the hint, but when the 000C HTG
+    binding arrives (domain FA), it must override the hint.
+
+    :param current: The device's current domain_id (may be None).
+    :param new: The new domain_id from the current packet.
+    :param is_authoritative: True if from a 000C binding, False if
+        from 3B00/3EF0.
+    :return: True if the domain_id should be updated.
+    """
+    if new is None:
+        return False
+    if is_authoritative:
+        return current != new
+    # Non-authoritative hint: only set if no domain_id exists yet
+    return current is None
+
+
 def _is_appliance_control_signal(
     dev_id: str, code: str, verb: str, is_src: bool
 ) -> bool:
-    """Return True if this packet indicates the src is an appliance_control.
+    """Return True if this packet hints the src is an appliance_control.
 
-    A BDR (13:) or OTB (10:) broadcasting 3B00 or 3EF0 as I is acting as the
-    boiler relay (TPI loop).  DHW valve relays do not send these codes — they
-    use a separate control path.  This is the same signature ramses_rf's
-    eavesdrop_appliance_control (tcs.py) uses to identify the system relay.
+    A BDR (13:) or OTB (10:) broadcasting 3B00 or 3EF0 as I *may* be
+    acting as the boiler relay (TPI loop).  However, this is NOT
+    authoritative -- a DHW valve relay also broadcasts these codes
+    (issue 834 comment 5044906835).  The 000C binding table is the
+    authoritative source for domain_id.
 
-    See issue 834: without this signal, a BDR with no zone_idx is misclassified
-    as a hotwater_valve by ramses_cc's generate_schema_entry.
+    This heuristic is used only as a fallback hint when no 000C binding
+    has been observed for the device.  See
+    ``_extract_domain_id_from_000c`` for the authoritative path.
+
+    See issue 834: without this signal, a BDR with no zone_idx is
+    misclassified as a hotwater_valve by ramses_cc's
+    generate_schema_entry.
     """
     if not is_src:
         return False
@@ -912,6 +1006,43 @@ def _is_appliance_control_signal(
         return False
     if code not in _APPLIANCE_CONTROL_CODES:
         return False
-    # 3B00/3EF0 are broadcast as I by the relay; RQ/RP are directed replies
-    # (e.g. 3EF1 RP from the relay to the HGI) and are not the TPI signature.
+    # 3B00/3EF0 are broadcast as I by the relay; RQ/RP are
+    # directed replies (e.g. 3EF1 RP from the relay to the HGI)
+    # and are not the TPI signature.
     return verb.strip() == "I"
+
+
+def _extract_domain_id_from_000c(payload: str) -> str | None:
+    """Extract the domain_id (FC/FA/F9) from a 000C binding payload.
+
+    000C payloads encode the domain in the zone_type field
+    (payload[2:4]):
+      - "0F" (APP) -> FC (appliance_control)
+      - "0E" (HTG) -> FA (hotwater_valve, index 00) or
+        F9 (heating_valve, index 01)
+      - "0D" (DHW) -> FA (dhw_sensor, index 00) or
+        F9 (index 01)
+
+    This is the authoritative source for domain_id -- the controller's
+    binding table explicitly declares which domain each relay belongs
+    to.  The 3B00/3EF0 TPI broadcast heuristic is ambiguous because
+    both appliance_control and hotwater_valve relays send these codes.
+
+    See issue 834 comment 5044906835: a BDR hotwater_valve broadcasting
+    3B00/3EF0 was misclassified as appliance_control because the scan
+    engine only used the TPI heuristic, not the 000C binding.
+
+    :param payload: The raw hex payload string from a 000C packet.
+    :return: "FC", "FA", "F9", or None if the payload is not a
+        domain binding.
+    """
+    if not payload or len(payload) < 4:
+        return None
+    role = payload[2:4].upper()
+    if role not in _000C_DOMAIN_ROLES:
+        return None
+    idx = payload[:2].upper()
+    if role == _000C_ROLE_APP:
+        return "FC"
+    # HTG/DHW: index "00" → FA, index "01" → F9
+    return "FA" if idx == "00" else "F9"
