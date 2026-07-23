@@ -631,7 +631,29 @@ def _struct_pack(
     else:
         val = int(bool(switchpoint[SZ_ENABLED]))
 
-    return struct.pack("<xxxxBxxxBxxxHxxHxx", idx, dow, tod, val)
+    # 20-byte Schedule Switchpoint binary layout (Little-Endian):
+    #   Offset  Format  Len  Description                    Sample Hex
+    #   --------------------------------------------------------------
+    #   +0       4x     4B   Padding / Header bytes       : 00 00 00 00
+    #   +4       B      1B   Zone/Domain index (uint8)    : 01
+    #   +5       3x     3B   Padding bytes                : 00 00 00
+    #   +8       B      1B   Day of week (uint8, 1-7)     : 01
+    #   +9       3x     3B   Padding bytes                : 00 00 00
+    #   +12      H      2B   Time of day (uint16 mins)    : 68 01
+    #   +14      2x     2B   Padding bytes                : 00 00
+    #   +16      H      2B   Setpoint value / state (u16) : D0 07
+    #   +18      2x     2B   Padding bytes                : 00 00
+    #   --------------------------------------------------------------
+    #   Field-spaced hex : 00000000 01 000000 01 000000 6801 0000 D007 0000
+    #   Payload hex      : 00000000010000000100000068010000D0070000
+    schedule_pack_struct = "<xxxxBxxxBxxxHxxHxx"
+    return struct.pack(
+        schedule_pack_struct,
+        idx,
+        dow,
+        tod,
+        val,
+    )
 
 
 def _struct_unpack(raw_schedule: bytes) -> tuple[int, int, int, int]:
@@ -640,7 +662,26 @@ def _struct_unpack(raw_schedule: bytes) -> tuple[int, int, int, int]:
     :param raw_schedule: Uncompressed 20-byte block.
     :return: A tuple mapping (idx, day_of_week, time_of_day, value).
     """
-    idx, dow, tod, val, _ = struct.unpack("<xxxxBxxxBxxxHxxHH", raw_schedule)
+    # 20-byte Schedule Switchpoint binary layout (Little-Endian):
+    #   Offset  Format  Len  Description                    Sample Hex
+    #   --------------------------------------------------------------
+    #   +0       4x     4B   Padding / Header bytes       : 00 00 00 00
+    #   +4       B      1B   Zone/Domain index (uint8)    : 01
+    #   +5       3x     3B   Padding bytes                : 00 00 00
+    #   +8       B      1B   Day of week (uint8, 1-7)     : 01
+    #   +9       3x     3B   Padding bytes                : 00 00 00
+    #   +12      H      2B   Time of day (uint16 mins)    : 68 01
+    #   +14      2x     2B   Padding bytes                : 00 00
+    #   +16      H      2B   Setpoint value / state (u16) : D0 07
+    #   +18      H      2B   Trailer / checksum           : 00 00
+    #   --------------------------------------------------------------
+    #   Field-spaced hex : 00000000 01 000000 01 000000 6801 0000 D007 0000
+    #   Payload hex      : 00000000010000000100000068010000D0070000
+    schedule_unpack_struct = "<xxxxBxxxBxxxHxxHH"
+    idx, dow, tod, val, _ = struct.unpack(
+        schedule_unpack_struct,
+        raw_schedule,
+    )
     return idx, dow, tod, val
 
 
