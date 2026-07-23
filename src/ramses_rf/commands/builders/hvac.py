@@ -2,6 +2,7 @@
 
 import math
 import struct
+from typing import Final
 
 from ramses_rf.commands.builders.helpers import resolve_addrs
 from ramses_rf.commands.core import Command
@@ -20,6 +21,23 @@ from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.const import DEFAULT_NUM_REPEATS, I_, RQ, SZ_MINUTES, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.helpers import hex_from_double, hex_from_percent, hex_from_temp
+
+# Command 2411 payload binary layout (Big-Endian):
+#   Offset  Format  Len  Description                    Sample Hex
+#   --------------------------------------------------------------
+#   +0      >B      1B   Leading zero byte            : 00
+#   +1       H      2B   Parameter ID                 : 00 0A
+#   +3       B      1B   Padding byte                 : 00
+#   +4       B      1B   Data type ID                 : 10
+#   +5       i      4B   Current value (int32)        : 00 00 00 05
+#   +9       i      4B   Minimum value (int32)        : 00 00 00 00
+#   +13      i      4B   Maximum value (int32)        : 00 00 00 64
+#   +17      i      4B   Precision scalar (int32)     : 00 00 00 01
+#   +21     2s      2B   Trailer bytes                : 00 01
+#   --------------------------------------------------------------
+#   Field-spaced hex : 00 000A 00 10 00000005 00000000 00000064 00000001 0001
+#   Payload hex      : 00000A0010000000050000000000000064000000010001
+CODE_2411_FAN_PARAM_STRUCT: Final[str] = ">BHBBiiii2s"
 
 
 def build_put_co2_level(intent: Command) -> CommandDTO:
@@ -111,20 +129,9 @@ def build_set_fan_mode(intent: Command) -> CommandDTO:
         mode_max = _22F1_MODE_MAX.get(scheme)
 
     if legacy_format or not mode_max:
-        payload_bytes = struct.pack(
-            ">BB",  # >BB: 2 bytes
-            int(idx, 16),  #   B: Zone/Domain index
-            int(mode, 16),  #   B: Fan mode
-        )
+        payload = f"{idx}{mode}"
     else:
-        payload_bytes = struct.pack(
-            ">BBB",  # >BBB: 3 bytes
-            int(idx, 16),  #    B: Zone/Domain index
-            int(mode, 16),  #    B: Fan mode
-            int(mode_max, 16),  #    B: Maximum supported mode
-        )
-
-    payload = payload_bytes.hex().upper()
+        payload = f"{idx}{mode}{mode_max}"
 
     if intent.src.id and seqn:
         # Actually in intent world, src is always there, but seqn is custom
@@ -302,16 +309,16 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
                 )
 
         payload_bytes = struct.pack(
-            ">B H BB i i i i 2s",
-            0x00,  # >B: Leading zero byte
-            param_id_int,  #  H: Parameter ID (2 bytes)
-            0x00,  #  B: Data type padding
-            int(data_type, 16),  #  B: Data type ID
-            value_scaled,  #  i: Current value (4 bytes)
-            min_val_scaled,  #  i: Minimum allowed value (4 bytes)
-            max_val_scaled,  #  i: Maximum allowed value (4 bytes)
-            precision_scaled,  #  i: Precision scalar (4 bytes)
-            trailer_bytes,  # 2s: Trailer (2 bytes)
+            CODE_2411_FAN_PARAM_STRUCT,
+            0x00,
+            param_id_int,
+            0x00,
+            int(data_type, 16),
+            value_scaled,
+            min_val_scaled,
+            max_val_scaled,
+            precision_scaled,
+            trailer_bytes,
         )
         payload = payload_bytes.hex().upper()
 
