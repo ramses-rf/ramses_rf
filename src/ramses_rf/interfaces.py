@@ -252,6 +252,11 @@ class GatewayInterface(Protocol):
         """Return the gateway configuration."""
         ...
 
+    @property
+    def conversation_manager(self) -> Any:
+        """Return the ConversationManager instance."""
+        ...
+
     async def async_send_cmd(
         self,
         cmd: CommandDTO,

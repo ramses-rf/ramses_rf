@@ -141,6 +141,7 @@ class ConversationManager:
         effective_retries = max_retries if max_retries is not None else self.max_retries
 
         fut: asyncio.Future[Message] = self._loop.create_future()
+        fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
         key = self._conversation_key(intent, dto)
 
         pending = PendingConversation(
@@ -254,11 +255,17 @@ class ConversationManager:
 
     def cancel_all(self) -> None:
         """Cancel all pending conversations and clear tracking state."""
-        for pending in self._pending.values():
+        for key, pending in list(self._pending.items()):
             if pending.timer_task and not pending.timer_task.done():
                 pending.timer_task.cancel()
             if not pending.fut.done():
+                _LOGGER.debug(
+                    "Cancelling pending conversation %s due to gateway shutdown",
+                    key,
+                )
                 pending.fut.set_exception(
-                    ProtocolSendFailed("Conversation manager cancelled")
+                    ProtocolSendFailed(
+                        f"Conversation {key} cancelled on gateway teardown"
+                    )
                 )
         self._pending.clear()
