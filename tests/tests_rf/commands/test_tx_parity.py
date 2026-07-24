@@ -61,6 +61,42 @@ def test_build_set_dhw_params_parity(
     assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
+def test_build_set_dhw_params_none_defaults() -> None:
+    """Test that None values for overrun/differential use defaults (issue 865)."""
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_DHW_PARAMS,
+        data={
+            "dhw_idx": 0,
+            "setpoint": 55.0,
+            "overrun": None,
+            "differential": None,
+        },
+    )
+    dto = build_dto(intent)
+    # Should not raise — None values fall back to defaults (overrun=5, differential=1.0)
+    assert dto.code == "10A0"
+    assert dto.verb == " W"
+
+
+def test_build_set_dhw_params_only_setpoint() -> None:
+    """Test setting only setpoint (the water_heater.async_set_temperature path)."""
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("01:111111"),
+        action=Action.SET_DHW_PARAMS,
+        data={
+            "dhw_idx": 0,
+            "setpoint": 50.0,
+            "overrun": None,
+            "differential": None,
+        },
+    )
+    dto = build_dto(intent)
+    assert dto.code == "10A0"
+
+
 def test_build_get_dhw_temp(snapshot: Any) -> None:
     intent = Intent(
         src=Address("18:000730"),
