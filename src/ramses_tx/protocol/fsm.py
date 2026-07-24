@@ -566,7 +566,11 @@ class WantEcho(ProtocolStateBase):
             return
 
         self._echo_pkt = pkt
-        if self._sent_cmd.rx_header:
+        if (
+            self._sent_cmd.rx_header
+            and self._context._qos_mgr.qos
+            and self._context._qos_mgr.qos.wait_for_reply
+        ):
             self._context.set_state(WantRply)
         else:
             self._context.set_state(IsInIdle, result=pkt)

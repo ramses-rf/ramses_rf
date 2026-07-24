@@ -272,7 +272,8 @@ class DeviceRegistry:
         if not new_class_slug:
             return
 
-        # Update the configuration traits in the SSOT
+        # 1. ALWAYS update the configuration traits in the SSOT first
+        # This structurally resolves early-packet race conditions via the SSOT.
         old_traits_dict = dict(self._config.known_list.get(event.device_id, {}))
         traits_dict = dict(old_traits_dict)
         if old_traits_dict.get("class") != new_class_slug:
