@@ -36,6 +36,12 @@ class CommandDispatcher:
         """
         dto: CommandDTO = build_dto(intent)
 
+        if (
+            wait_for_reply
+            and getattr(self._gwy, "conversation_manager", None) is not None
+        ):
+            await self._gwy.conversation_manager.track_intent(intent, dto)
+
         return await self._gwy.async_send_cmd(
             dto,
             priority=priority if priority is not None else Priority(dto.priority),

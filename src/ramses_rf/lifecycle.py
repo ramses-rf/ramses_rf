@@ -163,6 +163,9 @@ class GatewayLifecycle:
         """Stop the Gateway and tidy up."""
         self.config.disable_discovery = True
 
+        if cm := getattr(self, "conversation_manager", None):
+            cm.cancel_all()
+
         # Cancel binding managers and discovery pollers before stopping engine
         for dev in self.device_registry.devices:
             bm = getattr(dev, "_binding_manager", None)

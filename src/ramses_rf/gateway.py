@@ -39,6 +39,7 @@ from .interfaces import (
 )
 from .lifecycle import GatewayLifecycle
 from .messages import ApplicationMessage, Message as rf_msg
+from .pipeline.conversation import ConversationManager
 from .pipeline.topology_builder import TopologyBuilder
 from .schemas import (
     SCH_GLOBAL_SCHEMAS,
@@ -186,8 +187,9 @@ class Gateway(GatewayLifecycle, GatewayInterface):
 
         rf_msg._IS_CONTROLLER_CB = is_controller
 
-        # 2. Instantiate L7 Command Dispatcher
+        # 2. Instantiate L7 Command Dispatcher and ConversationManager
         self._dispatcher = CommandDispatcher(self)
+        self._conversation_manager = ConversationManager(loop=loop)
 
     def __repr__(self) -> str:
         if not self._engine.ser_name:
@@ -200,6 +202,11 @@ class Gateway(GatewayLifecycle, GatewayInterface):
     @property
     def device_registry(self) -> DeviceRegistryInterface:
         return self._device_registry
+
+    @property
+    def conversation_manager(self) -> ConversationManager:
+        """Return the L7 ConversationManager instance."""
+        return self._conversation_manager
 
     @property
     def dispatcher(self) -> CommandDispatcher:
