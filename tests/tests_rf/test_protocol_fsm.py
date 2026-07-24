@@ -29,7 +29,6 @@ from ramses_tx.protocol.fsm import (
     IsInIdle,
     ProtocolContext,
     WantEcho,
-    WantRply,
     _ProtocolStateT,
 )
 from ramses_tx.transport import TransportConfig, transport_factory
@@ -180,7 +179,7 @@ def assert_protocol_state_detail(
 
     assert getattr(protocol._context.state, "_sent_cmd", None) == cmd
     assert protocol._context._cmd_tx_count == num_sends
-    assert bool(cmd) is isinstance(protocol._context.state, WantEcho | WantRply)
+    assert bool(cmd) is isinstance(protocol._context.state, WantEcho)
 
 
 async def async_pkt_received(

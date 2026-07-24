@@ -153,8 +153,6 @@ async def test_regex_with_qos() -> None:
 
         for before, after in TESTS_OUTBOUND.items():
             cmd = Command.from_cli(before)
-            if cmd.rx_header:  # we won't be getting any replies
-                continue
 
             pkt_src = await gwy_0.async_send_cmd(cmd)
             assert str(pkt_src) == before

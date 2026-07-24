@@ -10,15 +10,7 @@ import pytest
 from ramses_tx.const import Priority
 from ramses_tx.exceptions import TransportError
 from ramses_tx.packet import Packet
-
-# Updated imports based on your VSCode resolution
-from ramses_tx.protocol.fsm import (
-    Inactive,
-    IsInIdle,
-    ProtocolContext,
-    WantEcho,
-    WantRply,
-)
+from ramses_tx.protocol.fsm import Inactive, IsInIdle, ProtocolContext, WantEcho
 
 
 @pytest.fixture
@@ -48,7 +40,6 @@ def mock_cmd() -> MagicMock:
     """Provide a basic mocked Command."""
     cmd = MagicMock()
     cmd.tx_header = "10A0|RQ|01:123456"
-    cmd.rx_header = "10A0|RP|01:123456"
     cmd.src.id = "18:000730"
     cmd.dst.id = "01:123456"
     # To satisfy `HGI_DEVICE_ID in cmd.tx_header` checks in IsInIdle
@@ -108,21 +99,12 @@ async def test_fsm_send_cmd_success(
     echo_pkt._hdr = mock_cmd.tx_header
     fsm_context.pkt_received(echo_pkt)
 
-    # Given wait_for_reply is True in mock_qos, it moves to WantRply
-    assert isinstance(fsm_context.state, WantRply)
-
-    # Simulate receiving the reply packet
-    rply_pkt = MagicMock(spec=Packet)
-    rply_pkt._hdr = mock_cmd.rx_header
-    rply_pkt.src = MagicMock()  # Must not match echo's src identically
-    fsm_context.pkt_received(rply_pkt)
-
     # Should resolve and go back to Idle
     await asyncio.sleep(0.01)
     assert isinstance(fsm_context.state, IsInIdle)
 
     result = await send_task
-    assert result == rply_pkt
+    assert result == echo_pkt
 
 
 @pytest.mark.asyncio
