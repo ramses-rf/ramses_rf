@@ -8,7 +8,7 @@ from datetime import UTC, datetime as dt
 from typing import Any
 
 from ramses_rf.enums import TopologyAction
-from ramses_rf.typing import DeviceIdT
+from ramses_rf.typing import DeviceIdT, PollingIntervalsT
 
 
 @dataclass
@@ -19,17 +19,25 @@ class DeviceTraits:
     alias: str | None = None
     faked: bool | None = None
     scheme: str | None = None
+    polling_interval: PollingIntervalsT | None = None
+    is_battery: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DeviceTraits:
-        """Construct DeviceTraits safely from a dynamically parsed
-        dictionary.
+        """Construct DeviceTraits safely from a dynamically parsed dictionary.
+
+        :param data: The raw dictionary containing device trait key-values.
+        :type data: dict[str, Any]
+        :returns: A new DeviceTraits instance populated with trait values.
+        :rtype: DeviceTraits
         """
         return cls(
             device_class=data.get("class"),
             alias=data.get("alias"),
             faked=data.get("faked"),
             scheme=data.get("scheme"),
+            polling_interval=data.get("polling_interval"),
+            is_battery=data.get("is_battery"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -37,6 +45,9 @@ class DeviceTraits:
 
         Useful for bridging the boundary into legacy methods expecting
         **kwargs.
+
+        :returns: A dictionary representing the device traits.
+        :rtype: dict[str, Any]
         """
         result: dict[str, Any] = {}
         if self.device_class is not None:
@@ -47,6 +58,10 @@ class DeviceTraits:
             result["faked"] = self.faked
         if self.scheme is not None:
             result["scheme"] = getattr(self.scheme, "value", self.scheme)
+        if self.polling_interval is not None:
+            result["polling_interval"] = self.polling_interval
+        if self.is_battery is not None:
+            result["is_battery"] = self.is_battery
         return result
 
 
