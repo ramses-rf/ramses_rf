@@ -79,7 +79,7 @@ class Action(StrEnum):
 class TopologyAction(StrEnum):
     """Structural graph mutation actions."""
 
-    PROMOTE_CLASS = "promote_class"
+    UPDATE_DEVICE_CLASS = "update_device_class"
     UPDATE_TRAITS = "update_traits"
     BIND_DEVICE = "bind_device"
     CREATE_CONTROLLER = "create_controller"

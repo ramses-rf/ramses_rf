@@ -298,6 +298,29 @@ class DiscoveryScan:
         # Check schema keys (CTL IDs are top-level keys — declared intent)
         return dev_id in self._gwy._gwy_config.schema
 
+    def _is_declared_hotwater_valve(self, dev_id: str) -> bool:
+        """Check if a device is declared as hotwater_valve in the schema.
+
+        Under the Schema-as-Source-of-Truth architecture (issue 767),
+        the schema is the authoritative declaration of system topology.
+        If a BDR (13:) is declared as ``stored_hotwater.hotwater_valve``
+        in any CTL's schema entry, it is the DHW valve relay (FA domain),
+        NOT the appliance_control (FC domain).
+
+        This prevents the 3B00/3EF0 TPI broadcast heuristic from
+        misclassifying a hotwater_valve BDR as appliance_control when
+        both relays broadcast the same codes (issue 834 comment
+        5044906835).
+        """
+        schema = self._gwy._gwy_config.schema
+        for entry in schema.values():
+            if not isinstance(entry, dict):
+                continue
+            dhw = entry.get("stored_hotwater")
+            if isinstance(dhw, dict) and dhw.get("hotwater_valve") == dev_id:
+                return True
+        return False
+
     # -- packet handler ------------------------------------------------------
 
     async def _on_packet(self, dto: PacketDTO) -> None:
@@ -347,9 +370,18 @@ class DiscoveryScan:
             if domain_id:
                 is_authoritative_domain = True
         if not domain_id:
-            domain_id = (
-                "FC" if _is_appliance_control_signal(src, code, verb, True) else None
-            )
+            # Context check (issue 834): before using the 3B00/3EF0 FC
+            # heuristic, check if the device is already declared as
+            # hotwater_valve in the schema.  If so, it is the DHW valve
+            # relay (FA domain), NOT the appliance_control (FC domain).
+            # Both relays broadcast 3B00/3EF0, so the heuristic alone is
+            # ambiguous — the schema declaration is the disambiguator.
+            if not self._is_declared_hotwater_valve(src):
+                domain_id = (
+                    "FC"
+                    if _is_appliance_control_signal(src, code, verb, True)
+                    else None
+                )
 
         # Process each address in the packet
         # src: high-confidence (device is actively sending)
