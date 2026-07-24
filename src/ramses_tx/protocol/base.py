@@ -321,18 +321,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         """Send a Command with Qos (with retries, until success or
         ProtocolError).
 
-        Returns the Command's response Packet or the Command echo if a
-        response is not expected (e.g. sending an RP).
-
-        If wait_for_reply is True, return the RQ's RP (or W's I), or
-        raise an exception if one doesn't arrive. If it is False, return
-        the echo of the Command only. If it is None (the default), act
-        as True for RQs, and False for all other Commands.
+        Returns the Command's response Packet or the Command echo.
 
         num_repeats is # of times to send the Command, in addition to
-        the fist transmit, with gap_duration seconds between each
-        transmission. If wait_for_reply is True, then num_repeats is
-        ignored.
+        the first transmit, with gap_duration seconds between each
+        transmission.
 
         Commands are queued and sent FIFO, except higher-priority
         Commands are always sent first.
@@ -354,10 +347,6 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
 
         if cmd.addr1 != self.hgi_id:  # Was HGI_DEV_ADDR.id
             await self._send_impersonation_alert(cmd)
-
-        if qos and qos.wait_for_reply and num_repeats:
-            _LOGGER.warning(f"{cmd} < num_repeats set to 0, as wait_for_reply is True")
-            num_repeats = 0  # the lesser crime over wait_for_reply=False
 
         pkt = await self._send_cmd(  # may: raise ProtocolError/ProtocolSendFailed
             cmd,

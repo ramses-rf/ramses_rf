@@ -208,7 +208,7 @@ class ProtocolContext(StateMachineInterface):
             elif (
                 isinstance(self._state, WantRply)
                 and self._qos_mgr.qos
-                and not self._qos_mgr.qos.wait_for_reply
+                and not getattr(self._qos_mgr.qos, "wait_for_reply", False)
             ):
                 self.set_state(IsInIdle, result=self._state._echo_pkt)
             elif isinstance(self._state, WantEcho | WantRply):
@@ -569,7 +569,7 @@ class WantEcho(ProtocolStateBase):
         if (
             self._sent_cmd.rx_header
             and self._context._qos_mgr.qos
-            and self._context._qos_mgr.qos.wait_for_reply
+            and getattr(self._context._qos_mgr.qos, "wait_for_reply", False)
         ):
             self._context.set_state(WantRply)
         else:

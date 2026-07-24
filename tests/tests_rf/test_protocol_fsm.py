@@ -225,20 +225,20 @@ async def _test_flow_30x(protocol: PortProtocol) -> None:
     rf: VirtualRf = protocol._transport.get_extra_info("virtual_rf")
     ser = serial.Serial(rf.ports[1])
 
-    qos = QosParams(wait_for_reply=True)
+    qos = QosParams()
 
     # STEP 1: Send an I cmd (no reply)...
     task = rf._loop.create_task(protocol._send_cmd(II_CMD_0, qos=qos), name="send_1")
     _assert_pkt_eq_cmd(await task, II_CMD_0)  # no reply pkt expected
 
-    # STEP 2: Send an RQ cmd, then receive the corresponding RP pkt...
+    # STEP 2: Send an RQ cmd (returns echo at L3)...
     task = rf._loop.create_task(protocol._send_cmd(RQ_CMD_0, qos=qos), name="send_2")
     protocol._loop.call_later(
         CALL_LATER_DELAY,
         ser.write,
         bytes(str(RP_PKT_0).encode("ascii")) + b"\r\n",
     )
-    assert await task == RP_PKT_0
+    _assert_pkt_eq_cmd(await task, RQ_CMD_0)
 
     # STEP 3: Send an I cmd (no reply) *twice*...
     task = rf._loop.create_task(protocol._send_cmd(II_CMD_0, qos=qos), name="send_3A")
@@ -247,7 +247,7 @@ async def _test_flow_30x(protocol: PortProtocol) -> None:
     task = rf._loop.create_task(protocol._send_cmd(II_CMD_0, qos=qos), name="send_3B")
     _assert_pkt_eq_cmd(await task, II_CMD_0)  # no reply pkt expected
 
-    # STEP 4: Send an RQ cmd, then receive the corresponding RP pkt...
+    # STEP 4: Send an RQ cmd (returns echo at L3)...
     task = rf._loop.create_task(protocol._send_cmd(RQ_CMD_1, qos=qos), name="send_4A")
 
     # TODO: make these deterministic so ser replies *only after* it receives cmd
@@ -262,11 +262,11 @@ async def _test_flow_30x(protocol: PortProtocol) -> None:
         bytes(str(RP_PKT_1).encode("ascii")) + b"\r\n",
     )
 
-    assert await task == RP_PKT_1
+    _assert_pkt_eq_cmd(await task, RQ_CMD_1)
 
 
 async def _test_flow_401(protocol: PortProtocol) -> None:
-    qos = QosParams(wait_for_reply=False)
+    qos = QosParams()
 
     numbers = list(range(24))
     tasks = dict()
@@ -283,7 +283,7 @@ async def _test_flow_401(protocol: PortProtocol) -> None:
 
 
 async def _test_flow_402(protocol: PortProtocol) -> None:
-    qos = QosParams(wait_for_reply=False)
+    qos = QosParams()
 
     numbers = list(range(24))
     tasks = dict()
@@ -323,7 +323,7 @@ async def _test_flow_60x(protocol: PortProtocol, num_cmds: int = 1) -> None:
                 data={"zone_idx": f"{idx:02X}"},
             )
         )
-        coro = protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
+        coro = protocol._send_cmd(cmd, qos=QosParams())
         tasks.append(protocol._loop.create_task(coro, name=f"cmd_{idx:02X}"))
 
     assert await asyncio.gather(*tasks)
@@ -352,15 +352,15 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
     _assert_pkt_eq_cmd(pkt, cmd, "Should be echo as there's no reply to wait for")
 
     cmd = put_sensor_temp("03:000444", 19.5)
-    pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=None))
+    pkt = await protocol._send_cmd(cmd, qos=QosParams())
     _assert_pkt_eq_cmd(pkt, cmd, "should be echo as there is no wait_for_reply")
 
     cmd = put_sensor_temp("03:000555", 19.5)
-    pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
+    pkt = await protocol._send_cmd(cmd, qos=QosParams())
     _assert_pkt_eq_cmd(pkt, cmd, "should be echo as there is no wait_for_reply")
 
     cmd = put_sensor_temp("03:000666", 19.5)
-    pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=True))
+    pkt = await protocol._send_cmd(cmd, qos=QosParams())
     _assert_pkt_eq_cmd(pkt, cmd, "Should be echo as there's no reply to wait for")
 
     # # ### Simple test for an RQ (expects an RP)...
@@ -406,7 +406,7 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
             data={},
         )
     )
-    pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=None))
+    pkt = await protocol._send_cmd(cmd, qos=QosParams())
     _assert_pkt_eq_cmd(pkt, cmd, "Should be echo as there is no wait_for_reply")
 
     cmd = build_dto(
@@ -417,7 +417,7 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
             data={},
         )
     )
-    pkt = await protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=False))
+    pkt = await protocol._send_cmd(cmd, qos=QosParams())
     _assert_pkt_eq_cmd(pkt, cmd, "Should be echo as there is no wait_for_reply")
 
     cmd = build_dto(
@@ -428,8 +428,8 @@ async def _test_flow_qos(protocol: PortProtocol) -> None:
             data={},
         )
     )
-    coro = protocol._send_cmd(cmd, qos=QosParams(wait_for_reply=True, timeout=0.05))
-    await _test_flow_qos_helper(coro)
+    pkt = await protocol._send_cmd(cmd, qos=QosParams(timeout=0.05))
+    _assert_pkt_eq_cmd(pkt, cmd, "Should be echo as there's no reply to wait for")
 
     # # ### Simple test for an I (does not expect any reply)...
 

@@ -18,7 +18,6 @@ from ramses_tx.const import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_NUM_REPEATS,
     DEFAULT_SEND_TIMEOUT,
-    DEFAULT_WAIT_FOR_REPLY,
     SZ_ACTIVE_HGI,
     Priority,
 )
@@ -192,7 +191,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         self._dispatcher = CommandDispatcher(self)
         self._conversation_manager = ConversationManager(
             loop=loop,
-            send_func=lambda dto: self.async_send_cmd(dto, wait_for_reply=False),
+            send_func=lambda dto: self.async_send_cmd(dto),
         )
         self._polling_manager = PollingManager(self, shadow_mode=False)
 
@@ -441,7 +440,6 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         num_repeats: int = DEFAULT_NUM_REPEATS,
         priority: Priority = Priority.DEFAULT,
         timeout: float = DEFAULT_SEND_TIMEOUT,
-        wait_for_reply: bool | None = DEFAULT_WAIT_FOR_REPLY,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> asyncio.Task[Packet]:
         coro = self.async_send_cmd(
@@ -450,7 +448,6 @@ class Gateway(GatewayLifecycle, GatewayInterface):
             num_repeats=num_repeats,
             priority=priority,
             timeout=timeout,
-            wait_for_reply=wait_for_reply,
             max_retries=max_retries,
         )
         task = self._engine._loop.create_task(coro)
@@ -472,7 +469,6 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         num_repeats: int = DEFAULT_NUM_REPEATS,
         priority: Priority = Priority.DEFAULT,
         timeout: float = DEFAULT_SEND_TIMEOUT,
-        wait_for_reply: bool | None = DEFAULT_WAIT_FOR_REPLY,
         max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> Packet:
         try:
@@ -483,7 +479,6 @@ class Gateway(GatewayLifecycle, GatewayInterface):
                 priority=priority,
                 max_retries=max_retries,
                 timeout=timeout,
-                wait_for_reply=wait_for_reply,
             )
         except (ProtocolSendFailed, NotImplementedError) as err:
             if (

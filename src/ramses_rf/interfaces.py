@@ -263,7 +263,6 @@ class GatewayInterface(Protocol):
         /,
         *,
         priority: Priority = Priority.DEFAULT,
-        wait_for_reply: bool | None = True,
         max_retries: int = 3,
         timeout: float = 3.0,
     ) -> Packet:

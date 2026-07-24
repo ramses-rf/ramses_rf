@@ -1188,9 +1188,7 @@ class SystemMode(SystemBase):  # 2E04
                 data={"system_mode": system_mode, "until": until},
             )
         )
-        return await self._gwy.async_send_cmd(
-            cmd, priority=Priority.HIGH, wait_for_reply=True
-        )
+        return await self._gwy.async_send_cmd(cmd, priority=Priority.HIGH)
 
     async def set_auto(self) -> Packet:
         """Revert system to Auto, setting zones to FollowSchedule.
@@ -1249,7 +1247,7 @@ class Datetime(SystemBase):  # 313F
                 data={},
             )
         )
-        pkt = await self._gwy.async_send_cmd(cmd, wait_for_reply=True)
+        pkt = await self._gwy.async_send_cmd(cmd)
         msg = Message._from_pkt(pkt)
         return dt.fromisoformat(msg.payload[SZ_DATETIME])
 

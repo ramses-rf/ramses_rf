@@ -61,7 +61,6 @@ def mock_qos() -> MagicMock:
     """Provide a mocked QoS Params object."""
     qos = MagicMock()
     qos.timeout = 1.0
-    qos.wait_for_reply = True
     qos.max_retries = 2  # Added to prevent TypeError in qos.py
     return qos
 

@@ -50,7 +50,6 @@ class CommandDispatcher:
             await self._gwy.async_send_cmd(
                 dto,
                 priority=priority if priority is not None else Priority(dto.priority),
-                wait_for_reply=False,
             )
             msg = await rply_fut
             return cast(Packet, msg._pkt)
@@ -58,5 +57,4 @@ class CommandDispatcher:
         return await self._gwy.async_send_cmd(
             dto,
             priority=priority if priority is not None else Priority(dto.priority),
-            wait_for_reply=wait_for_reply,
         )

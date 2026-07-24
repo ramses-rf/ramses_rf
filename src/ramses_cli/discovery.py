@@ -130,7 +130,7 @@ async def exec_cmd(gwy: Gateway, **kwargs: Any) -> None:
     :param kwargs: CLI parameters containing the 'EXEC_CMD' string.
     """
     cmd = CommandDTO.from_cli(kwargs[EXEC_CMD])
-    await gwy.async_send_cmd(cmd, priority=Priority.HIGH, wait_for_reply=True)
+    await gwy.async_send_cmd(cmd, priority=Priority.HIGH)
 
 
 async def get_faults(
