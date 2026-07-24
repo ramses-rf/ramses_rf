@@ -15,7 +15,7 @@ import orjson
 
 from . import exceptions as exc
 from .address import ALL_DEV_ADDR, NON_DEV_ADDR, Address, pkt_addrs
-from .const import I_, RAW_LINE_REGEX, RP, RQ, W_, Code, VerbT
+from .const import I_, RAW_LINE_REGEX, RP, W_, Code, VerbT
 from .dtos import CommandDTO, PacketDTO
 from .logger import getLogger
 from .typing import HeaderT, PayloadT
@@ -742,31 +742,19 @@ class Packet:
         return cls.from_raw_line(dtm, raw_line, raw_frame=raw_frame)
 
 
-def pkt_header(pkt: Packet, /, rx_header: bool = False) -> HeaderT | None:
+def pkt_header(pkt: Packet, /) -> HeaderT | None:
     """Return the QoS header fingerprint of a packet.
 
     :param pkt: Packet instance to evaluate
     :type pkt: Packet
-    :param rx_header: If True, return expected response header fingerprint
-    :type rx_header: bool
     :returns: Header fingerprint string or None
     :rtype: HeaderT | None
     """
     if pkt.code == Code._1FC9:
-        if not rx_header:
-            device_id = ALL_DEV_ADDR.id if pkt.src == pkt.dst else pkt.dst.id
-            return HeaderT("|".join((pkt.code, pkt.verb, device_id)))
-        if pkt.src == pkt.dst:
-            return HeaderT("|".join((pkt.code, W_, pkt.src.id)))
-        if pkt.verb == W_:
-            return HeaderT("|".join((pkt.code, I_, pkt.src.id)))
-        return None
+        device_id = ALL_DEV_ADDR.id if pkt.src == pkt.dst else pkt.dst.id
+        return HeaderT("|".join((pkt.code, pkt.verb, device_id)))
 
-    if rx_header:
-        if pkt.verb in (I_, RP) or pkt.src == pkt.dst:
-            return None
-        header = "|".join((pkt.code, RP if pkt.verb == RQ else I_, pkt.dst.id))
-    elif pkt.verb in (I_, RP) or pkt.src == pkt.dst:
+    if pkt.verb in (I_, RP) or pkt.src == pkt.dst:
         header = "|".join((pkt.code, pkt.verb, pkt.src.id))
     else:
         header = "|".join((pkt.code, pkt.verb, pkt.dst.id))

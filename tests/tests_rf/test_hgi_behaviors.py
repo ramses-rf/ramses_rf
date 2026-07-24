@@ -125,7 +125,7 @@ async def _test_gwy_device(gwy: Gateway, test_idx: int) -> None:
         # using gwy._engine._protocol.send_cmd() instead of gwy.async_send_cmd() as the
         # latter may swallow the exception we wish to capture (ProtocolSendFailed)
         pkt = await gwy._engine._protocol.send_cmd(
-            cmd, qos=QosParams(wait_for_reply=False, timeout=timeout)
+            cmd, qos=QosParams(timeout=timeout)
         )  # for this test, we only need the cmd echo
     except exc.ProtocolSendFailed:
         if is_hgi80 and cmd_str[7:16] != HGI_DEVICE_ID:

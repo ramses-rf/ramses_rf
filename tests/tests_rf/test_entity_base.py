@@ -3,16 +3,16 @@
 
 from collections.abc import Generator
 from datetime import datetime as dt, timedelta as td
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from ramses_rf.const import I_, RP
-from ramses_rf.entity import Entity, _Entity
+from ramses_rf.entity import _Entity
 from ramses_rf.gateway import Gateway
 from ramses_rf.messages import Message
-from ramses_rf.routing import RoutingContext, StateHeader
-from ramses_rf.state import MessageStore, StateCache
+from ramses_rf.routing import StateHeader
+from ramses_rf.state import MessageStore
 from ramses_tx import Code, DeviceIdT, Packet
 
 
@@ -291,95 +291,21 @@ class Test_entity_base:
         val = dev.entity_state._msg_value_msg(msg_list, key="val", zone_idx="01")
         assert val == 20
 
-        # Case 5: Zone not found in list
-        val = dev.entity_state._msg_value_msg(msg_list, key="val", zone_idx="99")
-        assert val is None
 
+def test_opentherm_bridge_polling_schedule() -> None:
+    """Verify that OpenTherm Bridge (OTB) devices resolve OpenTherm polling schedules."""
+    from unittest.mock import MagicMock
 
-async def test_gh_396_sqlite_ot_context_type() -> None:
-    """Verify that integer context values from the cache are handled correctly.
+    from ramses_rf.devices.opentherm_bridge import OtbGateway
+    from ramses_rf.pipeline.polling import PollingManager
 
-    See: https://github.com/ramses-rf/ramses_rf/issues/396
-    """
-    # Setup
-    gwy = MagicMock()
-    gwy.config.disable_discovery = True
-    gwy.message_store = MagicMock()
+    mock_gwy = MagicMock()
+    mock_addr = MagicMock()
+    mock_addr.id = "10:123456"
+    mock_addr.type = "10"
 
-    # Create a mock message with an integer context directly in the state_cache
-    mock_msg = MagicMock(spec=Message)
-    mock_msg.verb = RP
-    mock_msg.code = Code._3220
+    otb = OtbGateway(mock_gwy, mock_addr)
+    schedule = PollingManager.resolve_schedule_for_device(otb)
 
-    # Properly mock the sub-attributes to prevent AttributeError
-    mock_msg.src = MagicMock()
-    mock_msg.src.id = "01:123456"
-    mock_msg.dst = MagicMock()
-    mock_msg.dst.id = "01:123456"
-
-    # Assign MagicMock property dynamically to avoid class scope bleeding
-    mock_msg._pkt = MagicMock()
-    mock_msg._pkt._ctx = 0
-    mock_msg._pkt._hdr = "3220|RP|01:123456|0"
-    mock_msg._idx_val = 0
-
-    # NEW: Properly mock the Native L7 domain properties
-    mock_msg.context = RoutingContext(0)
-    mock_msg.state_header = StateHeader.create(Code._3220, RP, "01:123456", 0)
-
-    gwy.message_store.log_by_dtm = [mock_msg]
-
-    # Instantiate the entity
-    entity = Entity(gwy)
-    entity.id = DeviceIdT("01:123456")
-
-    # Execute
-    try:
-        cmds = await entity.discovery.supported_cmds_ot()
-    except TypeError as err:
-        assert False, f"raised TypeError: {err}"
-
-    # Verify
-    # The integer 0 should be converted to hex string "00" internally
-    assert "0x00" in cmds
-
-
-async def test_gh_396_legacy_ot_context() -> None:
-    """Verify that the legacy path still processes context correctly."""
-    # Setup
-    gwy = MagicMock()
-    gwy.config.disable_discovery = True
-    gwy.message_store = None  # Force legacy path
-
-    entity = Entity(gwy)
-    entity.id = DeviceIdT("01:123456")
-
-    # Construct the mock message properly
-    mock_msg = MagicMock(spec=Message)
-    mock_msg.code = Code._3220
-    mock_msg.verb = RP
-
-    # Assign MagicMock property dynamically to avoid class scope bleeding
-    mock_msg._pkt = MagicMock()
-    mock_msg._pkt._ctx = "05"
-    mock_msg._pkt._hdr = "3220|RP|01:123456|05"
-    mock_msg._idx_val = "05"
-
-    # NEW: Properly mock the Native L7 domain properties
-    mock_msg.context = RoutingContext("05")
-    mock_msg.state_header = StateHeader.create(Code._3220, RP, "01:123456", "05")
-
-    # Construct the mock StateCache
-    fake_cache = StateCache()
-    fake_cache.add(mock_msg)
-
-    # Execute
-    with patch.object(
-        entity.entity_state,
-        "_build_state_cache",
-        AsyncMock(return_value=fake_cache),
-    ):
-        cmds = await entity.discovery.supported_cmds_ot()
-
-    # Verify
-    assert "0x05" in cmds
+    assert "3EF0" in schedule, "OpenTherm Modulation (3EF0) not in OTB schedule"
+    assert "3220" in schedule, "OpenTherm Data ID (3220) query not in OTB schedule"

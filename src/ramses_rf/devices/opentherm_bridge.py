@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta as td
-from typing import Any, Final, Literal
+from typing import Any, Final
 
 from ramses_rf.const import FC, HEARTBEAT_TIMEOUT_OTB, Code, DevType
 from ramses_rf.models import DeviceTraits, OpenThermState
-from ramses_tx import CommandDTO, Priority
+from ramses_tx import Priority
 from ramses_tx.const import (
     SZ_BOILER_OUTPUT_TEMP,
     SZ_BOILER_RETURN_TEMP,
@@ -50,15 +50,8 @@ from ramses_tx.const import (
 )
 from ramses_tx.typing import PayDictT
 
-from ..protocol.opentherm import (
-    PARAMS_DATA_IDS,
-    SCHEMA_DATA_IDS,
-    STATUS_DATA_IDS,
-    OtDataId,
-    parity,
-)
+from ..protocol.opentherm import OtDataId
 from .heat_actuators import Actuator, HeatDemand
-from .helpers import build_rq_cmd
 
 QOS_LOW = {SZ_PRIORITY: Priority.LOW}  # FIXME:  deprecate QoS in kwargs
 QOS_MID = {SZ_PRIORITY: Priority.HIGH}  # FIXME: deprecate QoS in kwargs
@@ -127,79 +120,6 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         :rtype: td
         """
         return HEARTBEAT_TIMEOUT_OTB
-
-    def _setup_discovery_cmds(self) -> None:
-        def _ot_cmd(msg_id: str) -> CommandDTO:
-            payload = (
-                f"0080{msg_id}0000" if parity(int(msg_id, 16)) else f"0000{msg_id}0000"
-            )
-            return build_rq_cmd(self.id, Code._3220, payload)
-
-        def which_cmd(
-            use_native_ot: Literal["always", "prefer", "avoid", "never"] | str | None,
-            msg_id: MsgId,
-        ) -> CommandDTO | None:
-            """Create a OT cmd, or its RAMSES equivalent, depending."""
-            # we know RQ|3220 is an option, question is: use that, or RAMSES or nothing?
-            if use_native_ot in ("always", "prefer"):
-                return _ot_cmd(msg_id)
-            if msg_id in self.OT_TO_RAMSES:  # is: in ("avoid", "never")
-                return build_rq_cmd(self.id, self.OT_TO_RAMSES[msg_id])
-            if use_native_ot == "avoid":
-                return _ot_cmd(msg_id)
-            return None  # use_native_ot == "never"
-
-        super()._setup_discovery_cmds()
-
-        # always send at least one of RQ|3EF0 or RQ|3220|00 (status)
-        if getattr(self._gwy.config, "use_native_ot", "avoid") != "never":
-            self.discovery.add_cmd(_ot_cmd(MsgId._00), 60)
-
-        if getattr(self._gwy.config, "use_native_ot", "avoid") != "always":
-            self.discovery.add_cmd(build_rq_cmd(self.id, Code._3EF0), 60)
-            self.discovery.add_cmd(  # NOTE: this code is a WIP
-                build_rq_cmd(self.id, Code._2401), 60
-            )
-
-        for data_id in SCHEMA_DATA_IDS:  # From OT v2.2: version numbers
-            if cmd := which_cmd(
-                getattr(self._gwy.config, "use_native_ot", "avoid"), _to_msg_id(data_id)
-            ):
-                self.discovery.add_cmd(cmd, 6 * 3600, delay=180)
-
-        for data_id in PARAMS_DATA_IDS:  # params or L/T state
-            if cmd := which_cmd(
-                getattr(self._gwy.config, "use_native_ot", "avoid"), _to_msg_id(data_id)
-            ):
-                self.discovery.add_cmd(cmd, 3600, delay=90)
-
-        for data_id in STATUS_DATA_IDS:  # except "00", see above
-            if data_id == 0x00:
-                continue
-            if cmd := which_cmd(
-                getattr(self._gwy.config, "use_native_ot", "avoid"), _to_msg_id(data_id)
-            ):
-                self.discovery.add_cmd(cmd, 300, delay=15)
-
-        if _DBG_EXTRA_OTB_DISCOVERY:  # TODO: these are WIP, but do vary in payload
-            for code in (
-                Code._2401,  # WIP - modulation_level + flags?
-                Code._3221,  # R8810A/20A
-                Code._3223,  # R8810A/20A
-            ):
-                self.discovery.add_cmd(build_rq_cmd(self.id, code), 60)
-
-        if _DBG_EXTRA_OTB_DISCOVERY:  # TODO: these are WIP, appear FIXED in payload
-            for code in (
-                Code._0150,  # payload always "000000", R8820A only?
-                Code._1098,  # payload always "00C8",   R8820A only?
-                Code._10B0,  # payload always "0000",   R8820A only?
-                Code._1FD0,  # payload always "0000000000000000"
-                Code._2400,  # payload always "0000000F"
-                Code._2410,  # payload always "000000000000000000000000010000000100000C"
-                Code._2420,  # payload always "0000001000000...
-            ):  # TODO: to test against BDR91T
-                self.discovery.add_cmd(build_rq_cmd(self.id, code), 300)
 
     async def boiler_output_temp(self) -> float | None:  # 3220|19, or 3200
         return self.opentherm_state.temperatures.boiler_output
@@ -323,12 +243,7 @@ class OtbGateway(Actuator, HeatDemand):  # OTB (10): 3220 (22D9, others)
         }
 
     async def traits(self) -> dict[str, Any]:
-        base_traits = await super().traits()
-        return {
-            **base_traits,
-            "opentherm_traits": await self.discovery.supported_cmds_ot(),
-            "ramses_ii_traits": await self.discovery.supported_cmds(),
-        }
+        return await super().traits()
 
     async def schema(self) -> dict[str, Any]:
         base_schema = await super().schema()

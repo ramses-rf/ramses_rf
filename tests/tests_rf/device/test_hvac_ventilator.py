@@ -4,7 +4,7 @@
 from collections.abc import Generator
 from enum import Enum
 from typing import cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -190,16 +190,11 @@ class TestHvacVentilator:
         :type hvac_ventilator: HvacVentilator
         """
 
-        # Use patch.object to properly mock the discovery service component directly
-        # Phase 4 Update: we now call self.discovery.add_cmd instead of the bridge method
-        with patch.object(hvac_ventilator.discovery, "add_cmd") as mock_add_cmd:
-            hvac_ventilator._setup_discovery_cmds()
+        from ramses_rf.pipeline.polling import PollingManager
 
-            # Check that add_cmd was called at least once
-            assert mock_add_cmd.called
-
-        if hvac_ventilator._gwy.message_store:
-            hvac_ventilator._gwy.message_store.stop()  # close sqlite3 connection
+        schedule = PollingManager.resolve_schedule_for_device(hvac_ventilator)
+        assert "10D0" in schedule, "Filter change (10D0) not scheduled for FAN"
+        assert "3150" in schedule, "Fan speed status (3150) not scheduled for FAN"
 
         if hvac_ventilator._gwy.message_store:
             hvac_ventilator._gwy.message_store.stop()  # close sqlite3 connection

@@ -1,5 +1,7 @@
 """RAMSES RF - Outbound Command Dispatcher."""
 
+from typing import cast
+
 from ramses_rf.commands.builders import build_dto
 from ramses_rf.commands.core import Command
 from ramses_rf.interfaces import GatewayInterface
@@ -32,12 +34,27 @@ class CommandDispatcher:
         """Translate and send a high-level intent over the RF network.
 
         :param intent: The high-level intent to execute.
-        :return: The resulting Packet from the modem (or an RP if requested).
+        :type intent: Command
+        :param priority: Priority override for transmission.
+        :type priority: Priority | None
+        :param wait_for_reply: True if the L7 FSM should await a reply.
+        :type wait_for_reply: bool | None
+        :returns: The resulting Packet from the modem (or RP packet).
+        :rtype: Packet
         """
         dto: CommandDTO = build_dto(intent)
+        conv_mgr = getattr(self._gwy, "conversation_manager", None)
+
+        if wait_for_reply and conv_mgr is not None:
+            rply_fut = await conv_mgr.track_intent(intent, dto)
+            await self._gwy.async_send_cmd(
+                dto,
+                priority=priority if priority is not None else Priority(dto.priority),
+            )
+            msg = await rply_fut
+            return cast(Packet, msg._pkt)
 
         return await self._gwy.async_send_cmd(
             dto,
             priority=priority if priority is not None else Priority(dto.priority),
-            wait_for_reply=wait_for_reply,
         )

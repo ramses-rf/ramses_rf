@@ -145,7 +145,7 @@ class ProtocolContext(StateMachineInterface):
     @property
     def is_sending(self) -> bool:
         """Return True if the context is currently sending a command."""
-        return isinstance(self._state, WantEcho | WantRply)
+        return isinstance(self._state, WantEcho)
 
     @property
     def state(self) -> _ProtocolStateT:
@@ -188,10 +188,9 @@ class ProtocolContext(StateMachineInterface):
                 if self._qos_mgr.tx_count == 3
                 else logging.WARNING
             )
-            state_str = "echo" if isinstance(self._state, WantEcho) else "reply"
             _LOGGER.log(
                 level,
-                f"Timeout expired waiting for {state_str}: {self} (delay={delay})",
+                f"Timeout expired waiting for echo: {self} (delay={delay})",
             )
 
             if self._qos_mgr.tx_count < self._qos_mgr.tx_limit:
@@ -205,13 +204,7 @@ class ProtocolContext(StateMachineInterface):
 
             if isinstance(self._state, IsInIdle):
                 self._loop.call_soon_threadsafe(self._check_buffer_for_cmd)
-            elif (
-                isinstance(self._state, WantRply)
-                and self._qos_mgr.qos
-                and not self._qos_mgr.qos.wait_for_reply
-            ):
-                self.set_state(IsInIdle, result=self._state._echo_pkt)
-            elif isinstance(self._state, WantEcho | WantRply):
+            elif isinstance(self._state, WantEcho):
                 self._expiry_timer = self._loop.create_task(expire_state_on_timeout())
 
         if self._expiry_timer is not None:
@@ -261,7 +254,7 @@ class ProtocolContext(StateMachineInterface):
             self._qos_mgr.tx_count += 1
         elif isinstance(self._state, WantEcho):
             self._qos_mgr.tx_count = 1
-        elif not isinstance(self._state, WantRply):
+        else:
             self._qos_mgr.reset_active()
 
         self._loop.call_soon_threadsafe(effect_state, timed_out)
@@ -513,7 +506,7 @@ class WantEcho(ProtocolStateBase):
         self._sent_cmd = context._state._sent_cmd
 
     def pkt_rcvd(self, pkt: Packet) -> None:
-        """If the pkt is the expected Echo, transition to IsInIdle, or WantRply."""
+        """If the pkt is the expected Echo, transition to IsInIdle."""
         if self._sent_cmd is None:
             _LOGGER.debug(
                 "%s: received packet while _sent_cmd is None "
@@ -527,33 +520,6 @@ class WantEcho(ProtocolStateBase):
         except PacketPayloadInvalid:
             return  # malformed packet, ignore
 
-        if (
-            self._sent_cmd.rx_header
-            and pkt_hdr == self._sent_cmd.rx_header
-            and (
-                pkt.dst.id == self._sent_cmd.addr1
-                or (
-                    self._sent_cmd.addr1 == HGI_DEVICE_ID
-                    and pkt.dst.id == self._context._protocol.hgi_id
-                )
-            )
-        ):
-            level = (
-                logging.DEBUG
-                if self._context._cmd_tx_count < 3
-                else logging.INFO
-                if self._context._cmd_tx_count == 3
-                else logging.WARNING
-            )
-            _LOGGER.log(
-                level,
-                "%s: Invalid state to receive a reply (expecting echo)",
-                self._context,
-            )
-            self._rply_pkt = pkt
-            self._context.set_state(IsInIdle, result=pkt)
-            return
-
         if HGI_DEVICE_ID in pkt_hdr:
             assert pkt._hdr_ is not None
             pkt__hdr = HeaderT(
@@ -566,70 +532,12 @@ class WantEcho(ProtocolStateBase):
             return
 
         self._echo_pkt = pkt
-        if self._sent_cmd.rx_header:
-            self._context.set_state(WantRply)
-        else:
-            self._context.set_state(IsInIdle, result=pkt)
+        self._context.set_state(IsInIdle, result=pkt)
 
     def cmd_sent(self, cmd: CommandDTO, is_retry: bool | None = None) -> None:
         """Transition to WantEcho (i.e. a retransmit)."""
         pass
 
 
-class WantRply(ProtocolStateBase):
-    """The Protocol is waiting to receive an reply Packet."""
-
-    def __init__(self, context: ProtocolContext) -> None:
-        """Initialize the state with the echo that triggered it."""
-        super().__init__(context)
-        self._sent_cmd = context._state._sent_cmd
-        self._echo_pkt = context._state._echo_pkt
-
-    def pkt_rcvd(self, pkt: Packet) -> None:
-        """If the pkt is the expected reply, transition to IsInIdle."""
-        if self._sent_cmd is None or self._echo_pkt is None:
-            _LOGGER.debug(
-                "%s: received packet while _sent_cmd/_echo_pkt is None "
-                "(unsolicited broadcast?), ignoring",
-                self._context,
-            )
-            return
-
-        try:
-            pkt_hdr = pkt._hdr
-        except PacketPayloadInvalid:
-            return  # malformed packet, ignore
-
-        if pkt_hdr == self._sent_cmd.tx_header and pkt.src == self._echo_pkt.src:
-            level = (
-                logging.DEBUG
-                if self._context._cmd_tx_count < 3
-                else logging.INFO
-                if self._context._cmd_tx_count == 3
-                else logging.WARNING
-            )
-            _LOGGER.log(
-                level,
-                "%s: Invalid state to receive an echo (expecting reply)",
-                self._context,
-            )
-            return
-
-        if (
-            self._sent_cmd.rx_header[:8] == "0418|RP|"  # type: ignore[index]
-            and self._sent_cmd.rx_header[:-2] == pkt_hdr[:-2]  # type: ignore[index]
-            and pkt.payload == "000000B0000000000000000000007FFFFF7000000000"
-        ):
-            self._rply_pkt = pkt
-        elif pkt_hdr != self._sent_cmd.rx_header:
-            return
-        else:
-            self._rply_pkt = pkt
-
-        self._context.set_state(IsInIdle, result=pkt)
-
-
-_ProtocolStateT: TypeAlias = Inactive | IsInIdle | WantEcho | WantRply
-_ProtocolStateClassT: TypeAlias = (
-    type[Inactive] | type[IsInIdle] | type[WantEcho] | type[WantRply]
-)
+_ProtocolStateT: TypeAlias = Inactive | IsInIdle | WantEcho
+_ProtocolStateClassT: TypeAlias = type[Inactive] | type[IsInIdle] | type[WantEcho]
