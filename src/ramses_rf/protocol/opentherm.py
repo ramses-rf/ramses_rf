@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import struct
 from collections.abc import Callable
 from enum import EnumCheck, IntEnum, StrEnum, verify
 from typing import Any, Final, TypeAlias
@@ -1061,16 +1060,12 @@ def _msg_value(val_seqx: str, val_type: str) -> _DataValueT:
     def u8(byte: str, *args: str) -> int:
         """Convert a byte (as a str) into an unsigned int."""
         assert len(args) == 0 or (len(args) == 1 and args[0] == "")
-        result = struct.unpack(">B", bytes.fromhex(byte))[0]
-        assert isinstance(result, int)  # mypy hint
-        return result
+        return int(byte, 16)
 
     def s8(byte: str, *args: str) -> int:
         """Convert a byte (as a str) into a signed int."""
         assert len(args) == 0 or (len(args) == 1 and args[0] == "")
-        result = struct.unpack(">b", bytes.fromhex(byte))[0]
-        assert isinstance(result, int)  # mypy hint
-        return result
+        return int.from_bytes(bytes.fromhex(byte), "big", signed=True)
 
     def f8_8(high_byte: str, low_byte: str) -> float:
         """Convert 2 bytes (as strs) into an OpenTherm f8_8 value."""
@@ -1082,15 +1077,13 @@ def _msg_value(val_seqx: str, val_type: str) -> _DataValueT:
         """Convert 2 bytes (as strs) into an unsigned int."""
         if high_byte == low_byte == "FF":  # TODO: move up to parser?
             raise ValueError()
-        buf = struct.pack(">BB", u8(high_byte), u8(low_byte))
-        return int(struct.unpack(">H", buf)[0])
+        return int(high_byte + low_byte, 16)
 
     def s16(high_byte: str, low_byte: str) -> int:
         """Convert 2 bytes (as strs) into a signed int."""
         if high_byte == low_byte == "FF":  # TODO: move up to parser?
             raise ValueError()
-        buf = struct.pack(">bB", s8(high_byte), u8(low_byte))
-        return int(struct.unpack(">h", buf)[0])
+        return int.from_bytes(bytes.fromhex(high_byte + low_byte), "big", signed=True)
 
     DATA_TYPES: dict[str, Callable[..., _DataValueT]] = {
         FLAG8: flag8,
