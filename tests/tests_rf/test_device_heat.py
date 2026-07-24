@@ -17,9 +17,9 @@ from ramses_rf.devices import (
     Thermostat,
     TrvActuator,
 )
-from ramses_rf.discovery import DiscoveryService
 from ramses_rf.exceptions import DeviceNotFaked
 from ramses_rf.messages import Message
+from ramses_rf.pipeline.polling import PollingManager
 from ramses_rf.protocol.opentherm import (
     SZ_MSG_ID,
     SZ_MSG_NAME,
@@ -611,22 +611,16 @@ async def test_controller_discovers_system_mode(mock_gwy: MagicMock) -> None:
     mock_addr.id = "01:111111"
     mock_addr.type = "01"
 
-    # 3. Instantiate the Controller, but suppress the auto-starting poller
-    #    (which would crash on the mock gateway and leave lingering tasks).
-    with patch.object(DiscoveryService, "start_poller", lambda self: None):
-        device = Controller(mock_gwy, mock_addr)
+    # 3. Instantiate the Controller
+    device = Controller(mock_gwy, mock_addr)
 
     # Act
-    # 4. Explicitly trigger the discovery setup phase (normally done by the Gateway)
-    device._setup_discovery_cmds()
-
-    # 5. Extract all queued discovery commands scheduled by the device
-    # device.discovery.cmds is a dictionary keyed by the packet header
-    queued_cmds = [task["command"].code for task in device.discovery.cmds.values()]
+    # 4. Resolve polling schedule via Layer 7 PollingManager
+    schedule = PollingManager.resolve_schedule_for_device(device)
 
     # Assert
-    # 6. Assert that the 2E04 (System Mode) packet was queued for polling
-    assert Code._2E04 in queued_cmds, (
-        "Diagnosis Failed: Controller did not queue a 2E04 (System Mode) "
-        "packet during discovery initialization."
+    # 5. Assert that 2E04 (System Mode) is scheduled for polling
+    assert "2E04" in schedule, (
+        "Diagnosis Failed: Controller did not resolve a 2E04 (System Mode) "
+        "polling schedule."
     )

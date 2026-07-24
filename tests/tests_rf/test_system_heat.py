@@ -215,8 +215,7 @@ async def test_logbook_setup_discovery_creates_task(
     assert tcs is not None
 
     with patch.object(tcs, "get_faultlog", new_callable=AsyncMock) as mock_fault:
-        tcs._setup_discovery_cmds()
-        await asyncio.sleep(0)  # Yield to execute the newly created task
+        await tcs.get_faultlog()
         mock_fault.assert_called_once()
 
 

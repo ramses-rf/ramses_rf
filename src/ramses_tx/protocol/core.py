@@ -19,7 +19,6 @@ from ..const import (
     MAX_NUM_REPEATS,
     SZ_ACTIVE_HGI,
     SZ_IS_EVOFW3,
-    Code,
     Priority,
 )
 from ..dtos import CommandDTO
@@ -248,13 +247,6 @@ class PortProtocol(_DeviceIdFilterMixin):
             await send_cmd(cmd)
             return None  # type: ignore[return-value]
 
-        _CODES = (Code._0006, Code._0404, Code._0418, Code._1FC9)
-
-        if self._disable_qos is True or _DBG_DISABLE_QOS:
-            qos._wait_for_reply = False
-        elif self._disable_qos is None and cmd.code not in _CODES:
-            qos._wait_for_reply = False
-
         assert self._context
 
         try:
@@ -278,16 +270,10 @@ class PortProtocol(_DeviceIdFilterMixin):
     ) -> Packet:
         """Send a Command with Qos (with retries, until success or ProtocolError).
 
-        Returns the Command's response Packet or the Command echo if a response is not
-        expected (e.g. sending an RP).
+        Returns the Command's response Packet or the Command echo.
 
-        If wait_for_reply is True, return the RQ's RP (or W's I), or raise an exception
-        if one doesn't arrive. If it is False, return the echo of the Command only. If
-        it is None (the default), act as True for RQs, and False for all other Commands.
-
-        num_repeats is # of times to send the Command, in addition to the fist transmit,
-        with gap_duration seconds between each transmission. If wait_for_reply is True,
-        then num_repeats is ignored.
+        num_repeats is # of times to send the Command, in addition to the first transmit,
+        with gap_duration seconds between each transmission.
 
         Commands are queued and sent FIFO, except higher-priority Commands are always
         sent first.
@@ -302,10 +288,6 @@ class PortProtocol(_DeviceIdFilterMixin):
 
         if qos and not self._context:
             _LOGGER.warning(f"{cmd} < QoS is currently disabled by this Protocol")
-
-        if qos and qos.wait_for_reply and num_repeats:
-            _LOGGER.warning(f"{cmd} < num_repeats set to 0, as wait_for_reply is True")
-            num_repeats = 0
 
         # Patch command with actual HGI ID if it uses the default placeholder.
         # PortProtocol.send_cmd overrides _BaseProtocol.send_cmd (which does this

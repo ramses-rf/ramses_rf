@@ -27,10 +27,8 @@ if TYPE_CHECKING:
     from ramses_tx.dtos import PacketDTO
 
     from .config import GatewayConfig
-    from .devices import Device
     from .gateway import Gateway
     from .interfaces import DeviceRegistryInterface, MessageStoreInterface
-    from .systems import Evohome
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,19 +65,7 @@ class GatewayLifecycle:
         start_discovery: bool = True,
         cached_packets: dict[str, dict[str, Any] | str] | None = None,
     ) -> None:
-        """Start the Gateway and Initiate discovery as required."""
-
-        def initiate_discovery(dev_list: list[Device], sys_list: list[Evohome]) -> None:
-            _LOGGER.debug("Engine: Initiating/enabling discovery...")
-            for device in dev_list:
-                device.discovery.start_poller()
-            for system in sys_list:
-                system.discovery.start_poller()
-                for zone in system.zones:
-                    zone.discovery.start_poller()
-                if system.dhw:
-                    system.dhw.discovery.start_poller()
-
+        """Start the Gateway."""
         _, self._pkt_log_listener = await set_pkt_logging_config(
             cc_console=(self.config.reduce_processing >= DONT_CREATE_MESSAGES),
             **self._engine._packet_log,
@@ -155,24 +141,25 @@ class GatewayLifecycle:
             and not self.config.disable_discovery
             and start_discovery
         ):
-            initiate_discovery(
-                self.device_registry.devices, self.device_registry.systems
-            )
+            if pm := getattr(self, "polling_manager", None):
+                pm.start()
 
     async def stop(self) -> None:
         """Stop the Gateway and tidy up."""
         self.config.disable_discovery = True
 
-        # Cancel binding managers and discovery pollers before stopping engine
+        if pm := getattr(self, "polling_manager", None):
+            await pm.stop()
+
+        if cm := getattr(self, "conversation_manager", None):
+            cm.cancel_all()
+
+        # Cancel binding managers before stopping engine
         for dev in self.device_registry.devices:
             bm = getattr(dev, "_binding_manager", None)
             if bm:
                 with contextlib.suppress(Exception):
                     bm.cancel()
-            disc = getattr(dev, "discovery", None)
-            if disc:
-                with contextlib.suppress(Exception):
-                    await disc.stop_poller()
 
         await self._engine.stop()
 

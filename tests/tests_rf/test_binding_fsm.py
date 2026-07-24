@@ -235,7 +235,6 @@ def _setup_fakeable_device(gwy: Gateway, device_id: str) -> Fakeable:
             if qos is not None:
                 kwargs["max_retries"] = qos.max_retries
                 kwargs["timeout"] = qos.timeout
-                kwargs["wait_for_reply"] = qos.wait_for_reply
 
             return await gwy.async_send_cmd(cmd, **kwargs)
 

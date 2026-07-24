@@ -18,7 +18,6 @@ from .const import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_NUM_REPEATS,
     DEFAULT_SEND_TIMEOUT,
-    DEFAULT_WAIT_FOR_REPLY,
     I_,
     SZ_ACTIVE_HGI,
     W_,
@@ -369,13 +368,11 @@ class Engine:
         priority: Priority = Priority.DEFAULT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         timeout: float = DEFAULT_SEND_TIMEOUT,
-        wait_for_reply: bool | None = DEFAULT_WAIT_FOR_REPLY,
     ) -> Packet:
         """Send a Command and return the corresponding Packet."""
         qos = QosParams(
             max_retries=max_retries,
             timeout=timeout,
-            wait_for_reply=wait_for_reply,
         )
 
         return await self._protocol.send_cmd(

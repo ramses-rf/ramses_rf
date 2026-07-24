@@ -4,21 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Final, cast
 
-from ramses_rf.address import HGI_DEV_ADDR, Address
-from ramses_rf.commands.builders import build_dto
-from ramses_rf.commands.core import Command as Intent_
 from ramses_rf.const import (
     DOMAIN_TYPE_MAP,
-    F9,
-    FA,
-    FC,
     SZ_HEAT_DEMAND,
     SZ_RELAY_DEMAND,
     Code,
     DevType,
 )
-from ramses_rf.devices.helpers import build_rq_cmd
-from ramses_rf.enums import Action
 from ramses_rf.models import DeviceTraits
 from ramses_tx import Priority
 from ramses_tx.const import SZ_PRIORITY
@@ -135,24 +127,6 @@ class RelayDemand(DeviceHeat):  # 0008
 
     RELAY_DEMAND: Final = SZ_RELAY_DEMAND  # percentage (0.0-1.0)
 
-    def _setup_discovery_cmds(self) -> None:
-        super()._setup_discovery_cmds()
-
-        if not self.is_faked:  # discover_flag & Discover.STATUS and
-            self.discovery.add_cmd(
-                (
-                    build_dto(
-                        Intent_(
-                            src=HGI_DEV_ADDR,
-                            dst=Address(self.id),
-                            action=Action.GET_RELAY_DEMAND,
-                            data={"zone_idx": None},
-                        )
-                    )
-                ),
-                60 * 15,
-            )
-
     async def relay_demand(self) -> float | None:  # 0008
         return self.demand_state.relay_demand
 
@@ -185,44 +159,6 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
     ) -> None:
         super().__init__(*args, traits=traits, **kwargs)
-
-    def _setup_discovery_cmds(self) -> None:
-        """Discover BDRs.
-
-        The BDRs have one of six roles:
-         - heater relay *or* a heat pump relay (alternative to an OTB)
-         - DHW hot water valve *or* DHW heating valve
-         - Zones: Electric relay *or* Zone valve relay
-
-        They all seem to respond thus (TODO: heat pump/zone valve relay):
-         - all BDR91As will (erractically) RP to these RQs
-             0016, 1FC9 & 0008, 1100, 3EF1
-         - all BDR91As will *not* RP to these RQs
-             0009, 10E0, 3B00, 3EF0
-         - a BDR91A will *periodically* send an I/3B00/00C8 if it is the heater relay
-        """
-        super()._setup_discovery_cmds()
-
-        if self.is_faked:
-            return
-
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent_(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_TPI_PARAMS,
-                        data={},
-                    )
-                )
-            ),
-            6 * 3600,
-        )  # params
-        self.discovery.add_cmd(
-            build_rq_cmd(self.id, Code._3EF1, "00"),
-            60 if getattr(self, "_child_id", None) in (F9, FA, FC) else 300,
-        )  # status
 
     async def active(self) -> bool | None:  # 3EF0, 3EF1
         """Return the actuator's current state."""

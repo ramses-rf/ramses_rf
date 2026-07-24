@@ -89,7 +89,6 @@ _RATIFY_WAIT_TIME: Final[float] = (
 BINDING_QOS = QosParams(
     max_retries=SENDING_RETRY_LIMIT,
     timeout=WAITING_TIMEOUT_SECS * 2,
-    wait_for_reply=False,
 )
 
 

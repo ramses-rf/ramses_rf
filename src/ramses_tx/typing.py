@@ -20,7 +20,6 @@ from .const import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_NUM_REPEATS,
     DEFAULT_SEND_TIMEOUT,
-    DEFAULT_WAIT_FOR_REPLY,
     FaultDeviceClass,
     FaultState,
     FaultType,
@@ -68,7 +67,6 @@ class QosParams:
         *,
         max_retries: int | None = DEFAULT_MAX_RETRIES,
         timeout: float | None = DEFAULT_SEND_TIMEOUT,
-        wait_for_reply: bool | None = DEFAULT_WAIT_FOR_REPLY,
     ) -> None:
         """Create a QosParams instance."""
         if max_retries is None:
@@ -77,7 +75,6 @@ class QosParams:
             self._max_retries = max_retries
 
         self._timeout = timeout or DEFAULT_SEND_TIMEOUT
-        self._wait_for_reply = wait_for_reply
 
         self._echo_pkt: Packet | None = None
         self._rply_pkt: Packet | None = None
@@ -93,10 +90,6 @@ class QosParams:
     @property
     def timeout(self) -> float:
         return self._timeout
-
-    @property
-    def wait_for_reply(self) -> bool | None:
-        return self._wait_for_reply
 
 
 class SendParams:

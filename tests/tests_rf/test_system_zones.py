@@ -198,8 +198,6 @@ async def test_zone_initialization(mock_tcs: MagicMock) -> None:
 def test_zone_schema_promotion(mock_tcs: MagicMock) -> None:
     """Test dynamic class promotion through schema definitions."""
     zon = Zone(mock_tcs, "01")
-    zon._setup_discovery_cmds = MagicMock()  # type: ignore[method-assign]
-
     zon._update_schema(**{"class": "underfloor_heating"})
     assert isinstance(zon, UfhZone)
 

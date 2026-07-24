@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ramses_tx import Priority, QosParams
 
-from .discovery import DiscoveryService
 from .models import (
     DemandState,
     FaultLogState,
@@ -81,7 +80,6 @@ class _Entity:
         self.entity_state: EntityState = EntityState(
             cast("DeviceInterface", self), self._gwy
         )
-        self.discovery: DiscoveryService = DiscoveryService(self, self._gwy)
 
         # Context required by children (Zones/Devices)
         self._z_id: DeviceIdT = None  # type: ignore[assignment]
@@ -160,7 +158,7 @@ class _Entity:
             _LOGGER.info(f"{cmd} < Sending was deprecated for {self}")
             return None
 
-        return self._gwy.send_cmd(cmd, wait_for_reply=False, **kwargs)
+        return self._gwy.send_cmd(cmd, **kwargs)
 
     async def _async_send_cmd(
         self,
@@ -193,8 +191,6 @@ class _Entity:
                 kwargs["max_retries"] = qos.max_retries
             if hasattr(qos, "timeout") and qos.timeout is not None:
                 kwargs["timeout"] = qos.timeout
-            if hasattr(qos, "wait_for_reply") and qos.wait_for_reply is not None:
-                kwargs["wait_for_reply"] = qos.wait_for_reply
 
         return await self._gwy.async_send_cmd(cmd, **kwargs)
 

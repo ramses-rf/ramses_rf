@@ -10,8 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from datetime import datetime as dt
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ramses_rf import Gateway
 from ramses_rf.gateway import GatewayConfig
@@ -152,8 +151,6 @@ async def test_gateway_stop_cancels_binding_managers() -> None:
         # Create a mock binding manager on a device
         dev = MagicMock()
         dev._binding_manager = MagicMock()
-        dev.discovery = MagicMock()
-        dev.discovery.stop_poller = AsyncMock()
 
         # Inject the mock device into the registry
         gwy.device_registry.devices.append(dev)
@@ -162,15 +159,13 @@ async def test_gateway_stop_cancels_binding_managers() -> None:
 
         # Binding manager cancel was called
         dev._binding_manager.cancel.assert_called_once()
-        # discovery stop_poller was called
-        dev.discovery.stop_poller.assert_awaited_once()
 
 
-async def test_gateway_stop_cancels_discovery_pollers() -> None:
-    """Gateway.stop() cancels discovery pollers for all devices.
+async def test_gateway_stop_stops_polling_manager() -> None:
+    """Gateway.stop() stops the PollingManager.
 
-    This proves the fix for discovery.py pollers that were started via
-    call_soon but never stopped during gateway shutdown.
+    This proves that the L7 PollingManager background loop is cleanly stopped
+    during gateway shutdown.
     """
     import tempfile
 
@@ -183,26 +178,11 @@ async def test_gateway_stop_cancels_discovery_pollers() -> None:
         with contextlib.suppress(Exception):
             await gwy.start(start_discovery=False)
 
-        # Track discovery stop_poller calls
-        stopped: list[str] = []
-
-        for dev in gwy.device_registry.devices:
-            disc = getattr(dev, "discovery", None)
-            if disc and hasattr(disc, "stop_poller"):
-                orig = disc.stop_poller
-
-                async def _tracked_stop(_orig: Any = orig, _id: str = dev.id) -> None:
-                    stopped.append(_id)
-                    with contextlib.suppress(Exception):
-                        await _orig()
-
-                disc.stop_poller = _tracked_stop
-
-        await gwy.stop()
-
-        # All discovery pollers were stopped
-        # (there may be 0 devices in empty gateway, but the code path ran without error)
-        assert isinstance(stopped, list)
+        with patch.object(
+            gwy.polling_manager, "stop", new_callable=AsyncMock
+        ) as mock_stop:
+            await gwy.stop()
+            mock_stop.assert_awaited_once()
 
 
 async def test_handler_tasks_auto_cleanup_on_completion() -> None:
