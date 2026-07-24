@@ -611,15 +611,9 @@ class TopologyBuilder:
     def _evaluate_heating_prefix_rules(self, msg: Message) -> None:
         """Evaluate passive heuristics based purely on hardware prefixes.
 
-        Legacy architecture automatically promoted generic devices into
-        specific heating domain subtypes (e.g., TRV, UFC, BDR) the
-        moment their address was observed anywhere in the packet (src, dst,
-        or embedded in payload).
-
-        :param msg: The immutable Message L7 envelope to evaluate.
-        :type msg: Message
-        :returns: None
-        :rtype: None
+        Automatically promotes generic devices into specific heating domain
+        subtypes (e.g., TRV, UFC, BDR) when their address is observed anywhere
+        in the packet (src, dst, or embedded in payload).
         """
         if not self._enable_eavesdrop:
             return
@@ -650,13 +644,7 @@ class TopologyBuilder:
                 self._emit(event)
 
     def _evaluate_appliance_control_sync_rules(self, msg: Message) -> None:
-        """Evaluate direct configuration syncs to map System Relay.
-
-        :param msg: The immutable Message L7 envelope to evaluate.
-        :type msg: Message
-        :returns: None
-        :rtype: None
-        """
+        """Evaluate direct configuration syncs to map System Relay."""
         if not self._enable_eavesdrop:
             return
 
@@ -684,14 +672,7 @@ class TopologyBuilder:
     def _evaluate_appliance_eavesdrop_rules(self, msg: Message) -> None:
         """Evaluate legacy passive eavesdropping of System Relay.
 
-        Replicates legacy eavesdrop_appliance_control logic based on
-        message flows (e.g., 3220, 3EF0, 3B00) between Controller and Heat
-        Relay.
-
-        :param msg: The immutable Message L7 envelope to evaluate.
-        :type msg: Message
-        :returns: None
-        :rtype: None
+        # TODO: PARITY FLAW - This replicates legacy `eavesdrop_appliance_control`.
         """
         if not self._enable_eavesdrop:
             return
@@ -741,13 +722,7 @@ class TopologyBuilder:
             self._emit(event)
 
     def _evaluate_zone_sensor_matching_rules(self, msg: Message) -> None:
-        """Evaluate legacy collision-abstention temperature matching.
-
-        :param msg: The immutable Message L7 envelope to evaluate.
-        :type msg: Message
-        :returns: None
-        :rtype: None
-        """
+        """Evaluate legacy collision-abstention temperature matching."""
         # DISABLED FOR PARITY: This legacy heuristic is highly prone to false
         # positives and cross-zone contamination (e.g., binding TRVs to wrong
         # zones). It is intentionally bypassed here to ensure schema parity.
@@ -756,13 +731,7 @@ class TopologyBuilder:
     def _evaluate_zone_type_eavesdrop_rules(self, msg: Message) -> None:
         """Evaluate legacy passive promotion of zone classes.
 
-        Replicates eavesdrop_zone_type from zones.py, mapping zones to
-        VAL, ELE, RAD, or UFH based on telemetry packet signatures.
-
-        :param msg: The immutable Message L7 envelope to evaluate.
-        :type msg: Message
-        :returns: None
-        :rtype: None
+        # TODO: PARITY FLAW - This replicates `eavesdrop_zone_type` from `zones.py`.
         """
         if not self._enable_eavesdrop:
             return
