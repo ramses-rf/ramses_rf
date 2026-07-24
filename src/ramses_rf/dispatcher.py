@@ -941,6 +941,9 @@ async def process_msg(gwy: Gateway, msg: Message) -> None:
     # All methods require msg with a valid payload, except instantiate_devices(),
     # which requires a valid payload only for 000C.
     try:
+        if cm := getattr(gwy, "conversation_manager", None):
+            cm.process_msg(msg)
+
         if not validate_addresses(gwy, msg):
             _log_message(gwy, msg)
             return

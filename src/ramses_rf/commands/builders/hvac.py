@@ -322,6 +322,7 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
         )
         payload = payload_bytes.hex().upper()
 
+        # W_, addr0=src_id, addr1=fan_id, addr2=NON_DEV_ADDR
         return CommandDTO(
             verb=W_,
             addr1=intent.src.id,
