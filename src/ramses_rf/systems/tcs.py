@@ -165,30 +165,6 @@ class SystemBase(Parent, Entity):  # 3B00 (multi-relay)
     def __repr__(self) -> str:
         return f"{self.ctl.id} ({self._SLUG})"
 
-    def _setup_discovery_cmds(self) -> None:
-        """Configure the system-level discovery commands."""
-        # super()._setup_discovery_cmds()
-
-        for payload in (
-            f"00{DEV_ROLE_MAP.APP}",  # appliance_control
-            f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
-            f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
-        ):
-            from ramses_rf.devices.helpers import build_rq_cmd
-
-            cmd = build_rq_cmd(self.ctl.id, Code._000C, payload)
-            self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
-
-        cmd = build_dto(
-            Intent_(
-                src=HGI_DEV_ADDR,
-                dst=Address(self.id),
-                action=Action.GET_TPI_PARAMS,
-                data={},
-            )
-        )
-        self.discovery.add_cmd(cmd, 60 * 60 * 6, delay=5)
-
     def _handle_msg(self, msg: Message) -> None:
         """Handle incoming messages routed to the base system."""
 
@@ -454,16 +430,6 @@ class MultiZone(SystemBase):  # 0005 (+/- 000C?)
         )
 
         self._prev_30c9: Message | None = None  # used to eavesdrop zone sensors
-
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery commands for zone types."""
-        super()._setup_discovery_cmds()
-
-        for zone_type in list(ZON_ROLE_MAP.HEAT_ZONES) + [ZON_ROLE_MAP.SEN]:
-            from ramses_rf.devices.helpers import build_rq_cmd
-
-            cmd = build_rq_cmd(self.id, Code._0005, f"00{zone_type}")
-            self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
 
     async def _eavesdrop_zone_sensors(self, msg: Message, prev: Message | None) -> None:
         """Discover zone sensors by correlating 30C9 temperature broadcasts.
@@ -816,15 +782,6 @@ class ScheduleSync(SystemBase):  # 0006 (+/- 0404?)
         self.zone_lock = Lock()  # FIXME: threading lock, or asyncio lock?
         self.zone_lock_idx: str | None = None
 
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery commands for schedules."""
-        super()._setup_discovery_cmds()
-
-        from ramses_rf.devices.helpers import build_rq_cmd
-
-        cmd = build_rq_cmd(self.id, Code._0006, "00")
-        self.discovery.add_cmd(cmd, 60 * 5, delay=5)
-
     def _handle_msg(self, msg: Message) -> None:  # NOTE: active
         """Periodically retrieve the latest global change counter."""
 
@@ -938,20 +895,6 @@ class ScheduleSync(SystemBase):  # 0006 (+/- 0404?)
 class Language(SystemBase):  # 0100
     """A system variant supporting language configuration."""
 
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery for system language."""
-        super()._setup_discovery_cmds()
-
-        cmd = build_dto(
-            Intent_(
-                src=HGI_DEV_ADDR,
-                dst=Address(self.id),
-                action=Action.GET_SYSTEM_LANGUAGE,
-                data={},
-            )
-        )
-        self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=60 * 15)
-
     async def language(self) -> str | None:
         """Return the current language configuration.
 
@@ -990,17 +933,6 @@ class Logbook(SystemBase):  # 0418
     def faultlog(self) -> FaultLog:
         """Return the system's fault log."""
         return self._faultlog
-
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery for the fault log."""
-        super()._setup_discovery_cmds()
-
-        from ramses_rf.devices.helpers import build_rq_cmd
-
-        cmd = build_rq_cmd(self.id, Code._0418, "000000")
-        self.discovery.add_cmd(cmd, 60 * 5, delay=5)
-        task = asyncio.create_task(self.get_faultlog())
-        self._gwy.add_task(task)
 
     def _handle_msg(self, msg: Message) -> None:  # NOTE: active
         """Handle logbook-specific incoming messages."""
@@ -1085,63 +1017,6 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
         """Initialise the StoredHw system."""
         super().__init__(*args, **kwargs)
         self._dhw: DhwZone = None  # type: ignore[assignment]
-
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery commands for DHW sensors and valves."""
-        super()._setup_discovery_cmds()
-
-        for payload in (
-            f"00{DEV_ROLE_MAP.DHW}",  # dhw_sensor
-            # f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
-            # f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
-        ):
-            from ramses_rf.devices.helpers import build_rq_cmd
-
-            cmd = build_rq_cmd(self.id, Code._000C, payload)
-            self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0)
-
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent_(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_DHW_PARAMS,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            DHW_POLLING_INTERVAL_SECS,
-            delay=5,
-        )
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent_(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_DHW_TEMP,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            DHW_POLLING_INTERVAL_SECS,
-            delay=10,
-        )
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent_(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.id),
-                        action=Action.GET_DHW_MODE,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            DHW_POLLING_INTERVAL_SECS,
-            delay=15,
-        )
 
     def _handle_msg(self, msg: Message) -> None:
         """Handle incoming messages related to DHW."""
@@ -1271,22 +1146,8 @@ class StoredHw(SystemBase):  # 10A0, 1260, 1F41
         }
 
 
-class SysMode(SystemBase):  # 2E04
+class SystemMode(SystemBase):  # 2E04
     """A system variant managing the overall system mode."""
-
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery for the system mode."""
-        super()._setup_discovery_cmds()
-
-        cmd = build_dto(
-            Intent_(
-                src=HGI_DEV_ADDR,
-                dst=Address(self.id),
-                action=Action.GET_SYSTEM_MODE,
-                data={},
-            )
-        )
-        self.discovery.add_cmd(cmd, 60 * 5, delay=5)
 
     async def system_mode(self) -> dict[str, Any] | None:  # 2E04
         """Return the system mode from Hot State RAM.
@@ -1356,20 +1217,6 @@ class SysMode(SystemBase):  # 2E04
 
 class Datetime(SystemBase):  # 313F
     """A system variant managing system date and time."""
-
-    def _setup_discovery_cmds(self) -> None:
-        """Configure discovery for system time."""
-        super()._setup_discovery_cmds()
-
-        cmd = build_dto(
-            Intent_(
-                src=HGI_DEV_ADDR,
-                dst=Address(self.id),
-                action=Action.GET_SYSTEM_TIME,
-                data={},
-            )
-        )
-        self.discovery.add_cmd(cmd, 60 * 60, delay=0)
 
     def _handle_msg(self, msg: Message) -> None:
         """Handle incoming datetime synchronisation messages."""
@@ -1598,7 +1445,7 @@ class System(StoredHw, Datetime, Logbook, SystemBase):
         return status
 
 
-class Evohome(ScheduleSync, Language, SysMode, MultiZone, UfHeating, System):
+class Evohome(ScheduleSync, Language, SystemMode, MultiZone, UfHeating, System):
     """The Evohome system class."""
 
     _SLUG: str = SYS_KLASS.TCS  # evohome

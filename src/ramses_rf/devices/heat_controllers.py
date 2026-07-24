@@ -5,11 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Final, cast
 
-from ramses_rf.address import HGI_DEV_ADDR, Address
-from ramses_rf.commands.builders import build_dto
-from ramses_rf.commands.core import Command as Intent
 from ramses_rf.const import (
-    DEV_ROLE_MAP,
     FA,
     FC,
     SZ_DOMAIN_ID,
@@ -23,9 +19,7 @@ from ramses_rf.const import (
     Code,
     DevType,
 )
-from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.entity import Entity
-from ramses_rf.enums import Action
 from ramses_rf.helpers import shrink
 from ramses_rf.models import DeviceTraits
 from ramses_rf.schemas import SCH_TCS, SZ_CIRCUITS
@@ -58,16 +52,6 @@ class Controller(DeviceHeat):  # CTL (01):
 
         self.tcs: Evohome | None = None  # TODO: = self?
         self._make_tcs_controller(**kwargs)  # NOTE: must create_from_schema first
-
-    def _setup_discovery_cmds(self) -> None:
-        super()._setup_discovery_cmds()
-
-        if not self.is_faked:
-            self.discovery.add_cmd(
-                build_rq_cmd(self.id, Code._2E04, "00"),
-                60 * 60 * 24,
-                delay=60 * 60,
-            )
 
     def _handle_msg(self, msg: Message) -> None:
         super()._handle_msg(msg)
@@ -113,20 +97,6 @@ class Programmer(Controller):  # PRG (23):
 
     _SLUG = DevType.PRG
 
-    def _setup_discovery_cmds(self) -> None:
-        super()._setup_discovery_cmds()
-
-        if not self.is_faked:
-            # PRGs respond to RP for 1090, 10A0, 3EF1
-            self.discovery.add_cmd(
-                build_rq_cmd(self.id, Code._1090, "00"),
-                60 * 60 * 6,  # every 6 hours
-            )
-            self.discovery.add_cmd(
-                build_rq_cmd(self.id, Code._10A0, "00"),
-                60 * 60 * 6,
-            )
-
 
 class RfgGateway(DeviceHeat):  # RFG (30:)
     """The RFG100 base class."""
@@ -164,41 +134,6 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
     def _init_ufh_state(self) -> None:
         """Initialize UFH-specific instance attributes (idempotent)."""
         self.__dict__.setdefault("circuit_by_id", {f"{i:02X}": {} for i in range(8)})
-
-    def _setup_discovery_cmds(self) -> None:
-        super()._setup_discovery_cmds()
-
-        # Only RPs are: 0001, 0005/000C, 10E0, 000A/2309 & 22D0
-
-        cmd = build_rq_cmd(self.id, Code._0005, f"00{DEV_ROLE_MAP.UFH}")
-        self.discovery.add_cmd(cmd, 60 * 60 * 24)
-
-        # TODO: this needs work
-        # if discover_flag & Discover.PARAMS:  # only 2309 has any potential?
-        for ufc_idx in getattr(self, "circuit_by_id", {}):
-            cmd = build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_ZONE_CONFIG,
-                    data={"zone_idx": ufc_idx},
-                )
-            )
-            self.discovery.add_cmd(cmd, 60 * 60 * 6)
-
-            cmd = build_dto(
-                Intent(
-                    src=HGI_DEV_ADDR,
-                    dst=Address(self.id),
-                    action=Action.GET_ZONE_SETPOINT,
-                    data={"zone_idx": ufc_idx},
-                )
-            )
-            self.discovery.add_cmd(cmd, 60 * 60 * 6)
-
-        for ufc_idx in range(8):
-            cmd = build_rq_cmd(self.id, Code._000C, f"{ufc_idx:02X}{DEV_ROLE_MAP.UFH}")
-            self.discovery.add_cmd(cmd, 60 * 60 * 24)
 
     def _handle_msg(self, msg: Message) -> None:
         super()._handle_msg(msg)

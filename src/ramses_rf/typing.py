@@ -10,10 +10,13 @@ IndexT: TypeAlias = TxIndexT
 
 DeviceTraitsT: TypeAlias = dict[str, Any]
 DeviceListT: TypeAlias = dict[DeviceIdT, DeviceTraitsT]
+PollingIntervalsT: TypeAlias = dict[str, int]
 
 
 # For fingerprints.py
 class DeviceFingerprint(TypedDict):
+    """Device fingerprint metadata for entity identification."""
+
     slug: str
     dev_type: str
     date: str

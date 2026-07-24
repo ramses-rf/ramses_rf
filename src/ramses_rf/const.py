@@ -154,6 +154,11 @@ DONT_CREATE_MESSAGES: Final[int] = 3
 DONT_CREATE_ENTITIES: Final[int] = 2
 DONT_UPDATE_ENTITIES: Final[int] = 1
 
+SZ_DISABLE_POLLING: Final = "disable_polling"
+SZ_DISABLE_DISCOVERY: Final = "disable_discovery"
+SZ_IS_BATTERY: Final = "is_battery"
+SZ_POLLING_INTERVAL: Final = "polling_interval"
+
 SCHED_REFRESH_INTERVAL: Final[int] = 3  # minutes
 
 # 0004 (zone_name) and 1060 (device_battery) are intentionally excluded:
