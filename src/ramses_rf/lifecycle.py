@@ -155,13 +155,15 @@ class GatewayLifecycle:
             and not self.config.disable_discovery
             and start_discovery
         ):
-            initiate_discovery(
-                self.device_registry.devices, self.device_registry.systems
-            )
+            if pm := getattr(self, "polling_manager", None):
+                pm.start()
 
     async def stop(self) -> None:
         """Stop the Gateway and tidy up."""
         self.config.disable_discovery = True
+
+        if pm := getattr(self, "polling_manager", None):
+            await pm.stop()
 
         if cm := getattr(self, "conversation_manager", None):
             cm.cancel_all()

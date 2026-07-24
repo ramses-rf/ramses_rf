@@ -21,7 +21,6 @@ from ramses_tx.const import I_, RP, Code
 from ramses_tx.typing import HeaderT
 
 from . import exceptions as exc
-from .helpers import schedule_task
 from .messages import Message
 from .protocol.ramses import CODES_SCHEMA
 from .routing import StateHeader
@@ -221,15 +220,10 @@ class DiscoveryService:
         }
 
     def start_poller(self) -> None:
-        """Start the discovery poller (if it is not already running)."""
+        """Start the discovery poller (deprecated in favor of L7 PollingManager)."""
         self._start_handle = None  # call_soon callback has now fired
-
-        if self._poller and not self._poller.done():
-            return
-
-        self._poller = schedule_task(self.poll_cmds)
-        self._poller.set_name(f"{self._entity.id}_discovery_poller")
-        self._gwy.add_task(self._poller)
+        # Legacy polling loop is disabled in Phase 4c.3 in favor of L7 PollingManager
+        return
 
     async def stop_poller(self) -> None:
         """Stop the discovery poller (only if it is running)."""

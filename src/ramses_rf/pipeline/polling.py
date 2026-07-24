@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Final
 from ramses_rf.const import DevType
 from ramses_rf.helpers import schedule_task
 from ramses_rf.typing import DeviceIdT, PollingIntervalsT
+from ramses_tx import CommandDTO
 
 if TYPE_CHECKING:
     from ramses_rf.devices.dev_base import DeviceBase
@@ -274,6 +275,15 @@ class PollingManager:
                 _LOGGER.info("Polling device %s command %s", task.device_id, task.code)
                 task.last_polled = now
                 task.next_due = now + td(seconds=task.interval)
-                # Live dispatch (used in PR 3c execution cutover)
+                cmd_dto = CommandDTO(
+                    verb="RQ",
+                    addr1=task.device_id,
+                    addr2=task.device_id,
+                    addr3="--:------",
+                    code=task.code,
+                    payload="00",
+                )
+                with contextlib.suppress(Exception):
+                    await self._gwy.async_send_cmd(cmd_dto)
 
         return processed_count
