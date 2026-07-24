@@ -24,18 +24,50 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+INTERVAL_HOURLY: Final[int] = 3600  # 1 hour in seconds
+INTERVAL_EVERY_12_HOURS: Final[int] = 43200  # 12 hours in seconds
+INTERVAL_DAILY: Final[int] = 86400  # 24 hours in seconds
+
 # Master default polling schedules table for all device classes.
-# Battery-powered devices (TRV, THM, DHW) set intervals to None to explicitly indicate
-# that polling is disabled for those command codes.
+# Battery-powered devices (TRV, THM, DHW) set intervals to None to explicitly
+# indicate that polling is disabled for those command codes.
 DEFAULT_POLLING_SCHEDULES: Final[dict[str, dict[str, int | None]]] = {
-    DevType.CTL: {"10E0": 86400, "1F41": 3600, "313F": 43200},
-    DevType.BDR: {"10E0": 86400},
-    DevType.UFC: {"10E0": 86400, "1F09": 3600},
-    DevType.FAN: {"10E0": 86400, "3150": 3600},
-    DevType.TRV: {"10E0": None, "1060": None},  # Battery device - explicitly disabled
-    DevType.THM: {"10E0": None, "1060": None},  # Battery device - explicitly disabled
-    DevType.DHW: {"10E0": None, "1060": None},  # Battery device - explicitly disabled
-    "DEFAULT": {"10E0": 86400},
+    # Evohome Controller
+    DevType.CTL: {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+        "1F41": INTERVAL_HOURLY,  # DHW System Mode / Operating State
+        "2E04": INTERVAL_DAILY,  # Evohome System Mode
+        "313F": INTERVAL_EVERY_12_HOURS,  # System Time & Date Sync
+    },
+    # Boiler Relay / Switch
+    DevType.BDR: {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+    },
+    # OpenTherm Bridge
+    DevType.OTB: {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+        "3EF0": INTERVAL_HOURLY,  # OpenTherm Modulation State
+        "3220": INTERVAL_HOURLY,  # OpenTherm Data ID Query
+    },
+    # Underfloor Heating Controller
+    DevType.UFC: {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+        "1F09": INTERVAL_HOURLY,  # UFH Controller Status
+    },
+    # HVAC Ventilation Fan
+    DevType.FAN: {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+        "10D0": INTERVAL_DAILY,  # Filter Change Sensor Status
+        "3150": INTERVAL_HOURLY,  # Fan Speed / Airflow Status
+    },
+    # Battery-Powered Devices - Polling disabled to preserve battery life
+    DevType.TRV: {"10E0": None, "1060": None},
+    DevType.THM: {"10E0": None, "1060": None},
+    DevType.DHW: {"10E0": None, "1060": None},
+    # Fallback Default
+    "DEFAULT": {
+        "10E0": INTERVAL_DAILY,  # Device Specification / Info
+    },
 }
 
 DEFAULT_POLL_CYCLE_SECS: Final[float] = 300.0  # 5 minutes maximum idle sleep
@@ -125,17 +157,14 @@ class PollingManager:
             and not self._poller_task.done()
         )
 
-    def resolve_schedule_for_device(self, device: DeviceBase) -> PollingIntervalsT:
-        """Resolve the effective polling schedule for a given device entity.
+    @staticmethod
+    def resolve_schedule_for_device(device: DeviceBase) -> PollingIntervalsT:
+        """Resolve the effective polling schedule for a given device.
 
-        Battery-powered devices sleep and do not listen to RF requests; they are
-        never polled (returns an empty schedule dictionary).
+        Combines default device schedule tables with SSOT schema trait overrides,
+        ensuring battery-powered devices always resolve to zero polling.
 
-        For mains-powered devices, combines explicit schema traits
-        (`dev.polling_interval`) with fallback defaults for the class (`_SLUG`),
-        filtering out any entries set to None.
-
-        :param device: The target device entity.
+        :param device: The target device instance.
         :type device: DeviceBase
         :returns: A dictionary mapping active command codes to interval seconds.
         :rtype: PollingIntervalsT

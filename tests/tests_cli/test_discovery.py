@@ -200,8 +200,7 @@ async def test_script_scan_disc(mock_gateway: MagicMock) -> None:
     """Test script_scan_disc."""
     await script_scan_disc(mock_gateway, DEV_ID)
     mock_dev = mock_gateway.device_registry.get_device(DEV_ID)
-    # Phase 4 update: Verify the discovery component method was called
-    mock_dev.discovery.discover.assert_awaited_once()
+    mock_gateway.polling_manager.update_device_tasks.assert_called_once_with(mock_dev)
 
 
 @pytest.mark.asyncio

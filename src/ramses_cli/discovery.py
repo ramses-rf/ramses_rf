@@ -282,7 +282,8 @@ async def script_scan_disc(gwy: Gateway, dev_id: DeviceIdT) -> None:
     """
     _LOGGER.warning("scan_disc() invoked...")
 
-    await gwy.device_registry.get_device(dev_id).discovery.discover()
+    dev = gwy.device_registry.get_device(dev_id)
+    gwy.polling_manager.update_device_tasks(dev)
 
 
 @script_decorator

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ramses_tx import Priority, QosParams
 
-from .discovery import DiscoveryService
 from .models import (
     DemandState,
     FaultLogState,
@@ -81,7 +80,6 @@ class _Entity:
         self.entity_state: EntityState = EntityState(
             cast("DeviceInterface", self), self._gwy
         )
-        self.discovery: DiscoveryService = DiscoveryService(self, self._gwy)
 
         # Context required by children (Zones/Devices)
         self._z_id: DeviceIdT = None  # type: ignore[assignment]

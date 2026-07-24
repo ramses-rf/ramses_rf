@@ -495,7 +495,6 @@ class DeviceRegistry:
 
             try:
                 dev = self._device_factory_cb(Address(device_id), msg, traits)
-                dev._setup_discovery_cmds()
             except Exception as err:
                 _TRACE.error(f"FACTORY EXCEPTION: Failed creating {device_id}: {err}")
                 raise
@@ -753,7 +752,6 @@ class DeviceRegistry:
 
         # 2. Instantiate using the completely decoupled factory
         new_dev = self._device_factory_cb(old_dev.addr, None, traits)
-        new_dev._setup_discovery_cmds()
 
         # 3. Migrate CQRS Read-Model State
         if hasattr(old_dev, "temp_state") and hasattr(new_dev, "temp_state"):

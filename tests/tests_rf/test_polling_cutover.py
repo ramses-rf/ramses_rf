@@ -6,7 +6,6 @@ import pytest
 
 from ramses_rf.config import GatewayConfig
 from ramses_rf.devices.dev_base import DeviceBase
-from ramses_rf.discovery import DiscoveryService
 from ramses_rf.pipeline.polling import DEFAULT_POLLING_SCHEDULES, PollingManager
 from ramses_tx import CommandDTO
 
@@ -68,19 +67,3 @@ async def test_polling_manager_live_dispatch_cutover(
     assert sent_dto.verb == "RQ"
     assert sent_dto.addr1 == "01:111111"
     assert sent_dto.addr2 == "01:111111"
-
-
-def test_legacy_discovery_poller_disabled(
-    mock_gateway: MagicMock,
-) -> None:
-    # ARRANGE
-    mock_entity = MagicMock()
-    mock_entity.id = "01:111111"
-    disc = DiscoveryService(mock_entity, mock_gateway)
-
-    # ACT
-    disc.start_poller()
-
-    # ASSERT
-    # Legacy discovery start_poller is deactivated in Phase 4c.3 in favor of L7 PollingManager
-    assert disc._poller is None

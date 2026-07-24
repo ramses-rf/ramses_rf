@@ -24,7 +24,6 @@ from ramses_rf.const import (
     SZ_OEM_CODE,
     DevType,
 )
-from ramses_rf.devices.helpers import build_rq_cmd
 from ramses_rf.entity import Entity, class_by_attr
 from ramses_rf.exceptions import DeviceNotFaked, SchemaInconsistentError
 from ramses_rf.models import DemandState, PowerState, TemperatureState
@@ -200,10 +199,6 @@ class DeviceBase(Entity):
             dev._update_traits(traits)
         return dev
 
-    def _setup_discovery_cmds(self) -> None:
-        """Configure initial discovery commands for the device."""
-        pass
-
     def _send_cmd(self, cmd: CommandDTO, **kwargs: Any) -> asyncio.Task[Any] | None:
         """Send a command from this device."""
         if (
@@ -378,19 +373,6 @@ class BatteryState(DeviceBase):  # 1060
 
 class DeviceInfo(DeviceBase):  # 10E0
     """The base state class for device information (10E0) payloads."""
-
-    def _setup_discovery_cmds(self) -> None:
-        """Enqueue a 10E0 device info request during discovery."""
-        super()._setup_discovery_cmds()
-
-        if self._SLUG not in CODES_BY_DEV_SLUG or RP in CODES_BY_DEV_SLUG[
-            self._SLUG
-        ].get(Code._10E0, {}):
-            self.discovery.add_cmd(
-                build_rq_cmd(self.id, Code._10E0, "00"),
-                60 * 60 * 24,
-                delay=60 * 60 * 6,
-            )
 
     async def device_info(self) -> dict[str, Any] | None:  # 10E0
         """Return the device specification and manufacturing data.

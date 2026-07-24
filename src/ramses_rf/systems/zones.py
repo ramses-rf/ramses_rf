@@ -10,7 +10,7 @@ from datetime import datetime as dt, timedelta as td
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from ramses_rf import exceptions as exc
-from ramses_rf.address import HGI_DEV_ADDR, Address
+from ramses_rf.address import Address
 from ramses_rf.const import (
     DEV_ROLE_MAP,
     SZ_HEAT_DEMAND,
@@ -48,7 +48,7 @@ from ramses_rf.schemas import (
 from ramses_rf.topology import Child, Parent
 from ramses_tx import Packet
 from ramses_tx.exceptions import ProtocolSendFailed, ProtocolTimeoutError
-from ramses_tx.typing import HeaderT, PayDictT
+from ramses_tx.typing import PayDictT
 
 from ..messages import Message
 from .schedule import InnerScheduleT, OuterScheduleT, Schedule
@@ -74,8 +74,6 @@ from ramses_rf.const import (  # noqa: F401, isort: skip
     Code,
 )
 
-from ramses_rf.commands.builders import build_dto
-from ramses_rf.commands.core import Command as Intent
 
 from .helpers import send_system_intent
 
@@ -220,59 +218,6 @@ class DhwZone(ZoneSchedule):  # CS92A
         self._dhw_sensor: DhwSensor | None = None
         self._dhw_valve: BdrSwitch | None = None
         self._htg_valve: BdrSwitch | None = None
-
-    def _setup_discovery_cmds(self) -> None:
-        for payload in (
-            f"00{DEV_ROLE_MAP.DHW}",  # sensor
-            f"00{DEV_ROLE_MAP.HTG}",  # hotwater_valve
-            f"01{DEV_ROLE_MAP.HTG}",  # heating_valve
-        ):
-            from ramses_rf.devices.helpers import build_rq_cmd
-
-            self.discovery.add_cmd(
-                build_rq_cmd(self.ctl.id, Code._000C, payload),
-                60 * 60 * 24,
-            )
-
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_DHW_PARAMS,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            60 * 60 * 6,
-        )
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_DHW_MODE,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            60 * 5,
-        )
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_DHW_TEMP,
-                        data={"dhw_idx": 0},
-                    )
-                )
-            ),
-            60 * 15,
-        )
 
     def _update_schema(self, **schema: Any) -> None:
         """Update a DHW zone with new schema attrs.
@@ -579,105 +524,6 @@ class Zone(ZoneSchedule):
             ) as err:
                 _TRACE.warning(f"SUPPRESSED in Zone._update_schema (actuator): {err}")
 
-    def _setup_discovery_cmds(self) -> None:
-        # super()._setup_discovery_cmds()
-
-        for dev_role in (self._ROLE_ACTUATORS, DEV_ROLE_MAP.SEN):
-            from ramses_rf.devices.helpers import build_rq_cmd
-
-            cmd = build_rq_cmd(self.ctl.id, Code._000C, f"{self.idx}{dev_role}")
-            self.discovery.add_cmd(cmd, 60 * 60 * 24, delay=0.5)
-
-        # td should be > long sync_cycle duration (> 1hr)
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_ZONE_CONFIG,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 60 * 6,
-            delay=30,
-        )
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_ZONE_NAME,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 60 * 6,
-            delay=30,
-        )
-
-        # 2349 instead of 2309
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_MODE,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 5,
-            delay=30,
-        )
-        # td should be > sync_cycle duration,?delay in hope of
-        # picking up cycle
-        self.discovery.add_cmd(  # 30C9
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_ZONE_TEMP,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 5,
-            delay=0,
-        )
-        # longer dt as low yield (factory duration is 30 min): prefer
-        # eavesdropping
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_ZONE_WINDOW_STATE,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 15,
-            delay=60 * 5,
-        )
-
-        # Cleanup inferior headers after registering all of them
-        if [t for t in self.discovery.cmds if t[-2:] in ZON_ROLE_MAP.HEAT_ZONES] and (
-            self.discovery.cmds.pop(HeaderT(f"{self.idx}{ZON_ROLE_MAP.ACT}"), [])
-        ):
-            _LOGGER.warning("inferior header removed from discovery")
-
-        if self.discovery.cmds.get(HeaderT(f"{self.idx}{ZON_ROLE_MAP.VAL}")) and (
-            self.discovery.cmds.get(HeaderT(f"{self.idx}{ZON_ROLE_MAP.ELE}"))
-        ):
-            self.discovery.cmds.pop(HeaderT(f"{self.idx}{ZON_ROLE_MAP.ELE}"), [])
-            _LOGGER.warning("inferior header removed from discovery")
-
     @property
     def sensor(self) -> Device | None:
         return self._sensor
@@ -969,23 +815,6 @@ class MixZone(Zone):  # HM80  # TODO: 0008/0009/3150
 
     _SLUG: str | None = ZoneRole.MIX
     _ROLE_ACTUATORS: str = DEV_ROLE_MAP.MIX
-
-    def _setup_discovery_cmds(self) -> None:
-        super()._setup_discovery_cmds()
-
-        self.discovery.add_cmd(
-            (
-                build_dto(
-                    Intent(
-                        src=HGI_DEV_ADDR,
-                        dst=Address(self.ctl.id),
-                        action=Action.GET_MIX_VALVE_PARAMS,
-                        data={"zone_idx": self.idx},
-                    )
-                )
-            ),
-            60 * 60 * 6,
-        )
 
     async def mix_config(self) -> PayDictT._1030:
         return cast(PayDictT._1030, await self.entity_state.get_value(Code._1030))
