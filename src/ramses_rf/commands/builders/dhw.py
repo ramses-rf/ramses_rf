@@ -40,9 +40,15 @@ def build_get_dhw_params(intent: Command) -> CommandDTO:
 def build_set_dhw_params(intent: Command) -> CommandDTO:
     """Translate a SET_DHW_PARAMS intent into a CommandDTO."""
     dhw_idx = _check_idx(intent.get(SZ_DHW_IDX, 0))
-    setpoint = intent.get("setpoint", 50.0)
-    overrun = intent.get("overrun", 5)
-    differential = intent.get("differential", 1.0)
+    setpoint = intent.get("setpoint")
+    if setpoint is None:
+        setpoint = 50.0
+    overrun = intent.get("overrun")
+    if overrun is None:
+        overrun = 5
+    differential = intent.get("differential")
+    if differential is None:
+        differential = 1.0
 
     if not (30.0 <= setpoint <= 85.0):
         raise ValueError(f"Out of range, setpoint: {setpoint}")
