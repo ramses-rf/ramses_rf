@@ -1082,6 +1082,8 @@ def zone_factory(
 
         # NOTE: for now, zones are always promoted after instantiation
 
+        # a specified zone class always takes precedence (even if it
+        # is wrong)...
         if (sz_cls := schema.get(SZ_CLASS)) and (
             cls := ZONE_CLASS_BY_SLUG.get(str(sz_cls))
         ):

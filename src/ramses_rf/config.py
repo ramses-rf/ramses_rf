@@ -14,10 +14,18 @@ from ramses_tx.config import EngineConfig
 from ramses_tx.const import DEV_TYPE_MAP, DEVICE_ID_REGEX, DevType
 from ramses_tx.schemas import SZ_BLOCK_LIST, SZ_KNOWN_LIST
 
+from .const import SZ_IS_BATTERY, SZ_POLLING_INTERVAL
+
 _T = TypeVar("_T")
 
 
 def ConvertNullToDict() -> Callable[[_T | None], _T | dict[Never, Never]]:
+    """Return a validator that converts a null node value to an empty dictionary.
+
+    :returns: A callable validator function for voluptuous schemas.
+    :rtype: Callable[[_T | None], _T | dict[Never, Never]]
+    """
+
     def convert_null_to_dict(node_value: _T | None) -> _T | dict[Never, Never]:
         if node_value is None:
             return {}
@@ -44,13 +52,23 @@ SCH_DEVICE_ID_UFC = vol.Match(DEVICE_ID_REGEX.UFC)
 _SCH_TRAITS_DOMAINS = ("heat", "hvac")
 _SCH_TRAITS_HVAC_SCHEMES = ("itho", "nuaire", "orcon", "vasco", "climarad")
 
+SCH_POLLING_INTERVAL = vol.Schema({str: vol.All(int, vol.Range(min=0))})
+
 
 def sch_global_traits_dict_factory(
     heat_traits: dict[vol.Optional, vol.Any] | None = None,
     hvac_traits: dict[vol.Optional, vol.Any] | None = None,
 ) -> tuple[dict[vol.Optional, vol.Any], vol.Any]:
-    """Return a global traits dict with a configurable extra traits."""
+    """Return a global traits dict with configurable extra traits.
 
+    :param heat_traits: Optional extra traits dict for the heat domain.
+    :type heat_traits: dict[vol.Optional, vol.Any] | None
+    :param hvac_traits: Optional extra traits dict for the hvac domain.
+    :type hvac_traits: dict[vol.Optional, vol.Any] | None
+    :returns: A tuple containing the global traits schema dictionary and
+        schema validator.
+    :rtype: tuple[dict[vol.Optional, vol.Any], vol.Any]
+    """
     heat_traits = heat_traits or {}
     hvac_traits = hvac_traits or {}
 
@@ -58,6 +76,10 @@ def sch_global_traits_dict_factory(
         {
             vol.Optional(SZ_ALIAS, default=None): vol.Any(None, str),
             vol.Optional(SZ_FAKED, default=None): vol.Any(None, bool),
+            vol.Optional(SZ_POLLING_INTERVAL, default=None): vol.Any(
+                None, SCH_POLLING_INTERVAL
+            ),
+            vol.Optional(SZ_IS_BATTERY, default=False): vol.Any(None, bool),
             vol.Optional(vol.Remove("_note")): str,
         },
         extra=vol.PREVENT_EXTRA,
@@ -137,6 +159,8 @@ _TRAIT_KEY_MAP: Final[dict[str, str]] = {
     "_alias": SZ_ALIAS,
     "_faked": SZ_FAKED,
     "_class": SZ_CLASS,
+    "_polling_interval": SZ_POLLING_INTERVAL,
+    "_is_battery": SZ_IS_BATTERY,
 }
 
 
@@ -240,8 +264,8 @@ def strip_and_map_schema(schema: dict[str, Any]) -> dict[str, Any]:
 class GatewayConfig:
     """Configuration parameters for the Ramses Gateway.
 
-    :param disable_discovery: Disable device discovery, defaults to False.
-    :type disable_discovery: bool
+    :param disable_polling: Disable device polling, defaults to False.
+    :type disable_polling: bool
     :param enable_eavesdrop: Enable eavesdropping mode, defaults to False.
     :type enable_eavesdrop: bool
     :param reduce_processing: Level of reduced processing, defaults to 0.
@@ -272,7 +296,8 @@ class GatewayConfig:
     :type hgi_id: str | None
     """
 
-    disable_discovery: bool = False
+    disable_polling: bool = False
+    disable_discovery: bool | None = None
     enable_eavesdrop: bool = False
     reduce_processing: int = 0
     max_zones: int = 12
@@ -293,8 +318,23 @@ class GatewayConfig:
 
     hgi_id: str | None = None
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Keep disable_polling and disable_discovery synchronized natively."""
+        super().__setattr__(name, value)
+        if value is not None:
+            if name == "disable_discovery":
+                super().__setattr__("disable_polling", value)
+            elif name == "disable_polling":
+                super().__setattr__("disable_discovery", value)
+
     def __post_init__(self) -> None:
         """Initialize computed properties natively on startup."""
+        if self.disable_discovery is None:
+            self.disable_discovery = self.disable_polling
+        elif self.disable_discovery:
+            self.disable_polling = True
+        elif self.disable_polling:
+            self.disable_discovery = True
         if not self.hgi_id:
             explicit_hgis = [
                 k
@@ -314,5 +354,9 @@ class GatewayConfig:
 
     @property
     def mac_filter_list(self) -> list[str]:
-        """Return a flattened list of MAC addresses from the known_list."""
+        """Return a flattened list of MAC addresses from the known_list.
+
+        :returns: A list of MAC address strings from known_list.
+        :rtype: list[str]
+        """
         return list(self.known_list.keys())
