@@ -304,16 +304,29 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
         """Return True if the UFH pump relay is active.
 
         Primary source: 3EF0 byte 3 flags (0x10=cooling, 0x02=heating).
-        Fallback: zone_demand > 0 from 3150 packets (always available).
+        Fallback: zone_demand > 10% from 3150 packets (always available).
         The HCC100 only broadcasts 3EF0 when 2D49 binding is active.
         """
         from_3ef0 = await self.entity_state.get_value(Code._3EF0, key="pump_active")
         if from_3ef0 is not None:
+            _LOGGER.debug(
+                "%s pump_active: 3EF0 returned %s", self.id, from_3ef0
+            )
             return cast("bool | None", from_3ef0)
-        # Fallback: infer from zone demand (3150 packets)
+        # DEBUG: trace why 3EF0 returned None
+        msgs_dict = await self.entity_state.get_message_log_flat()
+        has_3ef0_in_flat = Code._3EF0 in msgs_dict
+        _LOGGER.warning(
+            "%s pump_active: 3EF0 returned None! "
+            "3EF0 in message_log_flat=%s, _current_state keys=%s",
+            self.id,
+            has_3ef0_in_flat,
+            [str(h.code) for h in self.entity_state._current_state.keys()],
+        )
+        # Fallback: infer from zone demand (3150 packets) — threshold 10%
         demand = await self.zone_demand()
         if demand is not None:
-            return demand > 0
+            return demand > 10
         return None
 
     async def mode(self) -> str | None:  # 2D49
