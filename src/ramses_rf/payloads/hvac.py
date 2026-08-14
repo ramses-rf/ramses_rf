@@ -4,6 +4,7 @@ This module contains strongly-typed dataclass representations for HVAC,
 ventilation, air quality, and fan status packet payloads.
 """
 
+import logging
 import struct
 from dataclasses import dataclass
 from datetime import timedelta as td
@@ -3467,55 +3468,62 @@ class DesiredBoilerSetpointPayload(PayloadBase):
 @register_payload("2D49")
 @dataclass(frozen=True, slots=True)
 class CoolingStatePayload(PayloadBase):
-    """Cooling relay state payload (Opcode 2D49).
+    """HCC100 cooling-demand payload (Opcode 2D49).
 
-    2-byte Cooling State binary layout:
+    3-byte HCC100 Cooling Demand binary layout:
       Offset  Format  Len  Description                    Sample Hex
       --------------------------------------------------------------
-      +0       B      1B   Domain / Zone Index (uint8)  : 00
-      +1       B      1B   Cooling Active (0=No, 1=Yes) : 01
+      +0       B      1B   Zone Index                    : 1E
+      +1       B      1B   Cooling Demand (00/C8)        : C8
+      +2       B      1B   Reserved                      : 00
       --------------------------------------------------------------
-      Field-spaced hex : 00 01
-      Payload hex      : 0001
+      Field-spaced hex : 1E C8 00
+      Payload hex      : 1EC800
 
-    :param domain_or_zone_idx: Domain or zone index byte.
-    :type domain_or_zone_idx: int
-    :param state: Cooling state boolean.
-    :type state: bool
+    The HCC100 encodes active cooling as ``C8``. Unknown demand values are
+    conservatively treated as inactive and logged for diagnostics.
     """
 
-    _STRUCT_FMT: ClassVar[str] = ">BB"
+    _STRUCT_FMT: ClassVar[str] = ">BBB"
 
     domain_or_zone_idx: int
     state: bool
+    reserved: int
 
     @classmethod
     def from_bytes(cls, raw_data: bytes) -> Self:
-        """Unpack cooling state binary payload.
-
-        :param raw_data: Raw binary byte string.
-        :type raw_data: bytes
-        :returns: Unpacked CoolingStatePayload instance.
-        :rtype: Self
-        :raises ValueError: If raw_data length is less than 2 bytes.
-        """
-        if len(raw_data) < 2:
+        """Unpack an exact three-byte HCC100 cooling-demand payload."""
+        if len(raw_data) != 3:
             raise ValueError(f"Invalid payload length for 2D49: {len(raw_data)}")
-        idx, st_raw = struct.unpack_from(cls._STRUCT_FMT, raw_data, 0)
+
+        idx, demand_raw, reserved = struct.unpack(cls._STRUCT_FMT, raw_data)
+        if demand_raw not in (0x00, 0xC8):
+            _LOGGER.warning(
+                "Unknown 2D49 cooling demand byte: %02X (payload=%s)",
+                demand_raw,
+                raw_data.hex().upper(),
+            )
         return cls(
             domain_or_zone_idx=idx,
-            state=bool(st_raw),
+            state=demand_raw == 0xC8,
+            reserved=reserved,
         )
 
     def to_bytes(self) -> bytes:
-        """Pack cooling state data into binary payload.
-
-        :returns: Packed binary payload bytes.
-        :rtype: bytes
-        """
+        """Pack the HCC100 cooling-demand payload."""
         return struct.pack(
-            self._STRUCT_FMT, self.domain_or_zone_idx, 0xC8 if self.state else 0x00
+            self._STRUCT_FMT,
+            self.domain_or_zone_idx,
+            0xC8 if self.state else 0x00,
+            self.reserved,
         )
+
+    def to_dict(self, msg: Any = None) -> dict[str, Any]:
+        """Convert the HCC100 payload to the established packet dictionary."""
+        return {
+            "zone_idx": f"{self.domain_or_zone_idx:02X}",
+            "cooling_demand": self.state,
+        }
 
 
 # ----------------------------------------------------------------------

@@ -2973,6 +2973,7 @@ class ActuatorStatePayload(PayloadBase):
     flags_6: int | None = None
     ch_setpoint: int | None = None
     max_rel_modulation: float | None = None
+    _raw_length: int = 0
 
     @classmethod
     def from_bytes(cls, raw_data: bytes) -> Self:
@@ -3006,6 +3007,7 @@ class ActuatorStatePayload(PayloadBase):
             flags_6=f6,
             ch_setpoint=ch_setpoint,
             max_rel_modulation=max_rel_mod,
+            _raw_length=len(raw_data),
         )
 
     def to_bytes(self) -> bytes:
@@ -3036,11 +3038,11 @@ class ActuatorStatePayload(PayloadBase):
             )
         return res
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert actuator state payload to legacy dictionary layout.
+    def to_dict(self, msg: Any = None) -> dict[str, Any]:
+        """Convert actuator state to the legacy dictionary layout.
 
-        :returns: Decoded actuator state dictionary.
-        :rtype: dict[str, Any]
+        Nine-byte UFC packets expose the HCC100 relay state from byte three;
+        other sources and packet lengths retain the standard fields only.
         """
         res: dict[str, Any] = {
             "modulation_level": self.modulation_level,
@@ -3061,6 +3063,22 @@ class ActuatorStatePayload(PayloadBase):
             res["ch_setpoint"] = self.ch_setpoint
         if self.max_rel_modulation is not None:
             res["max_rel_modulation"] = self.max_rel_modulation
+
+        if (
+            self._raw_length == 9
+            and self.flags_3 is not None
+            and getattr(getattr(msg, "src", None), "type", None) == "02"
+        ):
+            relay_byte = self.flags_3
+            res["pump_relay_state"] = (
+                "cooling"
+                if relay_byte & 0x10
+                else "heating"
+                if relay_byte & 0x02
+                else "off"
+            )
+            if relay_byte & ~0x12 or relay_byte & 0x12 == 0x12:
+                res["relay_byte_raw"] = relay_byte
         return res
 
 
