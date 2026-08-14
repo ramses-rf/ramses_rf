@@ -828,33 +828,30 @@ def parser_2389(payload: str, msg: Message) -> dict[str, Any]:
     }
 
 
-# _state (of cooling?), from BDR91T, hometronics CTL
+# cooling demand, from BDR91T, Hometronics CTL, and HCC100 UFH controller
 @register_parser("2D49")
 def parser_2d49(payload: str, msg: Message) -> PayDictT._2D49:
-    """Parse the 2d49 packet.
+    """Parse a 2D49 cooling-demand packet.
 
-    :param payload: The raw hex payload
-    :type payload: str
-    :param msg: The message object containing context
-    :type msg: Message
-    :return: A dictionary containing the boolean state
-    :rtype: PayDictT._2D49
-    :raises AssertionError: If the payload state bytes are unrecognized.
+    The three-byte payload contains a zone index, a cooling-demand byte, and a
+    reserved byte. ``C8`` is the observed active-cooling value; ``00`` means
+    no cooling demand. Unknown demand bytes are conservatively treated as no
+    cooling demand and logged for diagnostics.
+
+    :raises exc.PacketPayloadInvalid: If the payload is not exactly three bytes.
     """
-    _LOGGER.warning(
-        "RAMSES 2D49 %s from %s to %s: payload=%s [%s]",
-        msg.verb,
-        msg.src.id,
-        msg.dst.id,
-        payload,
-        dt.now().isoformat(timespec='seconds'),
-    )
+    if len(payload) != 6:
+        raise exc.PacketPayloadInvalid(
+            f"Invalid 2D49 payload length: expected 6 hex characters, got {len(payload)}"
+        )
 
-    assert payload[2:] in ("0000", "00FF", "C800", "C8FF"), _INFORM_DEV_MSG
+    demand = payload[2:4]
+    if demand not in ("00", "C8"):
+        _LOGGER.warning("Unknown 2D49 cooling demand byte: %s (payload=%s)", demand, payload)
 
     return {
-        "zone_idx": int(payload[0:2], 16),
-        "mode": "cool" if payload[2:4] == "C8" else "heat",
+        SZ_ZONE_IDX: payload[:2],
+        "cooling_demand": demand == "C8",
     }
 
 
@@ -1019,6 +1016,23 @@ def parser_3b00(payload: str, msg: Message) -> PayDictT._3B00:
 
 
 # actuator_state
+def _3ef0_ufc(payload: str) -> dict[str, str | int]:
+    """Parse the UFC-specific pump-relay flags of a nine-byte 3EF0 payload."""
+    relay_byte = int(payload[6:8], 16)
+
+    if relay_byte & 0x10:
+        pump_relay_state = "cooling"
+    elif relay_byte & 0x02:
+        pump_relay_state = "heating"
+    else:
+        pump_relay_state = "off"
+
+    result: dict[str, str | int] = {"pump_relay_state": pump_relay_state}
+    if relay_byte & ~0x12 or (relay_byte & 0x12) == 0x12:
+        result["relay_byte_raw"] = relay_byte
+    return result
+
+
 @register_parser("3EF0")
 def parser_3ef0(payload: str, msg: Message) -> PayDictT._3EF0 | PayDictT._JASPER:
     """Parse the 3ef0 (actuator_state) packet.
@@ -1050,21 +1064,8 @@ def parser_3ef0(payload: str, msg: Message) -> PayDictT._3EF0 | PayDictT._JASPER
             "blob": payload[8:],
         }
 
-    if msg.src.type == DEV_TYPE_MAP.UFC:  # HCC100 UFH controller
-        # HCC100 sends 9-byte 3EF0 with a non-standard format.
-        # Known payloads:
-        #   760000100000000000 — pump ON in cooling (byte 3 = 0x10)
-        #   760000020000000000 — pump ON in heating/post-rebind (byte 3 = 0x02)
-        #   760000000000000000 — pump OFF (byte 3 = 0x00)
-        # Byte 3 flags: bit 4 (0x10) = cooling pump, bit 1 (0x02) = heating pump
-        # pump_active = True if ANY pump-related bit is set (0x12 mask)
-        byte3 = int(payload[6:8], 16)
-        _LOGGER.warning(
-            f"{msg!r} < {_INFORM_DEV_MSG} (UFC 3EF0 byte3=0x{byte3:02X})"
-        )
-        return {  # type: ignore[return-value]
-            "pump_active": bool(byte3 & 0x12),
-        }
+    if msg.src.type == "02" and len(payload) == 18:
+        return _3ef0_ufc(payload)  # type: ignore[return-value]
 
     # TODO: These two should be picked up by the regex
     assert msg.len in (3, 6, 9), f"Invalid payload length: {msg.len}"

@@ -639,3 +639,36 @@ async def test_controller_discovers_system_mode(mock_gwy: MagicMock) -> None:
         "Diagnosis Failed: Controller did not queue a 2E04 (System Mode) "
         "packet during discovery initialization."
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("cooling_demand", "expected_mode"),
+    [
+        (True, "cool"),
+        (False, None),
+        (None, None),
+    ],
+    ids=["active_2d49_demand", "inactive_2d49_demand", "missing_2d49_message"],
+)
+async def test_ufh_controller_mode_from_2d49_cooling_demand(
+    mock_gwy: MagicMock,
+    cooling_demand: bool | None,
+    expected_mode: str | None,
+) -> None:
+    """Map active 2D49 cooling demand to cool and all other states to None.
+
+    Validates: Requirements 1.6
+    """
+    from ramses_rf.devices import UfhController
+
+    address = MagicMock(spec=Address)
+    address.id = "02:111111"
+    address.type = "02"
+    controller = UfhController(mock_gwy, address)
+    controller.entity_state.get_value = AsyncMock(return_value=cooling_demand)
+
+    assert await controller.mode() == expected_mode
+    controller.entity_state.get_value.assert_awaited_once_with(
+        Code._2D49, key="cooling_demand"
+    )

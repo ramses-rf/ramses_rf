@@ -525,7 +525,7 @@ CODES_SCHEMA: dict[Code, CodeSchemaEntry] = {  # rf_unknown
     },
     Code._30C9: {  # temperature
         "name": "temperature",
-        " I": r"^(0[0-9A-F][0-9A-F]{4})+$",
+        " I": r"^([0-9A-F]{2}[0-9A-F]{4})+$",
         "RQ": r"^0[0-9A-F](00)?$",  # TODO: officially: r"^0[0-9A-F]$"
         "RP": r"^0[0-9A-F][0-9A-F]{4}$",  # Null: r"^0[0-9A-F]7FFF$"
         "lifespan": td(hours=1),
@@ -554,7 +554,7 @@ CODES_SCHEMA: dict[Code, CodeSchemaEntry] = {  # rf_unknown
     },
     Code._3150: {  # zone_demand, also fans with preheat
         "name": "zone_demand",
-        " I": r"^((0[0-9A-F])[0-9A-F]{2}|FC[0-9A-F]{2})+$",
+        " I": r"^([0-9A-F]{2}[0-9A-F]{2})+$",
         "lifespan": td(minutes=20),
     },
     Code._31D9: {  # fan_state
@@ -682,7 +682,7 @@ CODES_WITH_ARRAYS: dict[Code, list[int | tuple[str, ...]]] = {  # 000C/1FC9 are 
     Code._0009: [3, ("01", "12", "22")],
     Code._000A: [6, ("01", "12", "22")],  # single element I after a W
     Code._2309: [3, ("01", "12", "22")],
-    Code._30C9: [3, ("01", "12", "22")],
+    Code._30C9: [3, ("01", "02", "12", "22")],
     Code._2249: [7, ("23",)],
     Code._22C9: [6, ("02",)],
     Code._3150: [2, ("02",)],

@@ -517,7 +517,8 @@ class _2349(TypedDict):
 
 
 class _2d49(TypedDict):
-    state: bool | None
+    zone_idx: str
+    cooling_demand: bool
 
 
 class _2e04(TypedDict):
