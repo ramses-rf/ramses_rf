@@ -330,8 +330,11 @@ class UfhController(Parent, DeviceHeat):  # UFC (02):
         return None
 
     async def mode(self) -> str | None:  # 2D49
-        """Return 'cool', 'heat', or None from 2D49 changeover state."""
-        return await self.entity_state.get_value(Code._2D49, key="mode")
+        """Return 'cool' for active 2D49 cooling demand, otherwise None."""
+        cooling_demand = await self.entity_state.get_value(
+            Code._2D49, key="cooling_demand"
+        )
+        return "cool" if cooling_demand is True else None
 
     async def ufc_mode(self) -> dict | None:  # 22D0
         """Return the UFC heat/cool mode flags (from 22D0).
