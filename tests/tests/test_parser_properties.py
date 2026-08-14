@@ -18,7 +18,7 @@ from ramses_tx import Packet
 from ramses_tx.exceptions import PacketPayloadInvalid
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 1: 2D49 Valid Payload Parsing
+# Feature: ramses-rf-hcc100-cooling, Property 1: 2D49 Valid Payload Parsing
 # Validates: Requirements 1.1, 1.2, 1.3, 1.4
 @given(
     zone_idx=st.integers(min_value=0x00, max_value=0xFF),
@@ -42,7 +42,7 @@ def test_2d49_valid_payload_parsing(
     assert result["cooling_demand"] is (demand == 0xC8)
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 2: 2D49 Invalid Length Rejection
+# Feature: ramses-rf-hcc100-cooling, Property 2: 2D49 Invalid Length Rejection
 # Validates: Requirements 1.5
 @given(
     encoded_payload=st.one_of(
@@ -60,7 +60,7 @@ def test_2d49_invalid_length_rejection(encoded_payload: bytes) -> None:
         parser_2d49(payload, cast(Message, None))
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 4: UFC 3EF0 Pump Relay Bit-Mapping
+# Feature: ramses-rf-hcc100-cooling, Property 4: UFC 3EF0 Pump Relay Bit-Mapping
 # Validates: Requirements 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
 @given(relay_byte=st.integers(min_value=0x00, max_value=0xFF))
 @settings(max_examples=200)
@@ -93,7 +93,7 @@ def test_3ef0_ufc_pump_relay_bit_mapping(relay_byte: int) -> None:
         assert "relay_byte_raw" not in result
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 5: Non-UFC 3EF0 Routing Guard
+# Feature: ramses-rf-hcc100-cooling, Property 5: Non-UFC 3EF0 Routing Guard
 # Validates: Requirements 4.7, 5.3
 @given(
     payload_length=st.sampled_from((3, 6, 9)),
@@ -142,7 +142,7 @@ def test_3ef0_non_ufc_routing_guard(
         assert {"_flags_6", "ch_enabled", "ch_setpoint", "max_rel_modulation"} <= result.keys()
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 6: Mixed Zone Index Array Parsing
+# Feature: ramses-rf-hcc100-cooling, Property 6: Mixed Zone Index Array Parsing
 # Validates: Requirements 5.4
 @given(
     standard_elements=st.lists(

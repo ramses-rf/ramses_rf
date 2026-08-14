@@ -125,7 +125,7 @@ RQ_IDX_UNKNOWN = [
 ]
 
 
-# Feature: ramses-rf-vaillant-cooling, Property 3: 30C9/3150 Regex Full Zone Index Range
+# Feature: ramses-rf-hcc100-cooling, Property 3: 30C9/3150 Regex Full Zone Index Range
 # Validates: Requirements 2.1, 2.4, 3.1, 3.3
 @given(
     temperature_elements=st.lists(
@@ -166,8 +166,8 @@ def test_30c9_3150_regex_full_zone_index_range(
 
 
 # Validates: Requirements 2.2, 3.2
-def test_vaillant_extended_zone_index_examples() -> None:
-    """The observed Vaillant zone indices match their respective array schemas."""
+def test_hcc100_extended_zone_index_examples() -> None:
+    """The observed HCC100 zone indices match their respective array schemas."""
 
     temperature_schema = str(CODES_SCHEMA[Code._30C9][" I"])
     demand_schema = str(CODES_SCHEMA[Code._3150][" I"])
@@ -191,7 +191,7 @@ def test_standard_zone_array_examples_remain_valid() -> None:
 
 # Validates: Requirements 2.3, 3.4
 def test_ufc_is_registered_as_an_array_source() -> None:
-    """UFC devices can dispatch both Vaillant zone packet formats as arrays."""
+    """UFC devices can dispatch both HCC100 zone packet formats as arrays."""
 
     assert "02" in CODES_WITH_ARRAYS[Code._30C9][1]
     assert "02" in CODES_WITH_ARRAYS[Code._3150][1]
