@@ -177,8 +177,17 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
         """Initialize the BDR switch device."""
         super().__init__(*args, traits=traits, **kwargs)
 
-    async def active(self) -> bool | None:  # 3EF0, 3EF1
-        """Return the actuator's current state."""
+    @property
+    def active(self) -> bool | None:  # 3EF0, 3EF1
+        """Return the actuator's current state.
+
+        This is a synchronous property (not async) because it merely reads
+        ``act_state.modulation_level`` which is updated synchronously by the
+        ingestion pipeline.  Declaring it ``async`` would cause ramses_cc's
+        ``resolve_async_attr`` to apply a 30-second cooldown, preventing the
+        binary sensor from reflecting relay state changes in real-time
+        (issue 1042).
+        """
         state = getattr(self, "act_state", None)
         if state and state.modulation_level is not None:
             return bool(state.modulation_level)
@@ -234,7 +243,7 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
         base_status = await super().status()
         return {
             **base_status,
-            self.ACTIVE: await self.active(),
+            self.ACTIVE: self.active,
         }
 
 
