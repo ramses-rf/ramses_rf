@@ -244,3 +244,28 @@ class TestComputeQuality:
         tracker6.record("04:123456", str(RSSI_WEAK - 1), now)
         q6 = compute_quality("04:123456", [tracker6], now=now)
         assert q6.rssi_quality == "very_weak"
+
+    def test_staleness_battery_device_not_stale(self) -> None:
+        """Battery devices use longer staleness thresholds (issue 1062).
+
+        Evohome battery devices (TRVs, sensors) transmit every 10-30
+        minutes to conserve battery.  A 5-minute default threshold
+        falsely flags them as stale.  The device's heartbeat_timeout
+        (12h for TRV/sensor, 24h for DHW) should be used instead.
+        """
+        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        # 10 minutes since last tx — would be stale with 300s default
+        recent = now - td(minutes=10)
+
+        tracker = RssiTracker()
+        tracker.record("04:123456", "-70", recent)
+
+        # Default threshold (300s = 5min) → stale
+        q_default = compute_quality("04:123456", [tracker], now=now)
+        assert q_default.is_stale is True
+
+        # Battery sensor threshold (12h = 43200s) → not stale
+        q_battery = compute_quality(
+            "04:123456", [tracker], now=now, stale_warn_seconds=43200
+        )
+        assert q_battery.is_stale is False

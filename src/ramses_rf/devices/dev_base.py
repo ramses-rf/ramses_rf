@@ -169,6 +169,11 @@ class DeviceBase(Entity):
         ``None`` if the gateway has no RSSI tracker (e.g. during
         tests without a real gateway).
 
+        The staleness threshold is derived from the device's
+        ``heartbeat_timeout``, which is device-class-aware (e.g. 12h
+        for TRVs/sensors, 24h for BDR/DHW).  This prevents battery
+        devices from being falsely flagged as stale (issue 1062).
+
         :return: Communication quality snapshot, or ``None``.
         :rtype: CommunicationQuality | None
         """
@@ -178,7 +183,11 @@ class DeviceBase(Entity):
         tracker = getattr(gwy, "_rssi_tracker", None)
         if tracker is None:
             return None
-        return compute_quality(str(self.id), [tracker])
+        return compute_quality(
+            str(self.id),
+            [tracker],
+            stale_warn_seconds=int(self.heartbeat_timeout.total_seconds()),
+        )
 
     def _update_traits(self, traits: DeviceTraits) -> None:
         """Update a device with new schema attributes.
