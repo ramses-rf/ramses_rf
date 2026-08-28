@@ -185,6 +185,28 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         self._schema: dict[str, Any] = SCH_GLOBAL_SCHEMAS(
             strip_traits(schema_in)
         )
+        # Preserve _name in zone entries for issue 919 fix.
+        # strip_traits removes all _ keys recursively, but Zone._update_schema
+        # needs _name to hydrate zone_state.name (so zone names survive
+        # MessageStore pruning after 24h).  SCH_GLOBAL_SCHEMAS doesn't accept
+        # _ keys, so we re-add _name from the original schema after validation.
+        for ctl_id, ctl_schema in self._schema.items():
+            if not (
+                isinstance(ctl_schema, dict)
+                and isinstance(ctl_schema.get("zones"), dict)
+            ):
+                continue
+            orig_ctl = schema_in.get(ctl_id, {})
+            if not isinstance(orig_ctl, dict):
+                continue
+            orig_zones = orig_ctl.get("zones", {})
+            if not isinstance(orig_zones, dict):
+                continue
+            for z_idx, z_schema in ctl_schema["zones"].items():
+                if isinstance(z_schema, dict) and z_idx in orig_zones:
+                    orig_name = orig_zones[z_idx].get("_name")  # type: ignore[union-attr]
+                    if orig_name is not None:
+                        z_schema["_name"] = orig_name
 
         self._tcs: Evohome | None = None
         self._eavesdrop_engine: Any = None
