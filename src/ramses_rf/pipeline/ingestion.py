@@ -240,36 +240,22 @@ class StateProjector:
         if msg.code == Code._2411:
             _route_2411_to_fan(self._gateway, msg)
 
-        payloads = (
+        # Normalise payload to a list of dicts.  Array payloads (e.g. 000A,
+        # 22C9) arrive as list[dict] after to_dict() conversion on the
+        # base.py:Message.payload property; single payloads arrive as dict.
+        # The legacy dict-of-dicts unfolding (for {'00': {...}, '01': {...}}
+        # structures) has been removed — no PayloadBase.to_dict() method
+        # produces nested dicts after the Phase 6 dataclass migration
+        # (issue 1039).  All array payloads now arrive as list[dict] with
+        # the index key (zone_index, ufh_index, etc.) embedded in each
+        # element by the dataclass's to_dict().
+        payloads: list[dict[str, Any]] = []
+        raw_payloads = (
             msg.payload if isinstance(msg.payload, list) else [msg.payload]
         )
-
-        # Unfold dict-of-dicts arrays (e.g. {'00': {'temp_low': 10}})
-        unfolded_payloads: list[dict[str, Any]] = []
-        for payload in payloads:
-            if not isinstance(payload, dict):
-                continue
-
-            if (
-                SZ_UFH_INDEX not in payload
-                and "ufh_index" not in payload
-                and SZ_ZONE_INDEX not in payload
-                and "zone_index" not in payload
-                and "ufx_index" not in payload
-                and SZ_DOMAIN_INDEX not in payload
-                and "domain_id" not in payload
-                and all(
-                    isinstance(dict_val, dict) for dict_val in payload.values()
-                )
-            ):
-                for key, value in payload.items():
-                    if isinstance(value, dict):
-                        # Inject the outer index key so it isn't lost during unfold
-                        value_copy = dict(value)
-                        value_copy[SZ_UFH_INDEX] = key
-                        unfolded_payloads.append(value_copy)
-            else:
-                unfolded_payloads.append(payload)
+        for payload in raw_payloads:
+            if isinstance(payload, dict):
+                payloads.append(payload)
 
         registry = getattr(self._gateway, "device_registry", None)
         if not registry:
@@ -278,7 +264,7 @@ class StateProjector:
         systems = getattr(registry, "systems", [])
         system_by_id = {s.id: s for s in systems}
 
-        for payload in unfolded_payloads:
+        for payload in payloads:
             # Hexagonal Boundary Enforcement: Route telemetry to Source
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev:
