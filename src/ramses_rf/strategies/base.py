@@ -108,8 +108,31 @@ class HvacStrategyBase:
     #: Max mode byte — overridden by subclasses
     _mode_max: str | None = None
 
-    #: Aliases (name → canonical name) — overridden by subclasses
+    #: Aliases (alias → canonical name).  Subclasses override with
+    #: their own list, containing only canonical names that exist in
+    #: their ``_mode_map``.  ``fan_mode_to_hex()`` resolves aliases
+    #: before looking up the hex code, so aliases are always accepted
+    #: regardless of UI language.
     _aliases: dict[str, str] = {}
+
+    #: Dutch translations for common mode names.  Subclasses use this
+    #: as a source to build their own ``_aliases`` by picking only the
+    #: entries whose canonical name exists in their ``_mode_map``.
+    _DUTCH_ALIASES: dict[str, str] = {
+        "laag": "low",
+        "hoog": "high",
+        "gemiddeld": "medium",
+        "uit": "off",
+        "afwezig": "away",
+        "normaal": "normal",
+        "boost": "boost",  # same in Dutch
+        "auto": "auto",  # same in Dutch
+    }
+
+    #: Language code for the aliases (e.g. ``"nl"`` for Dutch), or
+    #: ``None`` when aliases are language-neutral.  Consumers use this
+    #: to decide whether to expose aliases in a localised UI.
+    alias_language: str | None = None
 
     #: Binding codes — overridden by subclasses
     _binding_codes: tuple[Code, ...] = (Code._22F1, Code._22F3)
