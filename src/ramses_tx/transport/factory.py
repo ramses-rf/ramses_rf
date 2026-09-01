@@ -269,7 +269,7 @@ async def pooled_transport_factory(
         child_transports.append(child)
 
     # Inject the child transports into the pool.
-    pool._transports = child_transports
+    pool._transports = list(child_transports)
     pool._child_connected = [False] * len(child_transports)
     pool._child_hgi = [None] * len(child_transports)
     pool._child_transport_objs = [None] * len(child_transports)

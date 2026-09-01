@@ -158,6 +158,13 @@ class PooledTransport(TransportInterface):
     :param max_consecutive_errors: Number of consecutive errors before
         a child is marked unhealthy.  Defaults to 5.
     :type max_consecutive_errors: int
+    :param accepted_hgis: Optional set of HGI IDs that are allowed to
+        forward packets.  When set, packets from children whose HGI is
+        not in this set are dropped before dedup/forwarding.  When
+        ``None`` (default), all child packets are forwarded.  Used by
+        ramses_cc to implement schema-driven pool membership
+        (``_owner: me`` → accepted, ``_owner: not-me`` → rejected).
+    :type accepted_hgis: set[str] | None
     """
 
     def __init__(
@@ -171,6 +178,7 @@ class PooledTransport(TransportInterface):
         dedup_window: float = _DEFAULT_DEDUP_WINDOW,
         health_timeout: float = _DEFAULT_HEALTH_TIMEOUT,
         max_consecutive_errors: int = _DEFAULT_MAX_CONSECUTIVE_ERRORS,
+        accepted_hgis: set[str] | None = None,
     ) -> None:
         """Initialise the pooled transport."""
         if not transports:
@@ -179,7 +187,7 @@ class PooledTransport(TransportInterface):
             )
 
         self._protocol: RamsesProtocolT = protocol
-        self._transports: list[TransportInterface] = transports
+        self._transports: list[TransportInterface | None] = list(transports)
         self._config: TransportConfig = config
         self._loop: asyncio.AbstractEventLoop = (
             loop or asyncio.get_event_loop()
@@ -199,10 +207,24 @@ class PooledTransport(TransportInterface):
         # Round-robin outbound counter (used as fallback when no RSSI).
         self._rr_index: int = 0
 
-        # Per-child RSSI sample windows for outbound routing (PR 3).
+        # Per-child RSSI sample windows for aggregate outbound routing.
         self._child_rssi: list[deque[int]] = [
             deque(maxlen=_RSSI_SAMPLE_WINDOW) for _ in transports
         ]
+
+        # Per-child, per-device RSSI sample windows for device-aware
+        # outbound routing.  Maps child_index → device_id → deque[int].
+        # When a target device is known, _select_transport uses this to
+        # pick the HGI with the best signal for that specific device.
+        self._child_device_rssi: list[dict[str, deque[int]]] = [
+            {} for _ in transports
+        ]
+
+        # Accepted HGI set for schema-driven filtering.  When set,
+        # only packets from children whose HGI is in this set are
+        # forwarded.  Updated by ramses_cc when the user accepts/rejects
+        # an HGI in the discovery review.
+        self._accepted_hgis: set[str] | None = accepted_hgis
 
         # Per-child health tracking (PR 4).
         self._health_timeout: td = td(seconds=health_timeout)
@@ -227,6 +249,8 @@ class PooledTransport(TransportInterface):
             return
         self._closing = True
         for t in self._transports:
+            if t is None:
+                continue
             try:
                 t.close()
             except Exception as err:  # pragma: no cover - defensive
@@ -271,6 +295,12 @@ class PooledTransport(TransportInterface):
                 ],
                 "child_health": list(self._child_healthy),
                 "consecutive_errors": list(self._child_consecutive_errors),
+                "child_hgi": list(self._child_hgi),
+                "accepted_hgis": (
+                    sorted(self._accepted_hgis)
+                    if self._accepted_hgis is not None
+                    else None
+                ),
             }
         return default
 
@@ -284,8 +314,9 @@ class PooledTransport(TransportInterface):
         """Route an outbound frame to a selected child transport.
 
         Selection uses the highest rolling-average RSSI among
-        connected children, falling back to round-robin when no RSSI
-        data is available.
+        connected children for the target device (if known from the
+        frame), falling back to aggregate RSSI, then round-robin when
+        no RSSI data is available.
 
         :param frame: The raw ASCII frame to transmit.
         :type frame: str
@@ -294,7 +325,19 @@ class PooledTransport(TransportInterface):
             ``write_frame``.
         :type disable_tx_limits: bool
         """
-        child = self._select_transport()
+        # Try to extract the target device ID from the frame for
+        # per-device RSSI routing.  The frame format is:
+        #   <rssi> <verb> <code> <src> <dst> [<addr3>] <payload>
+        target_device: str | None = None
+        try:
+            parts = frame.split(" ")
+            if len(parts) >= 5:
+                # dst is parts[4] — the device we're sending to.
+                target_device = parts[4]
+        except Exception:
+            pass
+
+        child = self._select_transport(target_device)
         if child is None:
             raise exc.TransportError(
                 "No connected child transport available for send"
@@ -328,6 +371,14 @@ class PooledTransport(TransportInterface):
         if self._closing:
             return
 
+        # HGI filtering: if an accepted set is configured, drop packets
+        # from children whose HGI is not accepted (foreign/neighbour's
+        # gateway).  This is a single dict lookup — negligible overhead.
+        hgi = self._child_hgi[index]
+        if self._accepted_hgis is not None and hgi is not None:
+            if hgi not in self._accepted_hgis:
+                return
+
         # Update health tracking — any packet proves the child is alive.
         self._child_last_pkt_time[index] = dt_now()
         if self._child_consecutive_errors[index] > 0:
@@ -339,10 +390,19 @@ class PooledTransport(TransportInterface):
                 index,
             )
 
-        # Record RSSI sample for outbound routing (PR 3).
+        # Record RSSI samples for outbound routing.
         rssi_val = self._parse_rssi(packet)
         if rssi_val is not None:
+            # Aggregate per-child average.
             self._child_rssi[index].append(rssi_val)
+            # Per-device: track RSSI for the source device on this child.
+            src_id = packet._dto.addr1
+            if src_id:
+                dev_window = self._child_device_rssi[index].get(src_id)
+                if dev_window is None:
+                    dev_window = deque(maxlen=_RSSI_SAMPLE_WINDOW)
+                    self._child_device_rssi[index][src_id] = dev_window
+                dev_window.append(rssi_val)
 
         key = self._dedup_key(packet)
         now = dt_now()
@@ -366,16 +426,6 @@ class PooledTransport(TransportInterface):
         # Not a duplicate — record and forward.
         self._dedup_cache.append((now, key))
         self._pkts_forwarded += 1
-
-        # Tag the packet's source HGI for downstream tracking.
-        # Packet has __slots__, so we use the _extra dict pattern.
-        # The protocol reads SZ_ACTIVE_HGI from the transport, so we
-        # set it on the pool for get_extra_info() queries.
-        hgi = self._child_hgi[index]
-        if hgi is not None:
-            # Update the pool's "active" HGI to the source child's HGI.
-            # This is a simplification — PR 3 will track per-packet source.
-            pass
 
         try:
             self._loop.call_soon_threadsafe(
@@ -427,16 +477,27 @@ class PooledTransport(TransportInterface):
         except (ValueError, TypeError):
             return None
 
-    def _avg_rssi(self, index: int) -> float:
+    def _avg_rssi(self, index: int, device_id: str | None = None) -> float:
         """Return the rolling-average RSSI for a child.
+
+        When ``device_id`` is provided, returns the per-device average
+        (RSSI of packets from that specific device heard by this child).
+        Otherwise returns the aggregate average across all devices.
 
         Returns ``_RSSI_UNKNOWN`` (0) if no samples are available.
 
         :param index: The child index.
         :type index: int
+        :param device_id: Optional device ID for per-device RSSI.
+        :type device_id: str | None
         :returns: Average RSSI, or 0 if no data.
         :rtype: float
         """
+        if device_id is not None:
+            samples = self._child_device_rssi[index].get(device_id)
+            if not samples:
+                return float(_RSSI_UNKNOWN)
+            return sum(samples) / len(samples)
         samples = self._child_rssi[index]
         if not samples:
             return float(_RSSI_UNKNOWN)
@@ -527,29 +588,41 @@ class PooledTransport(TransportInterface):
 
     # -- Internal: outbound routing -------------------------------------
 
-    def _select_transport(self) -> TransportInterface | None:
+    def _select_transport(
+        self, target_device: str | None = None
+    ) -> TransportInterface | None:
         """Select a child transport for outbound transmission.
 
-        Uses RSSI-based selection: the connected, healthy child with
-        the highest rolling-average RSSI is preferred.  Falls back to
-        round-robin among connected, healthy children when no RSSI data
-        is available.  Returns ``None`` if no child is connected and
-        healthy.
+        Uses per-device RSSI when ``target_device`` is provided and
+        per-device samples exist for that device.  Falls back to
+        aggregate RSSI, then round-robin among connected, healthy
+        children when no RSSI data is available.  Returns ``None`` if
+        no child is connected and healthy.
         """
         # Check health timeouts before selecting.
         self._check_health()
 
-        # Only consider connected AND healthy children.
+        # Only consider connected AND healthy AND non-removed children.
         candidates = [
             i
             for i in range(len(self._transports))
-            if self._child_connected[i] and self._child_healthy[i]
+            if self._transports[i] is not None
+            and self._child_connected[i]
+            and self._child_healthy[i]
         ]
         if not candidates:
             return None
 
         # Compute average RSSI for each candidate.
-        rssi_values = {i: self._avg_rssi(i) for i in candidates}
+        # Prefer per-device RSSI when a target device is known.
+        rssi_values = {i: self._avg_rssi(i, target_device) for i in candidates}
+
+        # If per-device RSSI returned nothing for all candidates,
+        # fall back to aggregate RSSI.
+        if target_device and all(
+            v == float(_RSSI_UNKNOWN) for v in rssi_values.values()
+        ):
+            rssi_values = {i: self._avg_rssi(i) for i in candidates}
 
         # If no child has RSSI data, fall back to round-robin.
         if all(v == float(_RSSI_UNKNOWN) for v in rssi_values.values()):
@@ -580,6 +653,8 @@ class PooledTransport(TransportInterface):
         any_healthy = False
 
         for i in range(len(self._transports)):
+            if self._transports[i] is None:
+                continue
             if not self._child_connected[i]:
                 continue
 
@@ -608,7 +683,11 @@ class PooledTransport(TransportInterface):
         if not any_healthy:
             re_enabled = []
             for i in range(len(self._transports)):
-                if self._child_connected[i] and not self._child_healthy[i]:
+                if (
+                    self._transports[i] is not None
+                    and self._child_connected[i]
+                    and not self._child_healthy[i]
+                ):
                     self._child_healthy[i] = True
                     re_enabled.append(i)
             if re_enabled:
@@ -618,12 +697,144 @@ class PooledTransport(TransportInterface):
                     re_enabled,
                 )
 
+    # -- Hot-reload: add/remove children at runtime ----------------------
+
+    async def add_child(
+        self,
+        port_name: str,
+        port_config: Any = None,
+        extra: dict[str, object] | None = None,
+    ) -> int:
+        """Create a new child transport and add it to the pool.
+
+        Uses :func:`_create_single_child` from the factory to create
+        the transport (serial, MQTT, or Zigbee), then appends it to
+        the pool's internal lists.  The child's HGI ID is
+        auto-discovered when it connects.
+
+        :param port_name: Transport address (serial path, MQTT URL,
+            Zigbee URL).
+        :type port_name: str
+        :param port_config: Optional serial port configuration.
+        :type port_config: Any
+        :param extra: Optional extra configuration for the transport.
+        :type extra: dict[str, object] | None
+        :returns: The index of the new child in the pool.
+        :rtype: int
+        """
+        if self._closing:
+            raise exc.TransportError(
+                "Cannot add child to a closing PooledTransport"
+            )
+
+        from ..typing import SerPortNameT
+        from .factory import _create_single_child
+
+        index = len(self._transports)
+        proxy = _ChildProtocolProxy(self, index)
+
+        child = await _create_single_child(
+            proxy,
+            config=self._config,
+            port_name=SerPortNameT(port_name),
+            port_config=port_config,
+            extra=extra,
+            loop=self._loop,
+        )
+
+        self._transports.append(child)
+        self._child_connected.append(False)
+        self._child_hgi.append(None)
+        self._child_transport_objs.append(None)
+        self._child_rssi.append(deque(maxlen=_RSSI_SAMPLE_WINDOW))
+        self._child_device_rssi.append({})
+        self._child_last_pkt_time.append(None)
+        self._child_consecutive_errors.append(0)
+        self._child_healthy.append(True)
+        self._pkts_received.append(0)
+
+        _LOGGER.info(
+            "PooledTransport: added child %d (port=%s), "
+            "pool now has %d children",
+            index,
+            port_name,
+            len(self._transports),
+        )
+        return index
+
+    def remove_child(self, index: int) -> None:
+        """Close and remove a child from the pool.
+
+        The child transport is closed and all per-child state is
+        removed.  Indices of remaining children are **not** shifted
+        — the child is replaced with a ``None`` placeholder to keep
+        index stability for proxies that may still reference it.
+
+        :param index: The child index to remove.
+        :type index: int
+        """
+        if index < 0 or index >= len(self._transports):
+            raise ValueError(f"Invalid child index: {index}")
+
+        if self._transports[index] is None:
+            return  # already removed
+
+        try:
+            self._transports[index].close()  # type: ignore[union-attr]
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.debug("Error closing child %d: %s", index, err)
+
+        # Mark as removed but keep slot for index stability.
+        self._transports[index] = None
+        self._child_connected[index] = False
+        self._child_hgi[index] = None
+        self._child_transport_objs[index] = None
+        self._child_rssi[index].clear()
+        self._child_device_rssi[index].clear()
+        self._child_last_pkt_time[index] = None
+        self._child_consecutive_errors[index] = 0
+        self._child_healthy[index] = False
+        self._pkts_received[index] = 0
+
+        _LOGGER.info(
+            "PooledTransport: removed child %d, pool now has %d active",
+            index,
+            sum(1 for t in self._transports if t is not None),
+        )
+
+    def set_accepted_hgis(self, hgi_ids: set[str] | None) -> None:
+        """Update the set of accepted HGI IDs for packet filtering.
+
+        When set, only packets from children whose HGI is in this set
+        are forwarded to the protocol.  Packets from non-accepted HGIs
+        are dropped before dedup/forwarding (one dict lookup overhead).
+
+        Set to ``None`` to disable filtering (accept all).
+
+        Called by ramses_cc when the user accepts/rejects an HGI in
+        the discovery review, or when ``_owner`` / ``_disabled``
+        traits change in the schema.
+
+        :param hgi_ids: Set of accepted HGI IDs, or None to accept all.
+        :type hgi_ids: set[str] | None
+        """
+        self._accepted_hgis = set(hgi_ids) if hgi_ids is not None else None
+        _LOGGER.info(
+            "PooledTransport: accepted HGIs updated to %s",
+            (
+                sorted(self._accepted_hgis)
+                if self._accepted_hgis is not None
+                else "all (no filter)"
+            ),
+        )
+
     # -- Diagnostics -----------------------------------------------------
 
     def __repr__(self) -> str:
         """Return a diagnostic representation of the pool."""
+        active = sum(1 for t in self._transports if t is not None)
         return (
-            f"PooledTransport(children={len(self._transports)}, "
+            f"PooledTransport(children={active}, "
             f"connected={sum(self._child_connected)})"
         )
 

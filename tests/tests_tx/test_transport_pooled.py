@@ -1225,3 +1225,293 @@ def test_empty_transport_list_raises(
     proto = _make_mock_protocol()
     with pytest.raises(ValueError, match="at least one child transport"):
         PooledTransport(proto, [], config=TransportConfig(), loop=event_loop)
+
+
+# -- Per-device RSSI tracking ---------------------------------------------
+
+
+def test_per_device_rssi_tracked_separately(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """RSSI is tracked per-device per-child, not just per-child aggregate."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Device 01:111111 heard by child 0 with RSSI 050
+    pool._on_child_packet(0, _make_packet(src="01:111111", rssi="050"))
+    # Device 01:222222 heard by child 0 with RSSI 090
+    pool._on_child_packet(0, _make_packet(src="01:222222", rssi="090"))
+
+    # Per-device averages differ
+    assert pool._avg_rssi(0, "01:111111") == 50.0
+    assert pool._avg_rssi(0, "01:222222") == 90.0
+    # Aggregate is the mean of both
+    assert pool._avg_rssi(0) == 70.0
+
+
+def test_select_transport_uses_per_device_rssi(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """_select_transport picks the child with best RSSI for the target device."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Child 0 hears device 01:AAA at RSSI 030 (weak)
+    pool._on_child_packet(0, _make_packet(src="01:AAA", rssi="030"))
+    # Child 1 hears device 01:AAA at RSSI 080 (strong)
+    pool._on_child_packet(1, _make_packet(src="01:AAA", rssi="080"))
+
+    # Selecting for target 01:AAA should pick child 1 (stronger)
+    selected = pool._select_transport("01:AAA")
+    assert selected is t1
+
+
+def test_select_transport_falls_back_to_aggregate_rssi(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """When no per-device RSSI exists, falls back to aggregate RSSI."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Only aggregate RSSI (from a different device)
+    pool._on_child_packet(0, _make_packet(src="01:111", rssi="040"))
+    pool._on_child_packet(1, _make_packet(src="01:222", rssi="070"))
+
+    # Target device 01:999 has no per-device data → use aggregate
+    selected = pool._select_transport("01:999")
+    assert selected is t1  # child 1 has better aggregate RSSI
+
+
+def test_write_frame_extracts_target_device_for_routing(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """write_frame parses the frame to extract dst for per-device routing."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    t1.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Child 0 hears 01:TARGET at RSSI 020 (weak)
+    pool._on_child_packet(0, _make_packet(src="01:TARGET", rssi="020"))
+    # Child 1 hears 01:TARGET at RSSI 090 (strong)
+    pool._on_child_packet(1, _make_packet(src="01:TARGET", rssi="090"))
+
+    # Frame: "000 I --- 18:001234 01:TARGET --:------ 30C9 000 00"
+    # dst = parts[4] = "01:TARGET"
+    frame = "000 I --- 18:001234 01:TARGET --:------ 30C9 000 00"
+    asyncio.run(pool.write_frame(frame))
+
+    # Child 1 should be selected (best RSSI for 01:TARGET)
+    assert t1.write_frame.call_count == 1
+    assert t0.write_frame.call_count == 0
+
+
+# -- HGI filtering (accepted set) -----------------------------------------
+
+
+async def test_accepted_hgis_filters_foreign_packets() -> None:
+    """Packets from non-accepted HGIs are dropped before forwarding."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto,
+        [t0, t1],
+        config=TransportConfig(),
+        loop=asyncio.get_event_loop(),
+        accepted_hgis={"18:001234"},
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Child 0 is HGI 18:001234 (accepted)
+    pool._child_hgi[0] = "18:001234"
+    # Child 1 is HGI 18:999999 (foreign, not accepted)
+    pool._child_hgi[1] = "18:999999"
+
+    # Packet from accepted HGI → forwarded
+    pool._on_child_packet(0, _make_packet(src="01:111", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 1
+
+    # Packet from foreign HGI → dropped
+    pool._on_child_packet(1, _make_packet(src="01:222", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 1  # still 1, not 2
+
+
+async def test_set_accepted_hgis_updates_filter() -> None:
+    """set_accepted_hgis updates the filter at runtime."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=asyncio.get_event_loop()
+    )
+    pool._on_child_connected(0, t0)
+    pool._child_hgi[0] = "18:001234"
+
+    # Initially no filter → all packets forwarded
+    pool._on_child_packet(0, _make_packet(src="01:111", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 1
+
+    # Set filter to exclude this HGI
+    pool.set_accepted_hgis({"18:999999"})
+    pool._on_child_packet(0, _make_packet(src="01:222", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 1  # dropped
+
+    # Set filter back to include this HGI
+    pool.set_accepted_hgis({"18:001234"})
+    pool._on_child_packet(0, _make_packet(src="01:333", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 2  # forwarded
+
+
+async def test_accepted_hgis_none_accepts_all() -> None:
+    """When accepted_hgis is None, all packets are forwarded."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto,
+        [t0],
+        config=TransportConfig(),
+        loop=asyncio.get_event_loop(),
+        accepted_hgis=None,
+    )
+    pool._on_child_connected(0, t0)
+    pool._child_hgi[0] = "18:001234"
+
+    pool._on_child_packet(0, _make_packet(src="01:111", rssi="050"))
+    pool._on_child_packet(0, _make_packet(src="01:222", rssi="050"))
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 2
+
+
+# -- Hot-reload: add_child / remove_child ---------------------------------
+
+
+def test_remove_child_closes_transport_and_marks_removed(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """remove_child closes the transport and marks the slot as removed."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    pool.remove_child(0)
+
+    assert pool._transports[0] is None
+    assert pool._child_connected[0] is False
+    t0.close.assert_called_once()
+
+    # Child 1 is still active
+    assert pool._transports[1] is t1
+    assert pool._child_connected[1] is True
+
+
+def test_remove_child_excludes_from_selection(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Removed children are not selected for outbound routing."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    pool.remove_child(0)
+
+    # Only child 1 is available
+    selected = pool._select_transport()
+    assert selected is t1
+
+
+def test_remove_child_invalid_index_raises(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """remove_child with invalid index raises ValueError."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    with pytest.raises(ValueError, match="Invalid child index"):
+        pool.remove_child(5)
+
+
+def test_remove_already_removed_child_is_noop(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Removing an already-removed child is a no-op."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    pool.remove_child(0)
+    t0.close.assert_called_once()
+
+    # Second removal should not call close again
+    pool.remove_child(0)
+    assert t0.close.call_count == 1
+
+
+def test_pool_stats_includes_child_hgi_and_accepted(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """pool_stats includes child_hgi and accepted_hgis fields."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto,
+        [t0],
+        config=TransportConfig(),
+        loop=event_loop,
+        accepted_hgis={"18:001234"},
+    )
+    pool._on_child_connected(0, t0)
+    pool._child_hgi[0] = "18:001234"
+
+    stats = pool.get_extra_info("pool_stats")
+    assert stats is not None
+    assert stats["child_hgi"] == ["18:001234"]
+    assert stats["accepted_hgis"] == ["18:001234"]
+
+
+def test_pool_stats_accepted_hgis_none_when_no_filter(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """pool_stats shows None for accepted_hgis when no filter is set."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    stats = pool.get_extra_info("pool_stats")
+    assert stats["accepted_hgis"] is None
