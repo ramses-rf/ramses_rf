@@ -1099,6 +1099,122 @@ async def test_dedup_key_components_matter() -> None:
     assert proto.packet_received.call_count == 6
 
 
+# -- Single-child passthrough (1 HGI) --------------------------------------
+
+
+async def test_single_child_all_packets_forwarded() -> None:
+    """With only 1 child, all distinct packets are forwarded (no dedup false-positives)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), dedup_window=10.0
+    )
+    pool._child_connected = [True]
+    pool._child_hgi = ["18:001111"]
+
+    for i in range(10):
+        pool._on_child_packet(0, _make_packet(payload=f"{i:04X}"))
+
+    await asyncio.sleep(0.01)
+    assert proto.packet_received.call_count == 10
+
+
+async def test_single_child_all_writes_go_to_it() -> None:
+    """With only 1 child, all outbound writes go to that child."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(proto, [t0], config=TransportConfig())
+    pool._child_connected = [True]
+    pool._child_hgi = ["18:001111"]
+
+    for i in range(5):
+        await pool.write_frame(f"frame{i}")
+
+    assert t0.write_frame.call_count == 5
+
+
+async def test_single_child_rssi_and_health_work() -> None:
+    """RSSI tracking and health monitoring work with a single child."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), dedup_window=10.0
+    )
+    pool._child_connected = [True]
+    pool._child_hgi = ["18:001111"]
+
+    # Feed RSSI data.
+    for i in range(5):
+        pool._on_child_packet(0, _make_packet(rssi="070", payload=f"{i:02X}"))
+
+    await asyncio.sleep(0.01)
+    assert pool._avg_rssi(0) == 70.0
+    assert pool._child_healthy[0] is True
+
+    stats = pool.get_extra_info("pool_stats")
+    assert stats["avg_rssi"] == [70.0]
+    assert stats["child_health"] == [True]
+
+
+async def test_degradation_two_children_one_disconnects() -> None:
+    """When 1 of 2 children disconnects, the pool keeps working via the other."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    pool._child_connected = [True, True]
+    pool._child_hgi = ["18:001111", "18:002222"]
+
+    # Both connected — write goes to one of them.
+    await pool.write_frame("frame1")
+    assert t0.write_frame.call_count + t1.write_frame.call_count == 1
+
+    # Child 0 disconnects.
+    pool._on_child_disconnected(0, RuntimeError("usb unplugged"))
+    assert pool._child_connected[0] is False
+
+    # Now all writes must go to child 1 (the only connected child).
+    t1_baseline = t1.write_frame.call_count
+    await pool.write_frame("frame2")
+    await pool.write_frame("frame3")
+    assert t0.write_frame.call_count == 0  # child 0 never used at all
+    assert t1.write_frame.call_count == t1_baseline + 2  # both go to child 1
+
+
+async def test_degradation_reconnect_restores_round_robin() -> None:
+    """After a disconnected child reconnects, it participates in routing again."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    pool._child_connected = [True, True]
+    pool._child_hgi = ["18:001111", "18:002222"]
+
+    # Disconnect child 0 before any write.
+    pool._on_child_disconnected(0, RuntimeError("gone"))
+    assert pool._child_connected[0] is False
+
+    # Write goes to child 1 only (child 0 is disconnected).
+    await pool.write_frame("f1")
+    # child 1 used, child 0 not used.
+    assert t1.write_frame.call_count >= 1
+    assert t0.write_frame.call_count == 0
+
+    # Reconnect child 0.
+    pool._on_child_connected(0, t0)
+    assert pool._child_connected[0] is True
+
+    # Now writes can go to either child again (round-robin).
+    # Use a fresh read — t0 may have been used after reconnect.
+    t0_baseline = t0.write_frame.call_count  # type: ignore[unreachable]
+    t1_baseline = t1.write_frame.call_count
+    await pool.write_frame("f2")
+    await pool.write_frame("f3")
+    delta0 = t0.write_frame.call_count - t0_baseline
+    delta1 = t1.write_frame.call_count - t1_baseline
+    assert delta0 + delta1 == 2  # both frames delivered
+
+
 # -- Constructor validation ------------------------------------------------
 
 
