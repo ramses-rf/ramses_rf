@@ -205,6 +205,16 @@ class MqttConnectionManager:
         self.client.subscribe(self._topic_base)
         _LOGGER.info("Subscribed to status topic: %s", self._topic_base)
 
+        # If the topic_base is a specific HGI (not wildcard), also
+        # subscribe to the parent wildcard status topic so we can
+        # discover additional ESPs on the same broker (issue 1119).
+        if not self._topic_base.endswith("/+"):
+            parent_status = "/".join(self._topic_base.split("/")[:-1] + ["+"])
+            self.client.subscribe(parent_status)
+            _LOGGER.info(
+                "Subscribed to wildcard status topic: %s", parent_status
+            )
+
         if self._topic_base.endswith("/+") and not self._topic_sub:
             data_wildcard = self._topic_base.replace("/+", TOPIC_WILDCARD_RX)
             self.client.subscribe(data_wildcard, qos=self._mqtt_qos)
