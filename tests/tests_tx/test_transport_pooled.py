@@ -922,15 +922,16 @@ def test_child_proxy_wait_for_connection_delegates(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
     """_ChildProtocolProxy.wait_for_connection_made delegates to pool."""
+    t0 = _make_mock_transport(hgi="18:001111")
     pool = MagicMock()
-    pool._wait_for_any_connection = AsyncMock(return_value="transport")
+    pool._wait_for_any_connection = AsyncMock(return_value=t0)
     proxy = _ChildProtocolProxy(pool, 0)
 
     result = event_loop.run_until_complete(
         proxy.wait_for_connection_made(timeout=2.0)
     )
     pool._wait_for_any_connection.assert_called_once_with(2.0)
-    assert result == "transport"
+    assert result is t0
 
 
 def test_child_proxy_set_regex_rules_is_noop() -> None:
