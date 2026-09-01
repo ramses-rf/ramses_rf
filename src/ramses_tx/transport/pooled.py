@@ -373,15 +373,21 @@ class PooledTransport(TransportInterface):
         )
 
         # Re-patch the frame's source address to match the selected
-        # child's HGI ID.  Skip if:
+        # child's HGI ID.  This is only needed when the source is an
+        # HGI address (18:) that was patched by the protocol to the
+        # pool's "active" HGI (first connected child).  Skip if:
         # - child HGI is unknown (not yet connected/discovered)
         # - frame has no parseable source address
-        # - source is already the placeholder 18:000730 (HGI80 firmware
+        # - source is NOT an HGI address (e.g. faked device 37:001234
+        #   impersonating a REM — the HGI is the transmitter, not the
+        #   source; replacing it would break impersonation)
+        # - source is the placeholder 18:000730 (HGI80 firmware
         #   will substitute its own ID — correct for any HGI80 child)
         # - source already matches the child's HGI (no change needed)
         if (
             child_hgi
             and src_addr
+            and src_addr[:2] == "18"  # only re-patch HGI sources
             and src_addr != HGI_DEV_ADDR.id
             and src_addr != child_hgi
         ):

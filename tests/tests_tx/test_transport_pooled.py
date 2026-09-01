@@ -1676,3 +1676,45 @@ async def test_write_frame_skips_repatch_when_hgi_unknown() -> None:
     sent_frame = t0.write_frame.call_args[0][0]
     # Source unchanged — can't re-patch without knowing child's HGI
     assert sent_frame == frame
+
+
+async def test_write_frame_skips_repatch_for_faked_device_source() -> None:
+    """write_frame does NOT re-patch when source is a non-HGI (faked device).
+
+    When impersonating a device (e.g. a REM sending 2411 to a FAN),
+    the command's addr1 is the faked device's ID (37:...), not the
+    HGI's ID.  The HGI is just the RF transmitter — the packet's
+    source must remain the faked device so the receiving device
+    accepts it as coming from its bound controller.
+    """
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    t1.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto,
+        [t0, t1],
+        config=TransportConfig(),
+        loop=asyncio.get_event_loop(),
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    pool._child_hgi[0] = "18:001234"
+    pool._child_hgi[1] = "18:005678"
+
+    # Make child 1 have better RSSI for the FAN
+    pool._on_child_packet(0, _make_packet(src="32:000001", rssi="020"))
+    pool._on_child_packet(1, _make_packet(src="32:000001", rssi="090"))
+
+    # Frame from faked REM 37:001234 to FAN 32:000001
+    # _patch_cmd_if_needed does NOT touch this (addr1 is not 18:000730
+    # and not the HGI ID — it's a faked device)
+    frame = " I --- 37:001234 32:000001 --:------ 2411 001 00"
+    await pool.write_frame(frame)
+
+    # Child 1 was selected (better RSSI for 32:000001)
+    assert t1.write_frame.call_count == 1
+    sent_frame = t1.write_frame.call_args[0][0]
+    # Source should NOT be re-patched — it's a faked device, not an HGI
+    sent_parts = sent_frame.split()
+    assert sent_parts[2] == "37:001234"  # unchanged
