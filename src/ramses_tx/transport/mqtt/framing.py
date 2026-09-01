@@ -113,7 +113,12 @@ class MqttFramingHandler:
         try:
             payload = json.loads(payload_bytes)
         except json.JSONDecodeError:
-            _LOGGER.warning("%s < Can't decode JSON (ignoring)", payload_bytes)
+            # Empty payloads are used to clear retained messages —
+            # silently ignore them instead of logging a warning.
+            if payload_bytes.strip():
+                _LOGGER.warning(
+                    "%s < Can't decode JSON (ignoring)", payload_bytes
+                )
             return None
 
         if "ts" not in payload or "msg" not in payload:
