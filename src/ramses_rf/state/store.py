@@ -498,7 +498,12 @@ class MessageStore(MessageStoreInterface):
         """
         if self._worker:
             try:
-                payload_blob = orjson.dumps(msg.payload)
+                payload_blob = orjson.dumps(
+                    msg.payload,
+                    default=lambda o: (
+                        o.hex() if isinstance(o, bytes) else str(o)
+                    ),
+                )
             except orjson.JSONEncodeError as err:
                 _LOGGER.warning("Failed to serialize payload: %s", err)
                 payload_blob = b"{}"

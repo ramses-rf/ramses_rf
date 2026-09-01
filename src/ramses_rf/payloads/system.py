@@ -1246,7 +1246,10 @@ class SystemDeviceInfoPayload(PayloadBase):
             return {}
         hex_str = re.sub("(00)*$", "", hex_str)
         if len(hex_str) < 36:
-            return {"info_type": self.info_type, "info_bytes": self.info_bytes}
+            return {
+                "info_type": self.info_type,
+                "info_bytes": self.info_bytes.hex(),
+            }
         desc_hex, _, _ = hex_str[36:].partition("00")
         if len(desc_hex) % 2 != 0:
             desc_hex += "0"
