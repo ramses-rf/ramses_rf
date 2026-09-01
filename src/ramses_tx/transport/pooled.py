@@ -24,7 +24,7 @@ from typing import Any, TypeAlias
 
 from .. import exceptions as exc
 from ..address import HGI_DEV_ADDR
-from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3
+from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
 from ..packet import Packet
@@ -449,7 +449,7 @@ class PooledTransport(TransportInterface):
         # avoid resetting ESP32-based USB HGIs.
         if self._child_hgi[index] is None:
             src_id = packet._dto.addr1
-            if src_id and str(packet._dto.code) == "7FFF":
+            if src_id and packet._dto.code == Code._PUZZ:
                 self._child_hgi[index] = src_id
                 _LOGGER.info(
                     "PooledTransport: child %d HGI learned as %s "

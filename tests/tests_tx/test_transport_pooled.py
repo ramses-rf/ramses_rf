@@ -978,17 +978,18 @@ async def test_child_proxy_send_cmd_delegates_to_protocol() -> None:
 def test_child_proxy_wait_for_connection_delegates(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
-    """_ChildProtocolProxy.wait_for_connection_made delegates to pool."""
-    t0 = _make_mock_transport(hgi="18:001111")
+    """_ChildProtocolProxy.wait_for_connection_made waits for per-child event."""
+
     pool = MagicMock()
-    pool._wait_for_any_connection = AsyncMock(return_value=t0)
     proxy = _ChildProtocolProxy(pool, 0)
+    # Simulate the child connecting by setting the event
+    proxy._conn_event.set()
 
     result = event_loop.run_until_complete(
         proxy.wait_for_connection_made(timeout=2.0)
     )
-    pool._wait_for_any_connection.assert_called_once_with(2.0)
-    assert result is t0
+    # Returns the pool (a TransportInterface) when connected
+    assert result is pool
 
 
 def test_child_proxy_set_regex_rules_is_noop() -> None:
@@ -1270,13 +1271,29 @@ async def test_degradation_reconnect_restores_round_robin() -> None:
 # -- Constructor validation ------------------------------------------------
 
 
-def test_empty_transport_list_raises(
+def test_empty_transport_list_allowed(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
-    """PooledTransport with empty transport list raises ValueError."""
+    """PooledTransport allows empty transport list (deferred check).
+
+    The pool is created first with an empty list, then children are
+    injected via _transports by pooled_transport_factory. The check
+    is deferred to _wait_for_any_connection, which raises
+    TransportError if no child connects within the timeout.
+    """
+    from ramses_tx.exceptions import TransportError
+
     proto = _make_mock_protocol()
-    with pytest.raises(ValueError, match="at least one child transport"):
-        PooledTransport(proto, [], config=TransportConfig(), loop=event_loop)
+    # Construction with empty list should NOT raise
+    pool = PooledTransport(
+        proto, [], config=TransportConfig(), loop=event_loop
+    )
+    assert len(pool._transports) == 0
+    # _wait_for_any_connection should raise TransportError (no child)
+    with pytest.raises(TransportError, match="no child connected"):
+        event_loop.run_until_complete(
+            pool._wait_for_any_connection(timeout=0.1)
+        )
 
 
 # -- Per-device RSSI tracking ---------------------------------------------

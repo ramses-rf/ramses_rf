@@ -22,7 +22,11 @@ from ramses_tx.const import (
     Priority,
 )
 from ramses_tx.dtos import PacketDTO
-from ramses_tx.exceptions import PacketInvalid, ProtocolSendFailed
+from ramses_tx.exceptions import (
+    PacketInvalid,
+    ProtocolSendFailed,
+    TransportError,
+)
 from ramses_tx.rssi_tracker import RssiTracker
 from ramses_tx.schemas import (
     SZ_BLOCK_LIST,
@@ -677,7 +681,11 @@ class Gateway(GatewayLifecycle, GatewayInterface):
                 max_retries=max_retries,
                 timeout=timeout,
             )
-        except (ProtocolSendFailed, NotImplementedError) as err:
+        except (
+            ProtocolSendFailed,
+            NotImplementedError,
+            TransportError,
+        ) as err:
             if (
                 self.config.disable_discovery
                 or self._engine._disable_sending
