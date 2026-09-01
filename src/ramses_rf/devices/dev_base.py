@@ -171,6 +171,10 @@ class DeviceBase(Entity):
         ``None`` if the gateway has no RSSI tracker (e.g. during
         tests without a real gateway).
 
+        When the transport is a ``PooledTransport``, the per-child
+        RSSI trackers are included so that the **best** RSSI across
+        all connected HGIs is used (issue 1119 — multi-HGI pool).
+
         :return: Communication quality snapshot, or ``None``.
         :rtype: CommunicationQuality | None
         """
@@ -180,7 +184,15 @@ class DeviceBase(Entity):
         tracker = getattr(gwy, "_rssi_tracker", None)
         if tracker is None:
             return None
-        return compute_quality(str(self.id), [tracker])
+        trackers = [tracker]
+        # If the transport is a PooledTransport, include per-child
+        # RSSI trackers so we use the best RSSI across all HGIs.
+        transport = getattr(gwy, "_transport", None)
+        if transport is not None:
+            pool_trackers = transport.get_extra_info("pool_rssi_trackers")
+            if pool_trackers:
+                trackers.extend(pool_trackers)
+        return compute_quality(str(self.id), trackers)
 
     def set_strategy(self, strategy: HvacStrategy) -> None:
         """Set the HVAC strategy for this device.

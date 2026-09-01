@@ -1238,6 +1238,46 @@ class DiscoveryScan:
         """Return a single discovered device by ID, or None."""
         return self._devices.get(device_id)
 
+    def register_known_hgi(self, device_id: str) -> None:
+        """Register a known HGI as present in the scan.
+
+        This is used for pool member HGIs that are connected but may not
+        have sent any packets (e.g. a USB HGI with ``skip_signature=True``
+        that never sends a ``7FFF`` puzzle response).  Without this, the
+        HGI would not appear in the scan results and would be flagged as
+        "lost" by the discovery manager.
+
+        Only creates a minimal entry if the HGI is not already tracked.
+        Does not trigger discovery notifications (the HGI is already known).
+
+        :param device_id: The HGI device ID (must start with ``18:``).
+        """
+        if not device_id or not device_id.startswith("18:"):
+            return
+        if device_id in self._devices:
+            # Already tracked — update last_seen
+            self._devices[device_id].last_seen = dt.now().isoformat(
+                timespec="seconds"
+            )
+            return
+        now = dt.now().isoformat(timespec="seconds")
+        self._devices[device_id] = DiscoveredDevice(
+            device_id=device_id,
+            first_seen=now,
+            last_seen=now,
+            likely_type=DevType.HGI,
+            codes_seen=[],
+            rssi=None,
+            confidence="high",
+            is_battery=False,
+            source_count=0,
+            destination_count=0,
+        )
+        _LOGGER.debug(
+            "DiscoveryScan: registered known HGI %s (pool member, no packets)",
+            device_id,
+        )
+
     def remove_device(self, device_id: str) -> bool:
         """Remove a device from the in-memory list.
 

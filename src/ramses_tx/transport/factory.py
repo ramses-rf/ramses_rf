@@ -7,6 +7,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from typing import Final, TypeAlias
 
 from .. import exceptions as exc
@@ -242,13 +243,20 @@ async def pooled_transport_factory(
         protocol.set_regex_rules(config.use_regex)
 
     # Create the pool first so we can create child proxies.
+    # Pre-allocate the per-child lists so that early-connecting
+    # children don't hit IndexError before the injection below.
+    num_children = len(port_names)
     pool = PooledTransport(
         protocol,
-        [],  # filled in below
+        [None] * num_children,  # placeholders, replaced below
         config=config,
         loop=loop,
         dedup_window=dedup_window,
     )
+    pool._child_connected = [False] * num_children
+    pool._child_hgi = [None] * num_children
+    pool._child_transport_objs = [None] * num_children
+    pool._pkts_received = [0] * num_children
 
     child_transports: list[TransportInterface] = []
 
@@ -258,22 +266,33 @@ async def pooled_transport_factory(
 
         # Create the child transport via the standard factory, but
         # with the proxy protocol instead of the real one.
-        child = await _create_single_child(
-            proxy,
-            config=config,
-            port_name=pname,
-            port_config=pconfig,
-            extra=extra,
-            loop=loop,
-        )
-        child_transports.append(child)
+        # Tolerate individual child failures — the pool can operate
+        # with a subset of children (e.g. if a USB HGI is unplugged
+        # or in use by another process).
+        try:
+            child = await _create_single_child(
+                proxy,
+                config=config,
+                port_name=pname,
+                port_config=pconfig,
+                extra=extra,
+                loop=loop,
+            )
+        except Exception as err:
+            _LOGGER.warning(
+                "PooledTransport: child %d (%s) failed to connect: %s — "
+                "continuing with remaining children",
+                i,
+                pname,
+                err,
+            )
+            pool._transports[i] = None
+            pool._child_connected[i] = False
+            continue
 
-    # Inject the child transports into the pool.
-    pool._transports = list(child_transports)
-    pool._child_connected = [False] * len(child_transports)
-    pool._child_hgi = [None] * len(child_transports)
-    pool._child_transport_objs = [None] * len(child_transports)
-    pool._pkts_received = [0] * len(child_transports)
+        child_transports.append(child)
+        # Replace the placeholder with the real transport.
+        pool._transports[i] = child
 
     # Wait for at least one child to connect.
     await pool._wait_for_any_connection(
@@ -339,11 +358,17 @@ async def _create_single_child(
     assert port_config is not None  # serial requires port_config
     ser_config = SCH_SERIAL_PORT_CONFIG(port_config)
 
+    # Pool children skip the signature/puzzle handshake — some USB CDC
+    # devices (e.g. ESP32-based HGIs) reset when bytes are written
+    # immediately after the port opens.  The HGI ID will be learned
+    # from received packets instead.
+    child_config = replace(config, disable_sending=True)
+
     transport_port = PortTransport(
         port_name,
         protocol,
         port_config=ser_config,
-        config=config,
+        config=child_config,
         extra=extra,
         loop=loop,
     )

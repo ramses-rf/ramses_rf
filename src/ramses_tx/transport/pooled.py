@@ -76,6 +76,7 @@ class _ChildProtocolProxy(ProtocolInterface):
         self._pool = pool
         self._index = index
         self._connected: bool = False
+        self._conn_event: asyncio.Event = asyncio.Event()
 
     # -- ProtocolInterface ----------------------------------------------
 
@@ -84,11 +85,13 @@ class _ChildProtocolProxy(ProtocolInterface):
     ) -> None:
         """Forward connection_made to the pool for tracking."""
         self._connected = True
+        self._conn_event.set()
         self._pool._on_child_connected(self._index, transport)
 
     def connection_lost(self, error: Exception | None) -> None:
         """Forward connection_lost to the pool for tracking."""
         self._connected = False
+        self._conn_event.clear()
         self._pool._on_child_disconnected(self._index, error)
 
     def packet_received(self, packet: Packet) -> None:
@@ -114,8 +117,16 @@ class _ChildProtocolProxy(ProtocolInterface):
     async def wait_for_connection_made(
         self, timeout: float = 1.0
     ) -> TransportInterface:
-        """Wait until at least one child connects."""
-        return await self._pool._wait_for_any_connection(timeout)
+        """Wait until **this** child connects (not any child)."""
+        try:
+            await asyncio.wait_for(self._conn_event.wait(), timeout=timeout)
+        except TimeoutError as err:
+            raise exc.TransportError(
+                f"Child transport {self._index} did not connect "
+                f"within {timeout}s"
+            ) from err
+        # Return the pool — callers just need a TransportInterface.
+        return self._pool
 
     def set_regex_rules(self, rules: Any) -> None:
         """No-op — regex rules are set on the real protocol by the factory."""
@@ -179,10 +190,10 @@ class PooledTransport(TransportInterface):
         accepted_hgis: set[str] | None = None,
     ) -> None:
         """Initialise the pooled transport."""
-        if not transports:
-            raise ValueError(
-                "PooledTransport requires at least one child transport"
-            )
+        # Allow empty transport list during construction —
+        # pooled_transport_factory creates the pool first (with an
+        # empty list) then injects children via _transports.
+        # The check is deferred to _wait_for_any_connection.
 
         self._protocol: RamsesProtocolT = protocol
         self._transports: list[TransportInterface | None] = list(transports)
@@ -191,6 +202,7 @@ class PooledTransport(TransportInterface):
             loop or asyncio.get_event_loop()
         )
         self._closing: bool = False
+        self._protocol_connected: bool = False
 
         self._dedup_window: td = td(seconds=dedup_window)
         self._dedup_cache: deque[tuple[dt, _DedupKeyT]] = deque(
@@ -257,6 +269,14 @@ class PooledTransport(TransportInterface):
         ID.  For ``SZ_IS_EVOFW3`` returns True if any connected child
         is evofw3.
         """
+        if name == "pool_rssi_trackers":
+            # Expose per-child RSSI trackers so the gateway can
+            # compute communication_quality across all HGIs (best RSSI).
+            return [
+                self._child_rssi_trackers[i]
+                for i in range(len(self._transports))
+                if self._child_connected[i]
+            ]
         if name == SZ_ACTIVE_HGI:
             for hgi in self._child_hgi:
                 if hgi is not None:
@@ -423,6 +443,21 @@ class PooledTransport(TransportInterface):
         if self._closing:
             return
 
+        # Learn the child's HGI ID from the puzzle response (7FFF)
+        # or any packet whose src is a known HGI.  This is needed
+        # because pool children skip the signature handshake to
+        # avoid resetting ESP32-based USB HGIs.
+        if self._child_hgi[index] is None:
+            src_id = packet._dto.addr1
+            if src_id and str(packet._dto.code) == "7FFF":
+                self._child_hgi[index] = src_id
+                _LOGGER.info(
+                    "PooledTransport: child %d HGI learned as %s "
+                    "from puzzle response",
+                    index,
+                    src_id,
+                )
+
         # HGI filtering: if an accepted set is configured, drop packets
         # from children whose HGI is not accepted (foreign/neighbour's
         # gateway).  This is a single dict lookup — negligible overhead.
@@ -551,6 +586,13 @@ class PooledTransport(TransportInterface):
             len(self._transports),
         )
 
+        # Notify the real protocol that the transport is connected.
+        # The engine calls protocol.wait_for_connection_made() after
+        # creating the transport, so we must forward this event.
+        if not self._protocol_connected:
+            self._protocol_connected = True
+            self._protocol.connection_made(self, ramses=True)
+
         # Resolve the connection future if waiting.
         if self._conn_fut is not None and not self._conn_fut.done():
             self._conn_fut.set_result(self)
@@ -591,6 +633,7 @@ class PooledTransport(TransportInterface):
 
         # If no children are connected, notify the real protocol.
         if not any(self._child_connected) and not self._closing:
+            self._protocol_connected = False
             with contextlib.suppress(RuntimeError):
                 self._loop.call_soon_threadsafe(
                     self._protocol.connection_lost, error
