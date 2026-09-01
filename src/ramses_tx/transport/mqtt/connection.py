@@ -78,6 +78,9 @@ class MqttConnectionManager:
         # ESPs are tracked so the coordinator can register them in the
         # discovery scan (issue 1119: multi-HGI via single MQTT transport).
         self._online_esp_ids: set[DeviceIdT] = set()
+        # The primary ESP ID (the one whose /rx topic is _topic_sub).
+        # Set when the first ESP comes online and _topic_sub is assigned.
+        self._primary_esp_id: DeviceIdT | None = None
 
         # Reconnection settings
         self._reconnect_interval = 5.0
@@ -243,6 +246,7 @@ class MqttConnectionManager:
                 if len(parts) == 3:
                     gwy_id = DeviceIdT(parts[-1])
                     if not self._topic_pub:
+                        self._primary_esp_id = gwy_id
                         self._topic_pub = self._topic_base + TOPIC_SUFFIX_TX
                         self._topic_sub = self._topic_base + TOPIC_SUFFIX_RX
                         self.client.subscribe(
@@ -378,6 +382,7 @@ class MqttConnectionManager:
                     "MQTT device online — subscribing to /rx "
                     "(deferred from broker connect)"
                 )
+                self._primary_esp_id = esp_id
                 self._topic_pub = msg.topic + TOPIC_SUFFIX_TX
                 self._topic_sub = msg.topic + TOPIC_SUFFIX_RX
                 self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
@@ -391,13 +396,37 @@ class MqttConnectionManager:
                     finally:
                         self._data_wildcard_topic = ""
                 self._establish_connection(esp_id)
-            else:
+            elif esp_id == self._primary_esp_id:
                 _LOGGER.info("MQTT device came back online - resuming writing")
                 self._on_resume_writing()
+            else:
+                # A different ESP came online — subscribe to its /rx topic
+                # so we can receive packets from it too (issue 1119).
+                # The primary ESP's topic_sub is already set; this adds
+                # the new ESP's RX topic as an additional subscription.
+                new_rx_topic = msg.topic + TOPIC_SUFFIX_RX
+                if new_rx_topic != self._topic_sub:
+                    try:
+                        self.client.subscribe(new_rx_topic, qos=self._mqtt_qos)
+                        _LOGGER.info(
+                            "Subscribed to additional ESP /rx topic: %s",
+                            new_rx_topic,
+                        )
+                    except (ValueError, MQTTException) as err:
+                        _LOGGER.exception(
+                            "Error subscribing to additional ESP /rx: %s",
+                            err,
+                        )
+                else:
+                    _LOGGER.info(
+                        "MQTT device came back online - resuming writing"
+                    )
+                    self._on_resume_writing()
             return
 
         _LOGGER.info("MQTT device is online - establishing connection")
         self._connected = True
+        self._primary_esp_id = esp_id
         self._topic_pub = msg.topic + TOPIC_SUFFIX_TX
         self._topic_sub = msg.topic + TOPIC_SUFFIX_RX
         self.client.subscribe(self._topic_sub, qos=self._mqtt_qos)
