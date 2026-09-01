@@ -1515,3 +1515,122 @@ def test_pool_stats_accepted_hgis_none_when_no_filter(
     )
     stats = pool.get_extra_info("pool_stats")
     assert stats["accepted_hgis"] is None
+
+
+# -- Source-ID re-patching for multi-HGI outbound -------------------------
+
+
+async def test_write_frame_repatches_source_to_selected_child_hgi() -> None:
+    """write_frame re-patches addr1 to match the selected child's HGI.
+
+    The protocol patches addr1 to the pool's 'active' HGI (first
+    connected child).  If the pool routes to a different child, the
+    frame's source must be re-patched to that child's HGI.
+    """
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    t1.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto,
+        [t0, t1],
+        config=TransportConfig(),
+        loop=asyncio.get_event_loop(),
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    # Child 0 is HGI 18:001234, child 1 is HGI 18:005678
+    pool._child_hgi[0] = "18:001234"
+    pool._child_hgi[1] = "18:005678"
+
+    # Make child 1 have better RSSI for the target device
+    pool._on_child_packet(0, _make_packet(src="01:TARGET", rssi="020"))
+    pool._on_child_packet(1, _make_packet(src="01:TARGET", rssi="090"))
+
+    # Frame with source 18:001234 (patched by protocol to pool's active HGI)
+    frame = " I --- 18:001234 01:TARGET --:------ 30C9 001 00"
+    await pool.write_frame(frame)
+
+    # Child 1 was selected (better RSSI)
+    assert t1.write_frame.call_count == 1
+    sent_frame = t1.write_frame.call_args[0][0]
+    # Source should be re-patched to child 1's HGI
+    sent_parts = sent_frame.split()
+    assert sent_parts[2] == "18:005678"
+
+
+async def test_write_frame_skips_repatch_for_hgi80_placeholder() -> None:
+    """write_frame does NOT re-patch when source is 18:000730 (HGI80).
+
+    HGI80 firmware substitutes its own hardware ID during transmission,
+    so the placeholder is correct for any HGI80 child.
+    """
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    t1.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto,
+        [t0, t1],
+        config=TransportConfig(),
+        loop=asyncio.get_event_loop(),
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    pool._child_hgi[0] = "18:001234"
+    pool._child_hgi[1] = "18:005678"
+
+    # Make child 1 have better RSSI
+    pool._on_child_packet(0, _make_packet(src="01:TARGET", rssi="020"))
+    pool._on_child_packet(1, _make_packet(src="01:TARGET", rssi="090"))
+
+    # Frame with placeholder source 18:000730 (HGI80 mode)
+    frame = " I --- 18:000730 01:TARGET --:------ 30C9 001 00"
+    await pool.write_frame(frame)
+
+    # Child 1 was selected
+    assert t1.write_frame.call_count == 1
+    sent_frame = t1.write_frame.call_args[0][0]
+    # Source should NOT be re-patched — still 18:000730
+    sent_parts = sent_frame.split()
+    assert sent_parts[2] == "18:000730"
+
+
+async def test_write_frame_skips_repatch_when_source_matches() -> None:
+    """write_frame does NOT re-patch when source already matches child HGI."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=asyncio.get_event_loop()
+    )
+    pool._on_child_connected(0, t0)
+    pool._child_hgi[0] = "18:001234"
+
+    # Frame already has the correct source
+    frame = " I --- 18:001234 01:123456 --:------ 30C9 001 00"
+    await pool.write_frame(frame)
+
+    sent_frame = t0.write_frame.call_args[0][0]
+    sent_parts = sent_frame.split()
+    assert sent_parts[2] == "18:001234"  # unchanged
+
+
+async def test_write_frame_skips_repatch_when_hgi_unknown() -> None:
+    """write_frame does NOT re-patch when child HGI is unknown."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport()
+    t0.write_frame = AsyncMock()
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=asyncio.get_event_loop()
+    )
+    pool._on_child_connected(0, t0)
+    # HGI not yet discovered
+    pool._child_hgi[0] = None
+
+    frame = " I --- 18:001234 01:123456 --:------ 30C9 001 00"
+    await pool.write_frame(frame)
+
+    sent_frame = t0.write_frame.call_args[0][0]
+    # Source unchanged — can't re-patch without knowing child's HGI
+    assert sent_frame == frame

@@ -23,6 +23,7 @@ from datetime import datetime as dt, timedelta as td
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
+from ..address import HGI_DEV_ADDR
 from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
@@ -318,6 +319,20 @@ class PooledTransport(TransportInterface):
         frame), falling back to aggregate RSSI, then round-robin when
         no RSSI data is available.
 
+        The frame's source address (addr1) is re-patched to match the
+        selected child's HGI ID before forwarding.  This is needed
+        because the protocol patches addr1 to the pool's "active" HGI
+        (the first connected child), but the pool may route the frame
+        to a different child with better RSSI.  Without re-patching,
+        the frame would be transmitted by the wrong HGI with the wrong
+        source ID.
+
+        For HGI80 children (``_is_evofw3`` is False), the protocol
+        patches addr1 to the placeholder ``18:000730`` and the HGI80
+        firmware substitutes its own hardware ID during transmission.
+        In this case, re-patching is skipped — the placeholder is
+        correct for any HGI80 child.
+
         :param frame: The raw ASCII frame to transmit.
         :type frame: str
         :param disable_tx_limits: If True, bypass per-child rate
@@ -325,23 +340,57 @@ class PooledTransport(TransportInterface):
             ``write_frame``.
         :type disable_tx_limits: bool
         """
-        # Try to extract the target device ID from the frame for
-        # per-device RSSI routing.  The frame format is:
-        #   <rssi> <verb> <code> <src> <dst> [<addr3>] <payload>
+        # Parse the frame to extract target device and source address.
+        # Frame format (from CommandDTO.__str__):
+        #   " I --- 18:001234 01:123456 --:------ 30C9 001 00"
+        #    0  1   2         3         4          5    6   7
+        #  verb --- addr1     addr2     addr3      code len payload
         target_device: str | None = None
-        try:
-            parts = frame.split(" ")
-            if len(parts) >= 5:
-                # dst is parts[4] — the device we're sending to.
-                target_device = parts[4]
-        except Exception:
-            pass
+        src_addr: str | None = None
+        parts = frame.split()
+        if len(parts) >= 4:
+            src_addr = parts[2]
+            target_device = parts[3]
 
         child = self._select_transport(target_device)
         if child is None:
             raise exc.TransportError(
                 "No connected child transport available for send"
             )
+
+        # Find the selected child's index and HGI ID.
+        child_idx: int | None = None
+        for i, t in enumerate(self._transports):
+            if t is child:
+                child_idx = i
+                break
+        child_hgi = (
+            self._child_hgi[child_idx] if child_idx is not None else None
+        )
+
+        # Re-patch the frame's source address to match the selected
+        # child's HGI ID.  Skip if:
+        # - child HGI is unknown (not yet connected/discovered)
+        # - frame has no parseable source address
+        # - source is already the placeholder 18:000730 (HGI80 firmware
+        #   will substitute its own ID — correct for any HGI80 child)
+        # - source already matches the child's HGI (no change needed)
+        if (
+            child_hgi
+            and src_addr
+            and src_addr != HGI_DEV_ADDR.id
+            and src_addr != child_hgi
+        ):
+            parts[2] = child_hgi
+            frame = " ".join(parts)
+            _LOGGER.debug(
+                "PooledTransport: re-patched frame source %s -> %s "
+                "for child %d",
+                src_addr,
+                child_hgi,
+                child_idx,
+            )
+
         # Child transports (PortTransport, MqttTransport) accept the
         # disable_tx_limits kwarg even though TransportInterface
         # doesn't declare it — use getattr to call the concrete method.
