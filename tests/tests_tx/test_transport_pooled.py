@@ -463,9 +463,10 @@ async def test_rssi_rolling_window_keeps_last_5_samples() -> None:
             0, _make_packet(rssi=f"{i:03d}", payload=f"{i:02X}C")
         )
 
-    # The rolling average should be the average of the last 5: 5,6,7,8,9 = 7.0
-    avg = pool._avg_rssi(0)
-    assert avg == 7.0
+    # RssiTracker keeps last 3 readings (default window) and returns
+    # the best (max).  Last 3: 7, 8, 9 → best = 9.0
+    best = pool._best_rssi(0)
+    assert best == 9.0
 
 
 async def test_rssi_skips_disconnected_children() -> None:
@@ -478,9 +479,13 @@ async def test_rssi_skips_disconnected_children() -> None:
     pool._child_hgi = ["18:001111", None]
 
     # Give child 1 (disconnected) high RSSI via direct manipulation.
-    pool._child_rssi[1].extend([90, 90, 90])
+    pool._child_rssi_trackers[1].record("01:111", 90, dt.now())
+    pool._child_rssi_trackers[1].record("01:111", 90, dt.now())
+    pool._child_rssi_trackers[1].record("01:111", 90, dt.now())
     # Child 0 has low RSSI.
-    pool._child_rssi[0].extend([10, 10, 10])
+    pool._child_rssi_trackers[0].record("01:111", 10, dt.now())
+    pool._child_rssi_trackers[0].record("01:111", 10, dt.now())
+    pool._child_rssi_trackers[0].record("01:111", 10, dt.now())
 
     await pool.write_frame("frame1")
     t0.write_frame.assert_called_once()
@@ -498,30 +503,15 @@ def test_pool_stats_includes_avg_rssi(
         proto, [t0, t1], config=TransportConfig(), loop=event_loop
     )
     pool._child_connected = [True, True]
-    pool._child_rssi[0].extend([60, 70, 80])
+    pool._child_rssi_trackers[0].record("01:111", 60, dt.now())
+    pool._child_rssi_trackers[0].record("01:111", 70, dt.now())
+    pool._child_rssi_trackers[0].record("01:111", 80, dt.now())
     # child 1 has no RSSI data.
 
     stats = pool.get_extra_info("pool_stats")
     assert "avg_rssi" in stats
-    assert stats["avg_rssi"] == [70.0, 0.0]
-
-
-def test_parse_rssi_extracts_numeric_value() -> None:
-    """_parse_rssi converts '063' to 63."""
-    pkt = _make_packet(rssi="063")
-    assert PooledTransport._parse_rssi(pkt) == 63
-
-
-def test_parse_rssi_returns_none_for_ellipsis() -> None:
-    """_parse_rssi returns None for '...' placeholder."""
-    pkt = _make_packet(rssi="...")
-    assert PooledTransport._parse_rssi(pkt) is None
-
-
-def test_parse_rssi_returns_none_for_empty() -> None:
-    """_parse_rssi returns None for empty string."""
-    pkt = _make_packet(rssi="")
-    assert PooledTransport._parse_rssi(pkt) is None
+    # best_rssi_for returns max of last 3: max(60, 70, 80) = 80.0
+    assert stats["avg_rssi"] == [80.0, 0.0]
 
 
 # -- Health monitoring (PR 4) ---------------------------------------------
@@ -726,7 +716,9 @@ async def test_rssi_mixed_data_child_with_data_wins() -> None:
     pool._child_hgi = ["18:001111", "18:002222"]
 
     # Only child 1 gets RSSI data (low value).
-    pool._child_rssi[1].extend([10, 10, 10])
+    pool._child_rssi_trackers[1].record("01:111", 10, dt.now())
+    pool._child_rssi_trackers[1].record("01:111", 10, dt.now())
+    pool._child_rssi_trackers[1].record("01:111", 10, dt.now())
     # Child 0 has no RSSI data at all.
 
     await pool.write_frame("frame1")
@@ -1056,22 +1048,16 @@ async def test_three_children_rssi_selects_best() -> None:
     t2.write_frame.assert_not_called()
 
 
-def test_parse_rssi_non_numeric_returns_none() -> None:
-    """_parse_rssi returns None for non-numeric string."""
-    pkt = _make_packet(rssi="ABC")
-    assert PooledTransport._parse_rssi(pkt) is None
-
-
-def test_avg_rssi_empty_returns_zero(
+def test_best_rssi_empty_returns_zero(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
-    """_avg_rssi returns 0.0 when no samples exist."""
+    """_best_rssi returns 0.0 when no samples exist."""
     proto = _make_mock_protocol()
     t0 = _make_mock_transport(hgi="18:001111")
     pool = PooledTransport(
         proto, [t0], config=TransportConfig(), loop=event_loop
     )
-    assert pool._avg_rssi(0) == 0.0
+    assert pool._best_rssi(0) == 0.0
 
 
 async def test_dedup_key_components_matter() -> None:
@@ -1148,7 +1134,8 @@ async def test_single_child_rssi_and_health_work() -> None:
         pool._on_child_packet(0, _make_packet(rssi="070", payload=f"{i:02X}"))
 
     await asyncio.sleep(0.01)
-    assert pool._avg_rssi(0) == 70.0
+    # best_rssi_for returns max of last 3 readings: all 70 → 70.0
+    assert pool._best_rssi(0) == 70.0
     assert pool._child_healthy[0] is True
 
     stats = pool.get_extra_info("pool_stats")
@@ -1247,11 +1234,11 @@ def test_per_device_rssi_tracked_separately(
     # Device 01:222222 heard by child 0 with RSSI 090
     pool._on_child_packet(0, _make_packet(src="01:222222", rssi="090"))
 
-    # Per-device averages differ
-    assert pool._avg_rssi(0, "01:111111") == 50.0
-    assert pool._avg_rssi(0, "01:222222") == 90.0
-    # Aggregate is the mean of both
-    assert pool._avg_rssi(0) == 70.0
+    # Per-device best RSSI differs
+    assert pool._best_rssi(0, "01:111111") == 50.0
+    assert pool._best_rssi(0, "01:222222") == 90.0
+    # Aggregate is the best across all known devices: max(50, 90) = 90.0
+    assert pool._best_rssi(0) == 90.0
 
 
 def test_select_transport_uses_per_device_rssi(

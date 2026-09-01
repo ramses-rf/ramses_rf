@@ -28,6 +28,7 @@ from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
 from ..packet import Packet
+from ..rssi_tracker import RssiTracker
 from ..typing import RamsesProtocolT
 from .base import TransportConfig
 
@@ -40,10 +41,6 @@ _DEFAULT_DEDUP_WINDOW: float = 0.5
 
 #: Maximum number of dedup keys retained in the sliding window.
 _MAX_DEDUP_KEYS: int = 512
-
-#: Number of RSSI samples to retain per child for the rolling average
-#: used by outbound routing (Roadmap Item 9, PR 3).
-_RSSI_SAMPLE_WINDOW: int = 5
 
 #: RSSI value used when a child has no data yet (treated as neutral).
 _RSSI_UNKNOWN: int = 0
@@ -208,17 +205,13 @@ class PooledTransport(TransportInterface):
         # Round-robin outbound counter (used as fallback when no RSSI).
         self._rr_index: int = 0
 
-        # Per-child RSSI sample windows for aggregate outbound routing.
-        self._child_rssi: list[deque[int]] = [
-            deque(maxlen=_RSSI_SAMPLE_WINDOW) for _ in transports
-        ]
-
-        # Per-child, per-device RSSI sample windows for device-aware
-        # outbound routing.  Maps child_index → device_id → deque[int].
-        # When a target device is known, _select_transport uses this to
-        # pick the HGI with the best signal for that specific device.
-        self._child_device_rssi: list[dict[str, deque[int]]] = [
-            {} for _ in transports
+        # Per-child RssiTracker instances for device-aware outbound
+        # routing.  Each tracker maintains the last N RSSI readings per
+        # device heard by that child.  Uses the shared RssiTracker from
+        # ramses_tx/rssi_tracker.py (PR 1123, issue 1047) — consistent
+        # with the gateway-level tracker used for CommunicationQuality.
+        self._child_rssi_trackers: list[RssiTracker] = [
+            RssiTracker() for _ in transports
         ]
 
         # Accepted HGI set for schema-driven filtering.  When set,
@@ -295,7 +288,7 @@ class PooledTransport(TransportInterface):
                 "deduped": self._pkts_deduped,
                 "forwarded": self._pkts_forwarded,
                 "avg_rssi": [
-                    round(self._avg_rssi(i), 1)
+                    round(self._best_rssi(i), 1)
                     for i in range(len(self._transports))
                 ],
                 "child_health": list(self._child_healthy),
@@ -449,19 +442,14 @@ class PooledTransport(TransportInterface):
                 index,
             )
 
-        # Record RSSI samples for outbound routing.
-        rssi_val = self._parse_rssi(packet)
-        if rssi_val is not None:
-            # Aggregate per-child average.
-            self._child_rssi[index].append(rssi_val)
-            # Per-device: track RSSI for the source device on this child.
-            src_id = packet._dto.addr1
-            if src_id:
-                dev_window = self._child_device_rssi[index].get(src_id)
-                if dev_window is None:
-                    dev_window = deque(maxlen=_RSSI_SAMPLE_WINDOW)
-                    self._child_device_rssi[index][src_id] = dev_window
-                dev_window.append(rssi_val)
+        # Record RSSI in the child's RssiTracker for device-aware
+        # outbound routing.  RssiTracker handles sentinel filtering
+        # and ring-buffer management (PR 1123, issue 1047).
+        src_id = packet._dto.addr1
+        if src_id:
+            self._child_rssi_trackers[index].record(
+                src_id, packet._dto.rssi, dt_now()
+            )
 
         key = self._dedup_key(packet)
         now = dt_now()
@@ -515,52 +503,34 @@ class PooledTransport(TransportInterface):
             dto.raw_payload,
         )
 
-    @staticmethod
-    def _parse_rssi(packet: Packet) -> int | None:
-        """Extract a numeric RSSI value from a packet.
+    def _best_rssi(self, index: int, device_id: str | None = None) -> float:
+        """Return the best RSSI for a child, optionally for a specific device.
 
-        RSSI is stored as a 3-character string in the DTO (e.g.
-        ``"000"``, ``"063"``).  Returns ``None`` if the value is
-        absent or non-numeric.
-
-        :param packet: The packet to extract RSSI from.
-        :type packet: Packet
-        :returns: Integer RSSI value, or ``None`` if unavailable.
-        :rtype: int | None
-        """
-        rssi = packet._dto.rssi
-        if not rssi or rssi == "...":
-            return None
-        try:
-            return int(rssi)
-        except (ValueError, TypeError):
-            return None
-
-    def _avg_rssi(self, index: int, device_id: str | None = None) -> float:
-        """Return the rolling-average RSSI for a child.
-
-        When ``device_id`` is provided, returns the per-device average
-        (RSSI of packets from that specific device heard by this child).
-        Otherwise returns the aggregate average across all devices.
-
-        Returns ``_RSSI_UNKNOWN`` (0) if no samples are available.
+        Uses :meth:`RssiTracker.best_rssi_for` (max of last N readings)
+        when a device ID is provided.  Falls back to the best RSSI
+        across all known devices for the child when no device is
+        specified.  Returns ``_RSSI_UNKNOWN`` (0) if no data.
 
         :param index: The child index.
         :type index: int
         :param device_id: Optional device ID for per-device RSSI.
         :type device_id: str | None
-        :returns: Average RSSI, or 0 if no data.
+        :returns: Best RSSI in dBm, or 0 if no data.
         :rtype: float
         """
+        tracker = self._child_rssi_trackers[index]
         if device_id is not None:
-            samples = self._child_device_rssi[index].get(device_id)
-            if not samples:
-                return float(_RSSI_UNKNOWN)
-            return sum(samples) / len(samples)
-        samples = self._child_rssi[index]
-        if not samples:
+            val = tracker.best_rssi_for(device_id)
+            if val is not None:
+                return float(val)
             return float(_RSSI_UNKNOWN)
-        return sum(samples) / len(samples)
+        # No device specified: return best RSSI across all known devices.
+        best = _RSSI_UNKNOWN
+        for dev_id in tracker.known_devices():
+            val = tracker.best_rssi_for(dev_id)
+            if val is not None and val > best:
+                best = val
+        return float(best)
 
     # -- Internal: connection lifecycle ---------------------------------
 
@@ -674,14 +644,16 @@ class PooledTransport(TransportInterface):
 
         # Compute average RSSI for each candidate.
         # Prefer per-device RSSI when a target device is known.
-        rssi_values = {i: self._avg_rssi(i, target_device) for i in candidates}
+        rssi_values = {
+            i: self._best_rssi(i, target_device) for i in candidates
+        }
 
         # If per-device RSSI returned nothing for all candidates,
         # fall back to aggregate RSSI.
         if target_device and all(
             v == float(_RSSI_UNKNOWN) for v in rssi_values.values()
         ):
-            rssi_values = {i: self._avg_rssi(i) for i in candidates}
+            rssi_values = {i: self._best_rssi(i) for i in candidates}
 
         # If no child has RSSI data, fall back to round-robin.
         if all(v == float(_RSSI_UNKNOWN) for v in rssi_values.values()):
@@ -805,8 +777,7 @@ class PooledTransport(TransportInterface):
         self._child_connected.append(False)
         self._child_hgi.append(None)
         self._child_transport_objs.append(None)
-        self._child_rssi.append(deque(maxlen=_RSSI_SAMPLE_WINDOW))
-        self._child_device_rssi.append({})
+        self._child_rssi_trackers.append(RssiTracker())
         self._child_last_pkt_time.append(None)
         self._child_consecutive_errors.append(0)
         self._child_healthy.append(True)
@@ -848,8 +819,7 @@ class PooledTransport(TransportInterface):
         self._child_connected[index] = False
         self._child_hgi[index] = None
         self._child_transport_objs[index] = None
-        self._child_rssi[index].clear()
-        self._child_device_rssi[index].clear()
+        self._child_rssi_trackers[index].clear()
         self._child_last_pkt_time[index] = None
         self._child_consecutive_errors[index] = 0
         self._child_healthy[index] = False
