@@ -187,7 +187,9 @@ class DeviceBase(Entity):
         trackers = [tracker]
         # If the transport is a PooledTransport, include per-child
         # RSSI trackers so we use the best RSSI across all HGIs.
-        transport = getattr(gwy, "_transport", None)
+        # The transport is on the engine, not the gateway directly.
+        engine = getattr(gwy, "_engine", None)
+        transport = getattr(engine, "_transport", None) if engine else None
         if transport is not None:
             pool_trackers = transport.get_extra_info("pool_rssi_trackers")
             if pool_trackers:

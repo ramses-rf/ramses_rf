@@ -118,6 +118,12 @@ def compute_quality(
 
         seen = tracker.last_seen(device_id)
         if seen is not None:
+            # Normalise tz-naive timestamps to tz-aware (UTC) so
+            # comparisons don't fail when mixing trackers from
+            # different layers (gateway uses tz-aware dtm from
+            # PacketDTO, pooled transport uses naive dt_now()).
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=UTC)
             if last_seen is None or seen > last_seen:
                 last_seen = seen
 
