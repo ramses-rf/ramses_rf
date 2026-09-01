@@ -321,6 +321,71 @@ def test_get_extra_info_pool_stats(
     assert stats["forwarded"] == 3
 
 
+def test_get_extra_info_pool_rssi_trackers_returns_only_connected(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info('pool_rssi_trackers') returns trackers for connected children only."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._child_connected = [True, False]
+
+    trackers = pool.get_extra_info("pool_rssi_trackers")
+    assert len(trackers) == 1  # only child 0 is connected
+
+
+def test_get_extra_info_pool_rssi_trackers_all_connected(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info('pool_rssi_trackers') returns all trackers when all connected."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._child_connected = [True, True]
+
+    trackers = pool.get_extra_info("pool_rssi_trackers")
+    assert len(trackers) == 2
+
+
+def test_pool_rssi_trackers_record_per_child(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Each child's RSSI tracker records independently.
+
+    When two HGIs hear the same device at different signal strengths,
+    the per-child trackers should reflect each child's RSSI.  The
+    caller (compute_quality) takes the best across all trackers.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._child_connected = [True, True]
+
+    pkt_child0 = _make_packet(src="04:123456", rssi="-41")
+    pkt_child1 = _make_packet(src="04:123456", rssi="-89")
+
+    # Simulate packet from child 0 (strong signal)
+    pool._on_child_packet(0, pkt_child0)
+    # Simulate packet from child 1 (weak signal)
+    pool._on_child_packet(1, pkt_child1)
+
+    trackers = pool.get_extra_info("pool_rssi_trackers")
+    assert len(trackers) == 2
+    # Child 0 heard the device at -41
+    assert trackers[0].best_rssi_for("04:123456") == -41
+    # Child 1 heard the device at -89
+    assert trackers[1].best_rssi_for("04:123456") == -89
+
+
 # -- Close -----------------------------------------------------------------
 
 

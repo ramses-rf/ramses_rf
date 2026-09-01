@@ -244,3 +244,76 @@ class TestComputeQuality:
         tracker6.record("04:123456", str(RSSI_WEAK - 1), now)
         q6 = compute_quality("04:123456", [tracker6], now=now)
         assert q6.rssi_quality == "very_weak"
+
+
+class TestTzNaiveTimestamps:
+    """Tests for mixing tz-aware and tz-naive timestamps.
+
+    The gateway's RssiTracker records tz-aware timestamps (from
+    PacketDTO.dtm), while PooledTransport's per-child trackers use
+    dt_now() which returns a tz-naive datetime.  compute_quality
+    must normalise these before comparison (issue 1119).
+    """
+
+    def test_naive_and_aware_timestamps_no_crash(self) -> None:
+        """Mixing naive and aware timestamps must not raise TypeError."""
+        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        naive_time = dt(2026, 1, 1, 12, 5, 0)  # no tzinfo
+
+        tracker_aware = RssiTracker()
+        tracker_naive = RssiTracker()
+
+        tracker_aware.record("04:123456", "-70", now)
+        tracker_naive.record("04:123456", "-60", naive_time)
+
+        # Should not raise TypeError
+        q = compute_quality(
+            "04:123456", [tracker_aware, tracker_naive], now=now
+        )
+        assert q.best_rssi == -60
+        assert q.last_seen is not None
+
+    def test_naive_last_seen_is_normalised_to_utc(self) -> None:
+        """Naive timestamps are treated as UTC for comparison."""
+        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        naive_earlier = dt(2026, 1, 1, 11, 55, 0)  # no tzinfo, 5 min earlier
+        aware_later = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+
+        tracker_a = RssiTracker()
+        tracker_b = RssiTracker()
+
+        tracker_a.record("04:123456", "-70", naive_earlier)
+        tracker_b.record("04:123456", "-80", aware_later)
+
+        q = compute_quality("04:123456", [tracker_a, tracker_b], now=now)
+        # aware_later (12:00 UTC) > naive_earlier (11:55 UTC)
+        assert q.last_seen == aware_later
+
+    def test_all_naive_timestamps(self) -> None:
+        """All-naive timestamps should work without error."""
+        t1 = dt(2026, 1, 1, 12, 0, 0)
+        t2 = dt(2026, 1, 1, 12, 5, 0)
+        now_aware = t2.replace(tzinfo=UTC)
+
+        tracker_a = RssiTracker()
+        tracker_b = RssiTracker()
+
+        tracker_a.record("04:123456", "-70", t1)
+        tracker_b.record("04:123456", "-60", t2)
+
+        q = compute_quality("04:123456", [tracker_a, tracker_b], now=now_aware)
+        assert q.best_rssi == -60
+        assert q.last_seen is not None
+
+    def test_naive_staleness_calculation(self) -> None:
+        """Staleness works with naive timestamps (normalised to UTC)."""
+        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        naive_old = dt(2026, 1, 1, 11, 50, 0)  # 10 min ago, no tz
+
+        tracker = RssiTracker()
+        tracker.record("04:123456", "-70", naive_old)
+
+        q = compute_quality("04:123456", [tracker], now=now)
+        assert q.is_stale is True
+        assert q.staleness_seconds is not None
+        assert q.staleness_seconds > 500  # ~600 seconds
