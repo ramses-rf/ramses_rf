@@ -331,6 +331,19 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
             except RuntimeError:
                 _LOGGER.debug("Event loop closed, cannot read frame")
 
+    def get_extra_info(self, name: str, default: Any = None) -> Any:
+        """Get extra information about the transport.
+
+        Extends the base class to expose ``pool_hgi_ids`` — the set of
+        all ESP IDs seen online via the MQTT status topic (wildcard).
+        This allows the coordinator to register MQTT-discovered HGIs
+        in the discovery scan, even without a PooledTransport.
+        """
+        if name == "pool_hgi_ids":
+            ids = self._connection_mgr.online_esp_ids
+            return list(ids) if ids else default
+        return super().get_extra_info(name, default)
+
     async def write_frame(
         self, frame: str, disable_tx_limits: bool = False
     ) -> None:

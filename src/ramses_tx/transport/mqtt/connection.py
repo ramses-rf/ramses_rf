@@ -73,6 +73,12 @@ class MqttConnectionManager:
         self._connection_established = False
         self._closing = False
 
+        # Track all online ESP IDs seen via the status topic (wildcard).
+        # The primary ESP is used for _topic_pub/_topic_sub; additional
+        # ESPs are tracked so the coordinator can register them in the
+        # discovery scan (issue 1119: multi-HGI via single MQTT transport).
+        self._online_esp_ids: set[DeviceIdT] = set()
+
         # Reconnection settings
         self._reconnect_interval = 5.0
         self._max_reconnect_interval = 300.0
@@ -95,6 +101,11 @@ class MqttConnectionManager:
     def is_connected(self) -> bool:
         """Return True if currently connected to the MQTT broker."""
         return self._connected
+
+    @property
+    def online_esp_ids(self) -> frozenset[DeviceIdT]:
+        """Return all ESP IDs seen online via the status topic."""
+        return frozenset(self._online_esp_ids)
 
     @property
     def topic_pub(self) -> str:
@@ -293,6 +304,9 @@ class MqttConnectionManager:
 
         if msg.topic[-3:] != TOPIC_SUFFIX_RX:
             if msg.payload == b"offline":
+                # Remove from online ESP set
+                esp_id = DeviceIdT(msg.topic.rsplit("/", 1)[-1])
+                self._online_esp_ids.discard(esp_id)
                 if (
                     self._topic_sub and msg.topic == self._topic_sub[:-3]
                 ) or not self._topic_sub:
@@ -344,6 +358,10 @@ class MqttConnectionManager:
 
     def _handle_device_online(self, msg: mqtt.MQTTMessage) -> None:
         """Handle online status message from ramses_esp device."""
+        # Extract the ESP device ID from the topic (last segment).
+        esp_id = DeviceIdT(msg.topic.rsplit("/", 1)[-1])
+        self._online_esp_ids.add(esp_id)
+
         if self._connected:
             if not self._topic_sub:
                 _LOGGER.info(
@@ -362,7 +380,7 @@ class MqttConnectionManager:
                         )
                     finally:
                         self._data_wildcard_topic = ""
-                self._establish_connection(DeviceIdT(msg.topic[-9:]))
+                self._establish_connection(esp_id)
             else:
                 _LOGGER.info("MQTT device came back online - resuming writing")
                 self._on_resume_writing()
