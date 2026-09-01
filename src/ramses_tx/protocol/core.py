@@ -621,6 +621,15 @@ class PortProtocol(_DeviceIdFilterMixin):
                 err,
             )
             raise
+        except TransportError as err:
+            _LOGGER.info(
+                "%s: Transport error sending %s|%s: %s",
+                self,
+                patched_cmd.verb,
+                patched_cmd.code,
+                err,
+            )
+            raise
         except ProtocolError as err:
             _LOGGER.info(
                 "%s: Failed to send %s|%s: %s",
