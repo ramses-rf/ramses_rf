@@ -49,6 +49,23 @@ class HvacStrategy(Protocol):
         """
         ...
 
+    def normalize_fan_info(self, fan_info: str) -> str:
+        """Normalise a 31DA fan_info string to a canonical mode name.
+
+        The 31DA parser produces descriptive strings like
+        ``"speed 1, low"`` that don't match the canonical mode names
+        (``"low"``) used in 22F1 mode maps and HA dropdowns.  This
+        method maps descriptive names back to canonical names so
+        consumers can compare fan_info against fan_modes.
+
+        :param fan_info: The descriptive fan_info string from 31DA.
+        :type fan_info: str
+        :returns: The canonical mode name, or the original string if
+            no mapping is known.
+        :rtype: str
+        """
+        ...
+
     @property
     def mode_max(self) -> str | None:
         """Max mode byte for this scheme (e.g. ``"07"`` for orcon)."""
@@ -186,6 +203,30 @@ class HvacStrategyBase:
         """
         return self._mode_map.get(hex_code, hex_code)
 
+    #: Descriptive 31DA fan_info strings → canonical mode names.
+    #: The 31DA parser uses ``_31DA_FAN_INFO`` which produces
+    #: descriptive strings (e.g. ``"speed 1, low"``).  These don't
+    #: match the canonical names in ``_mode_map`` (e.g. ``"low"``)
+    #: that 22F1 uses and that HA dropdowns display.  This map
+    #: normalises 31DA fan_info to canonical names so consumers can
+    #: compare fan_info against fan_modes.  See ramses_cc issue 1116.
+    _FAN_INFO_NORMALISE: dict[str, str] = {
+        "speed 1, low": "low",
+        "speed 2, medium": "medium",
+        "speed 3, high": "high",
+    }
+
+    def normalize_fan_info(self, fan_info: str) -> str:
+        """Normalise a 31DA fan_info string to a canonical mode name.
+
+        :param fan_info: The descriptive fan_info string from 31DA.
+        :type fan_info: str
+        :returns: The canonical mode name, or the original string if
+            no mapping is known.
+        :rtype: str
+        """
+        return self._FAN_INFO_NORMALISE.get(fan_info, fan_info)
+
     @property
     def mode_max(self) -> str | None:
         """Max mode byte for this scheme."""
@@ -260,6 +301,11 @@ class HvacStrategyBase:
                     pass  # semantic string, keep it
 
         if not current_state:
+            # Still normalise fan_info even without current state.
+            if msg_code == Code._31DA and "fan_info" in mutated:
+                incoming = mutated["fan_info"]
+                if isinstance(incoming, str):
+                    mutated["fan_info"] = self.normalize_fan_info(incoming)
             return mutated
 
         # QUIRK: 31DA 'fan_info' precedence over 22F1/22F4
@@ -284,6 +330,12 @@ class HvacStrategyBase:
                     and not current_state.fan_info.startswith("-unknown")
                 ):
                     mutated["fan_info"] = current_state.fan_info
+            elif isinstance(incoming, str):
+                # Normalise descriptive 31DA fan_info (e.g.
+                # "speed 1, low") to canonical mode names (e.g.
+                # "low") so consumers can match against fan_modes.
+                # See ramses_cc issue 1116.
+                mutated["fan_info"] = self.normalize_fan_info(incoming)
 
         return mutated
 

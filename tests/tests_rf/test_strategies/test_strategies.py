@@ -474,3 +474,142 @@ class TestQuirkDispatch:
         result = apply_hvac_quirks(payload, None, Code._12A0)
 
         assert result["supply_temp"] == 18.5
+
+
+# ---------------------------------------------------------------------------
+# normalize_fan_info: 31DA descriptive names → canonical mode names
+# (ramses_cc issue 1116 — "speed 1, low" → "low")
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeFanInfo:
+    """normalize_fan_info maps 31DA descriptive strings to canonical names."""
+
+    @pytest.mark.parametrize(
+        "strategy_cls",
+        [
+            OrconStrategy,
+            ClimaRadStrategy,
+            IthoStrategy,
+            NuaireStrategy,
+            VascoStrategy,
+        ],
+    )
+    def test_normalize_speed_low(
+        self, strategy_cls: type[HvacStrategyBase]
+    ) -> None:
+        assert strategy_cls().normalize_fan_info("speed 1, low") == "low"
+
+    @pytest.mark.parametrize(
+        "strategy_cls",
+        [
+            OrconStrategy,
+            ClimaRadStrategy,
+            IthoStrategy,
+            NuaireStrategy,
+            VascoStrategy,
+        ],
+    )
+    def test_normalize_speed_medium(
+        self, strategy_cls: type[HvacStrategyBase]
+    ) -> None:
+        assert strategy_cls().normalize_fan_info("speed 2, medium") == "medium"
+
+    @pytest.mark.parametrize(
+        "strategy_cls",
+        [
+            OrconStrategy,
+            ClimaRadStrategy,
+            IthoStrategy,
+            NuaireStrategy,
+            VascoStrategy,
+        ],
+    )
+    def test_normalize_speed_high(
+        self, strategy_cls: type[HvacStrategyBase]
+    ) -> None:
+        assert strategy_cls().normalize_fan_info("speed 3, high") == "high"
+
+    @pytest.mark.parametrize(
+        "strategy_cls",
+        [
+            OrconStrategy,
+            ClimaRadStrategy,
+            IthoStrategy,
+            NuaireStrategy,
+            VascoStrategy,
+        ],
+    )
+    def test_normalize_passthrough(
+        self, strategy_cls: type[HvacStrategyBase]
+    ) -> None:
+        """Unknown strings pass through unchanged."""
+        s = strategy_cls()
+        assert s.normalize_fan_info("auto") == "auto"
+        assert s.normalize_fan_info("away") == "away"
+        assert s.normalize_fan_info("boost") == "boost"
+        assert s.normalize_fan_info("off") == "off"
+        assert s.normalize_fan_info("custom_string") == "custom_string"
+
+
+class TestApplyQuirkFanInfoNormalization:
+    """apply_quirk normalises 31DA fan_info in the payload pipeline."""
+
+    def test_31da_fan_info_low_normalized(self) -> None:
+        """31DA 'speed 1, low' is normalised to 'low'."""
+        payload = {"fan_info": "speed 1, low"}
+        result = apply_hvac_quirks(
+            payload, None, Code._31DA, strategy=OrconStrategy()
+        )
+        assert result["fan_info"] == "low"
+
+    def test_31da_fan_info_medium_normalized(self) -> None:
+        """31DA 'speed 2, medium' is normalised to 'medium'."""
+        payload = {"fan_info": "speed 2, medium"}
+        result = apply_hvac_quirks(
+            payload, None, Code._31DA, strategy=OrconStrategy()
+        )
+        assert result["fan_info"] == "medium"
+
+    def test_31da_fan_info_high_normalized(self) -> None:
+        """31DA 'speed 3, high' is normalised to 'high'."""
+        payload = {"fan_info": "speed 3, high"}
+        result = apply_hvac_quirks(
+            payload, None, Code._31DA, strategy=OrconStrategy()
+        )
+        assert result["fan_info"] == "high"
+
+    def test_31da_fan_info_auto_passthrough(self) -> None:
+        """31DA 'auto' passes through unchanged."""
+        payload = {"fan_info": "auto"}
+        result = apply_hvac_quirks(
+            payload, None, Code._31DA, strategy=OrconStrategy()
+        )
+        assert result["fan_info"] == "auto"
+
+    def test_31da_fan_info_off_with_current_state(
+        self,
+    ) -> None:
+        """31DA 'off' with valid current_state keeps current fan_info."""
+        from ramses_rf.models import HvacState
+
+        current = HvacState(fan_info="low")
+        payload = {"fan_info": "off"}
+        result = apply_hvac_quirks(
+            payload, current, Code._31DA, strategy=OrconStrategy()
+        )
+        # 'off' is a null marker — keep the current valid state
+        assert result["fan_info"] == "low"
+
+    def test_31da_fan_info_normalized_with_current_state(
+        self,
+    ) -> None:
+        """31DA normalisation works even when current_state is present."""
+        from ramses_rf.models import HvacState
+
+        current = HvacState(fan_info="auto")
+        payload = {"fan_info": "speed 1, low"}
+        result = apply_hvac_quirks(
+            payload, current, Code._31DA, strategy=OrconStrategy()
+        )
+        assert result["fan_info"] == "low"
