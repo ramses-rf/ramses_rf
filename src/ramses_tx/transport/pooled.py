@@ -5,10 +5,12 @@ Combines multiple physical transports (serial, MQTT, ser2net) into a
 single coherent :class:`TransportInterface` that the protocol layer
 sees as one transport.  Inbound packets from any child are deduplicated
 within a sliding time window and forwarded upstream.  Outbound frames
-are routed to a selected child transport (round-robin in this PR;
-RSSI-based selection follows in a subsequent PR).
+are routed to the child transport with the best rolling-average RSSI,
+falling back to round-robin when no RSSI data is available yet.
+Unhealthy children are detected via a configurable health timeout and
+excluded from outbound selection until they recover.
 
-This is Roadmap Item 9, PR 2 (issue 1122).
+This is Roadmap Item 9, PRs 2-4 (issue 1122).
 """
 
 from __future__ import annotations
@@ -37,6 +39,20 @@ _DEFAULT_DEDUP_WINDOW: float = 0.5
 
 #: Maximum number of dedup keys retained in the sliding window.
 _MAX_DEDUP_KEYS: int = 512
+
+#: Number of RSSI samples to retain per child for the rolling average
+#: used by outbound routing (Roadmap Item 9, PR 3).
+_RSSI_SAMPLE_WINDOW: int = 5
+
+#: RSSI value used when a child has no data yet (treated as neutral).
+_RSSI_UNKNOWN: int = 0
+
+#: Default health-check interval in seconds.  A child that has not
+#: received any packets for this duration is marked unhealthy.
+_DEFAULT_HEALTH_TIMEOUT: float = 60.0
+
+#: Number of consecutive errors before a child is marked unhealthy.
+_DEFAULT_MAX_CONSECUTIVE_ERRORS: int = 5
 
 #: Key for deduplication: (verb, code, src, dst, addr3, raw_payload).
 _DedupKeyT: TypeAlias = tuple[str, str, str, str, str, str]
@@ -116,9 +132,12 @@ class PooledTransport(TransportInterface):
     inbound packets through the pool's deduplication filter before
     forwarding them to the real protocol.
 
-    Outbound frames are routed to a selected child transport.  The
-    selection strategy is round-robin in this PR; RSSI-based selection
-    will be added in a subsequent PR (Roadmap Item 9, PR 3).
+    Outbound frames are routed to the connected child with the best
+    rolling-average RSSI (5-sample window).  When no RSSI data is
+    available for any child, selection falls back to round-robin.
+    Unhealthy children (no packets for ``health_timeout`` seconds, or
+    exceeding ``max_consecutive_errors``) are excluded from selection
+    until they recover.
 
     :param protocol: The real protocol that receives deduplicated
         packets.
@@ -133,6 +152,12 @@ class PooledTransport(TransportInterface):
         with the same content key arriving within this window from
         different children are suppressed.  Defaults to 0.5s.
     :type dedup_window: float
+    :param health_timeout: Seconds without inbound packets before a
+        connected child is marked unhealthy.  Defaults to 60s.
+    :type health_timeout: float
+    :param max_consecutive_errors: Number of consecutive errors before
+        a child is marked unhealthy.  Defaults to 5.
+    :type max_consecutive_errors: int
     """
 
     def __init__(
@@ -144,6 +169,8 @@ class PooledTransport(TransportInterface):
         config: TransportConfig,
         loop: asyncio.AbstractEventLoop | None = None,
         dedup_window: float = _DEFAULT_DEDUP_WINDOW,
+        health_timeout: float = _DEFAULT_HEALTH_TIMEOUT,
+        max_consecutive_errors: int = _DEFAULT_MAX_CONSECUTIVE_ERRORS,
     ) -> None:
         """Initialise the pooled transport."""
         if not transports:
@@ -169,8 +196,20 @@ class PooledTransport(TransportInterface):
         self._child_hgi: list[str | None] = [None] * len(transports)
         self._child_transport_objs: list[Any] = [None] * len(transports)
 
-        # Round-robin outbound counter.
+        # Round-robin outbound counter (used as fallback when no RSSI).
         self._rr_index: int = 0
+
+        # Per-child RSSI sample windows for outbound routing (PR 3).
+        self._child_rssi: list[deque[int]] = [
+            deque(maxlen=_RSSI_SAMPLE_WINDOW) for _ in transports
+        ]
+
+        # Per-child health tracking (PR 4).
+        self._health_timeout: td = td(seconds=health_timeout)
+        self._max_consecutive_errors: int = max_consecutive_errors
+        self._child_last_pkt_time: list[dt | None] = [None] * len(transports)
+        self._child_consecutive_errors: list[int] = [0] * len(transports)
+        self._child_healthy: list[bool] = [True] * len(transports)
 
         # Connection future — resolved when at least one child connects.
         self._conn_fut: asyncio.Future[TransportInterface] | None = None
@@ -218,9 +257,20 @@ class PooledTransport(TransportInterface):
             return {
                 "children": len(self._transports),
                 "connected": sum(self._child_connected),
+                "healthy": sum(
+                    1
+                    for i in range(len(self._transports))
+                    if self._child_connected[i] and self._child_healthy[i]
+                ),
                 "received": list(self._pkts_received),
                 "deduped": self._pkts_deduped,
                 "forwarded": self._pkts_forwarded,
+                "avg_rssi": [
+                    round(self._avg_rssi(i), 1)
+                    for i in range(len(self._transports))
+                ],
+                "child_health": list(self._child_healthy),
+                "consecutive_errors": list(self._child_consecutive_errors),
             }
         return default
 
@@ -233,8 +283,9 @@ class PooledTransport(TransportInterface):
     ) -> None:
         """Route an outbound frame to a selected child transport.
 
-        Selection is round-robin among connected children in this PR.
-        RSSI-based selection will be added in PR 3.
+        Selection uses the highest rolling-average RSSI among
+        connected children, falling back to round-robin when no RSSI
+        data is available.
 
         :param frame: The raw ASCII frame to transmit.
         :type frame: str
@@ -267,12 +318,31 @@ class PooledTransport(TransportInterface):
         """Process a packet from a child transport.
 
         Deduplicates against the sliding window and forwards to the
-        real protocol if not a duplicate.
+        real protocol if not a duplicate.  Records the packet's RSSI
+        in the child's rolling sample window for outbound routing.
+        Updates the child's health timestamp (a packet received resets
+        the consecutive error counter and marks the child healthy).
         """
         self._pkts_received[index] += 1
 
         if self._closing:
             return
+
+        # Update health tracking — any packet proves the child is alive.
+        self._child_last_pkt_time[index] = dt_now()
+        if self._child_consecutive_errors[index] > 0:
+            self._child_consecutive_errors[index] = 0
+        if not self._child_healthy[index]:
+            self._child_healthy[index] = True
+            _LOGGER.info(
+                "PooledTransport: child %d recovered (healthy again)",
+                index,
+            )
+
+        # Record RSSI sample for outbound routing (PR 3).
+        rssi_val = self._parse_rssi(packet)
+        if rssi_val is not None:
+            self._child_rssi[index].append(rssi_val)
 
         key = self._dedup_key(packet)
         now = dt_now()
@@ -336,6 +406,42 @@ class PooledTransport(TransportInterface):
             dto.raw_payload,
         )
 
+    @staticmethod
+    def _parse_rssi(packet: Packet) -> int | None:
+        """Extract a numeric RSSI value from a packet.
+
+        RSSI is stored as a 3-character string in the DTO (e.g.
+        ``"000"``, ``"063"``).  Returns ``None`` if the value is
+        absent or non-numeric.
+
+        :param packet: The packet to extract RSSI from.
+        :type packet: Packet
+        :returns: Integer RSSI value, or ``None`` if unavailable.
+        :rtype: int | None
+        """
+        rssi = packet._dto.rssi
+        if not rssi or rssi == "...":
+            return None
+        try:
+            return int(rssi)
+        except (ValueError, TypeError):
+            return None
+
+    def _avg_rssi(self, index: int) -> float:
+        """Return the rolling-average RSSI for a child.
+
+        Returns ``_RSSI_UNKNOWN`` (0) if no samples are available.
+
+        :param index: The child index.
+        :type index: int
+        :returns: Average RSSI, or 0 if no data.
+        :rtype: float
+        """
+        samples = self._child_rssi[index]
+        if not samples:
+            return float(_RSSI_UNKNOWN)
+        return sum(samples) / len(samples)
+
     # -- Internal: connection lifecycle ---------------------------------
 
     def _on_child_connected(self, index: int, transport_obj: Any) -> None:
@@ -362,9 +468,28 @@ class PooledTransport(TransportInterface):
     def _on_child_disconnected(
         self, index: int, error: Exception | None
     ) -> None:
-        """Mark a child as disconnected."""
+        """Mark a child as disconnected and record the error.
+
+        Increments the consecutive error counter; if it exceeds the
+        threshold, the child is marked unhealthy.
+        """
         self._child_connected[index] = False
         self._child_hgi[index] = None
+
+        # Health tracking — increment consecutive errors (PR 4).
+        self._child_consecutive_errors[index] += 1
+        if (
+            self._child_consecutive_errors[index]
+            >= self._max_consecutive_errors
+        ):
+            if self._child_healthy[index]:
+                self._child_healthy[index] = False
+                _LOGGER.warning(
+                    "PooledTransport: child %d marked unhealthy "
+                    "(%d consecutive errors)",
+                    index,
+                    self._child_consecutive_errors[index],
+                )
 
         _LOGGER.info(
             "PooledTransport: child %d disconnected (%s), %d/%d connected",
@@ -405,22 +530,93 @@ class PooledTransport(TransportInterface):
     def _select_transport(self) -> TransportInterface | None:
         """Select a child transport for outbound transmission.
 
-        Round-robin among connected children.  Returns ``None`` if no
-        child is connected.
+        Uses RSSI-based selection: the connected, healthy child with
+        the highest rolling-average RSSI is preferred.  Falls back to
+        round-robin among connected, healthy children when no RSSI data
+        is available.  Returns ``None`` if no child is connected and
+        healthy.
         """
-        connected = [i for i, c in enumerate(self._child_connected) if c]
-        if not connected:
+        # Check health timeouts before selecting.
+        self._check_health()
+
+        # Only consider connected AND healthy children.
+        candidates = [
+            i
+            for i in range(len(self._transports))
+            if self._child_connected[i] and self._child_healthy[i]
+        ]
+        if not candidates:
             return None
 
-        # Round-robin: advance the counter and pick the next connected
-        # child, skipping disconnected ones.
-        n = len(self._transports)
-        for _ in range(n):
-            self._rr_index = (self._rr_index + 1) % n
-            if self._rr_index in connected:
-                return self._transports[self._rr_index]
+        # Compute average RSSI for each candidate.
+        rssi_values = {i: self._avg_rssi(i) for i in candidates}
 
-        return self._transports[connected[0]]
+        # If no child has RSSI data, fall back to round-robin.
+        if all(v == float(_RSSI_UNKNOWN) for v in rssi_values.values()):
+            n = len(self._transports)
+            for _ in range(n):
+                self._rr_index = (self._rr_index + 1) % n
+                if self._rr_index in candidates:
+                    return self._transports[self._rr_index]
+            return self._transports[candidates[0]]
+
+        # Select the child with the best (highest) average RSSI.
+        # Ties are broken by lowest index for determinism.
+        best_index = max(
+            candidates,
+            key=lambda i: (rssi_values[i], -i),
+        )
+        return self._transports[best_index]
+
+    def _check_health(self) -> None:
+        """Check all children for health timeout and mark unhealthy.
+
+        A connected child that has not received any packets within
+        ``health_timeout`` is marked unhealthy.  If there are no
+        healthy, connected children left, unhealthy children are
+        re-evaluated as a last resort (better to try than to fail).
+        """
+        now = dt_now()
+        any_healthy = False
+
+        for i in range(len(self._transports)):
+            if not self._child_connected[i]:
+                continue
+
+            if not self._child_healthy[i]:
+                continue
+
+            last_pkt = self._child_last_pkt_time[i]
+            if last_pkt is None:
+                # Connected but never received a packet — check if
+                # the connection is recent enough to still be healthy.
+                continue
+
+            if now - last_pkt > self._health_timeout:
+                self._child_healthy[i] = False
+                _LOGGER.warning(
+                    "PooledTransport: child %d marked unhealthy "
+                    "(no packets for %.1fs)",
+                    i,
+                    (now - last_pkt).total_seconds(),
+                )
+            else:
+                any_healthy = True
+
+        # If no healthy children remain, re-enable all connected ones
+        # as a last resort (better to attempt transmission than fail).
+        if not any_healthy:
+            re_enabled = []
+            for i in range(len(self._transports)):
+                if self._child_connected[i] and not self._child_healthy[i]:
+                    self._child_healthy[i] = True
+                    re_enabled.append(i)
+            if re_enabled:
+                _LOGGER.info(
+                    "PooledTransport: no healthy children, re-enabling "
+                    "as last resort: %s",
+                    re_enabled,
+                )
 
     # -- Diagnostics -----------------------------------------------------
 
