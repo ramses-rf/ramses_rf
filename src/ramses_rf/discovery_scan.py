@@ -385,13 +385,18 @@ class DiscoveryScan:
         # The gateway's own HGI is never a "discovered" device.
         # Check the active HGI ID from the transport directly — the device
         # may not be in the device_registry yet when the first packets arrive.
-        # TODO: when multiple HGI gateways are supported, this must check
-        # against all gateway IDs, not just the single active one.
+        # For PooledTransport, also check all pool member HGI IDs so that
+        # already-accepted pool members are not re-discovered.
         engine = getattr(self._gateway, "_engine", None)
         transport = getattr(engine, "_transport", None) if engine else None
         if transport is not None:
             active_hgi = transport.get_extra_info(SZ_ACTIVE_HGI)
             if active_hgi == device_id:
+                return True
+            # Check all pool members (PooledTransport returns a list;
+            # regular transports return None for this key).
+            pool_hgi_ids = transport.get_extra_info("pool_hgi_ids")
+            if pool_hgi_ids and device_id in pool_hgi_ids:
                 return True
         # Also check via the hgi property (covers the case where the device
         # is in the registry but the transport extra_info is not set)

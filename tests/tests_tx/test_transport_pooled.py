@@ -1517,6 +1517,48 @@ def test_pool_stats_accepted_hgis_none_when_no_filter(
     assert stats["accepted_hgis"] is None
 
 
+def test_pool_hgi_ids_returns_all_members(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info('pool_hgi_ids') returns all connected children's HGIs."""
+    proto = _make_mock_protocol()
+    t0, t1 = _make_mock_transport(), _make_mock_transport()
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    pool._child_hgi[0] = "18:001234"
+    pool._child_hgi[1] = "18:005678"
+
+    hgi_ids = pool.get_extra_info("pool_hgi_ids")
+    assert hgi_ids == ["18:001234", "18:005678"]
+
+
+def test_pool_hgi_ids_excludes_none_and_removed(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """pool_hgi_ids excludes children with unknown HGI or removed slots."""
+    proto = _make_mock_protocol()
+    t0, t1, t2 = (
+        _make_mock_transport(),
+        _make_mock_transport(),
+        _make_mock_transport(),
+    )
+    pool = PooledTransport(
+        proto, [t0, t1, t2], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    pool._on_child_connected(2, t2)
+    pool._child_hgi[0] = "18:001234"
+    pool._child_hgi[1] = None  # not yet discovered
+    pool._child_hgi[2] = "18:005678"
+
+    hgi_ids = pool.get_extra_info("pool_hgi_ids")
+    assert hgi_ids == ["18:001234", "18:005678"]  # child 1 excluded
+
+
 # -- Source-ID re-patching for multi-HGI outbound -------------------------
 
 

@@ -269,6 +269,10 @@ class PooledTransport(TransportInterface):
                 if hgi is not None:
                     return hgi
             return default
+        if name == "pool_hgi_ids":
+            # Return all connected children's HGI IDs (for discovery scan
+            # to exclude pool members from "new device" notifications).
+            return [hgi for hgi in self._child_hgi if hgi is not None]
         if name == SZ_IS_EVOFW3:
             for i, connected in enumerate(self._child_connected):
                 if connected and self._child_transport_objs[i] is not None:
