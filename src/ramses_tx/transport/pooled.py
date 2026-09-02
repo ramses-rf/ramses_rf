@@ -179,7 +179,7 @@ class PooledTransport(TransportInterface):
     def __init__(
         self,
         protocol: RamsesProtocolT,
-        transports: list[TransportInterface],
+        transports: list[TransportInterface | None],
         /,
         *,
         config: TransportConfig,
