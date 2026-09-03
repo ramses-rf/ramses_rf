@@ -47,7 +47,11 @@ _RSSI_UNKNOWN: int = 0
 
 #: Default health-check interval in seconds.  A child that has not
 #: received any packets for this duration is marked unhealthy.
-_DEFAULT_HEALTH_TIMEOUT: float = 60.0
+#: Set to 180s (3 min) because RAMSES traffic can be sparse — some
+#: devices poll every 2-3 minutes, and a 60s timeout caused false
+#: unhealthy markings during quiet periods (observed in pool testing
+#: with real MQTT HGIs, issue 1119).
+_DEFAULT_HEALTH_TIMEOUT: float = 180.0
 
 #: Number of consecutive errors before a child is marked unhealthy.
 _DEFAULT_MAX_CONSECUTIVE_ERRORS: int = 5
@@ -405,7 +409,12 @@ class PooledTransport(TransportInterface):
             and src_addr != child_hgi
         ):
             parts[2] = child_hgi
-            frame = " ".join(parts)
+            # Preserve leading whitespace (verb can be ' I' with a
+            # leading space in RAMSES frames).
+            leading = ""
+            if frame and frame[0].isspace():
+                leading = frame[0]
+            frame = leading + " ".join(parts)
             _LOGGER.debug(
                 "PooledTransport: re-patched frame source %s -> %s "
                 "for child %d",
@@ -690,6 +699,13 @@ class PooledTransport(TransportInterface):
         rssi_values = {
             i: self._best_rssi(i, target_device) for i in candidates
         }
+        _LOGGER.debug(
+            "PooledTransport: _select_transport target=%s candidates=%s "
+            "rssi_values=%s",
+            target_device,
+            candidates,
+            rssi_values,
+        )
 
         # If per-device RSSI returned nothing for all candidates,
         # fall back to aggregate RSSI.
@@ -712,6 +728,12 @@ class PooledTransport(TransportInterface):
         best_index = max(
             candidates,
             key=lambda i: (rssi_values[i], -i),
+        )
+        _LOGGER.debug(
+            "PooledTransport: selected child %d (rssi=%s) for target %s",
+            best_index,
+            rssi_values[best_index],
+            target_device,
         )
         return self._transports[best_index]
 
