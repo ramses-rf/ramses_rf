@@ -110,6 +110,7 @@ class Action(StrEnum):
     SET_DHW_MODE = "set_dhw_mode"
 
     PUT_CO2_LEVEL = "put_co2_level"
+    PUT_VENTILATION_DEMAND = "put_ventilation_demand"
     PUT_INDOOR_HUMIDITY = "put_indoor_humidity"
     PUT_OUTDOOR_TEMP = "put_outdoor_temp"
     PUT_SENSOR_TEMP = "put_sensor_temp"

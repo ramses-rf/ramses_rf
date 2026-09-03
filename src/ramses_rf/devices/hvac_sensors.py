@@ -19,8 +19,11 @@ from ramses_rf.const import (
 from ramses_rf.enums import Action
 from ramses_rf.messages import Message
 from ramses_rf.models import DeviceTraits, HvacState
+from ramses_rf.schemas import SZ_BOUND_TO
+from ramses_rf.strategies import VentilationControlStrategy, best_hvac_strategy
 from ramses_tx import Packet, Priority
 from ramses_tx.const import Code
+from ramses_tx.typing import DeviceIdT
 
 from .dev_base import BatteryState, DeviceHvac, Fakeable
 
@@ -251,6 +254,36 @@ class HvacCarbonDioxideSensor(CarbonDioxide, Fakeable):  # CO2: I/1298
     # .W --- 32:155617 29:181813 --:------ 1FC9 012 00-31D9-825FE1 00-31DA-825FE1  # The HRU
     # .I --- 29:181813 32:155617 --:------ 1FC9 001 00
 
+    async def _resolve_fan_strategy(
+        self, fan_id: DeviceIdT
+    ) -> VentilationControlStrategy:
+        """Resolve capability from the destination fan and its model."""
+        fan = self._gateway.device_registry.get_device(fan_id)
+        explicit_strategy: object = fan._strategy
+        if isinstance(explicit_strategy, VentilationControlStrategy):
+            return explicit_strategy
+
+        info = await fan.entity_state.get_value(Code._10E0)
+        model = info.get("description") if isinstance(info, dict) else None
+        strategy = best_hvac_strategy(fan.id, fan._scheme, model=model)
+        if not isinstance(strategy, VentilationControlStrategy):
+            raise ValueError(f"{fan}: ventilation demand is not supported")
+        return strategy
+
+    def _bound_fan_id(self) -> DeviceIdT | None:
+        """Return the configured bound fan ID, if present."""
+        traits = self._gateway.config.known_list.get(self.id, {})
+        bound = traits.get(SZ_BOUND_TO)
+        device_ids = bound if isinstance(bound, list) else [bound]
+        return next(
+            (
+                DeviceIdT(fan_id)
+                for fan_id in device_ids
+                if isinstance(fan_id, str) and fan_id.startswith("32:")
+            ),
+            None,
+        )
+
     async def initiate_binding_process(
         self,
     ) -> tuple[Message, Message, Message, Packet | None]:
@@ -260,6 +293,47 @@ class HvacCarbonDioxideSensor(CarbonDioxide, Fakeable):  # CO2: I/1298
         :rtype: tuple[Message, Message, Message, Packet | None]
         :raises exc.BindingError: If binding fails
         """
-        return await super()._initiate_binding_process(
-            (Code._31E0, Code._1298, Code._2E10)
+        configured_strategy: object = self._get_configured_strategy()
+        strategy = (
+            configured_strategy
+            if isinstance(configured_strategy, VentilationControlStrategy)
+            else None
+        )
+        if not strategy and (fan_id := self._bound_fan_id()):
+            strategy = await self._resolve_fan_strategy(fan_id)
+        offer_codes = (
+            strategy.co2_binding_codes()
+            if strategy
+            else (Code._31E0, Code._1298, Code._2E10)
+        )
+        return await super()._initiate_binding_process(offer_codes)
+
+    async def set_ventilation_demand(
+        self, fan_id: DeviceIdT, value: float
+    ) -> Message | None:
+        """Send a transient ventilation demand to a bound fan.
+
+        :param fan_id: The device ID of the destination fan.
+        :type fan_id: DeviceIdT
+        :param value: The demand as a value from 0.0 to 1.0.
+        :type value: float
+        :returns: The resulting message, if one was generated.
+        :rtype: Message | None
+        :raises exc.DeviceNotFaked: If faking is not enabled.
+        """
+        if not self.is_faked:
+            raise exc.DeviceNotFaked(f"{self}: Faking is not enabled")
+
+        strategy = await self._resolve_fan_strategy(fan_id)
+        intent = Intent(
+            src=Address(self.id),
+            dst=Address(fan_id),
+            action=Action.PUT_VENTILATION_DEMAND,
+            data={
+                "ventilation_demand": value,
+                "strategy": strategy,
+            },
+        )
+        return await self._gateway.dispatcher.send(
+            intent, priority=Priority.HIGH
         )

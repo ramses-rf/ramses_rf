@@ -22,6 +22,7 @@ BUILDERS: dict[Action, Callable[[Command], CommandDTO]] = {
     Action.SET_DHW_MODE: dhw.build_set_dhw_mode,
     # HVAC Commands
     Action.PUT_CO2_LEVEL: hvac.build_put_co2_level,
+    Action.PUT_VENTILATION_DEMAND: hvac.build_put_ventilation_demand,
     Action.PUT_INDOOR_HUMIDITY: hvac.build_put_indoor_humidity,
     Action.SET_FAN_MODE: hvac.build_set_fan_mode,
     Action.SET_BYPASS_POSITION: hvac.build_set_bypass_position,

@@ -227,19 +227,32 @@ def build_put_bind(intent: Command) -> CommandDTO:
     oem_code = intent.get("oem_code")
     index = intent.get("index")
 
-    kodes: list[str] = []
+    bindings: list[tuple[str, str]] = []
     if not codes:
-        kodes = []
+        bindings = []
     elif isinstance(codes, str):
         if len(codes) != 4:
             raise ValueError(f"Invalid code for a bind command: {codes}")
-        kodes = [codes]
+        bindings = [("00", codes)]
     elif isinstance(codes, Iterable):
-        kodes = [str(c) for c in codes]
-        if any(len(c) != 4 for c in kodes):
-            raise ValueError(f"Invalid codes for a bind command: {codes}")
+        for binding in codes:
+            if (
+                isinstance(binding, tuple)
+                and len(binding) == 2
+                and len(str(binding[0])) == 2
+            ):
+                binding_index, binding_code = map(str, binding)
+            else:
+                binding_index, binding_code = "00", str(binding)
+            if len(binding_index) != 2 or len(binding_code) != 4:
+                raise ValueError(
+                    f"Invalid binding for a bind command: {binding}"
+                )
+            bindings.append((binding_index.upper(), binding_code.upper()))
     else:
         raise ValueError(f"Invalid codes for a bind command: {codes}")
+
+    kodes = [code for _, code in bindings]
 
     if verb == I_ and intent.dst.id in (None, intent.src.id, ALL_DEV_ADDR.id):
         # put_bind_offer
@@ -247,7 +260,11 @@ def build_put_bind(intent: Command) -> CommandDTO:
         if not kodes:
             raise ValueError(f"Invalid codes for a bind offer: {codes}")
         hex_id = dev_id_to_hex_id(intent.src.id)
-        payload = "".join(f"00{c}{hex_id}" for c in kodes)
+        payload = "".join(
+            f"{binding_index}{binding_code}{hex_id}"
+            for binding_index, binding_code in bindings
+            if binding_code not in (Code._1FC9, Code._10E0)
+        )
         if oem_code:
             payload += f"{oem_code}{Code._10E0}{hex_id}"
         payload += f"00{Code._1FC9}{hex_id}"

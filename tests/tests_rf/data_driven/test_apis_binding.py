@@ -52,8 +52,8 @@ class GatewayStub:
         """Initialize the GatewayStub."""
         self.config = SimpleNamespace(disable_discovery=True, known_list={})
 
-        self.device_by_id: dict[str, Fakeable] = {}
-        self.devices: list[Fakeable] = []
+        self.device_by_id: dict[str, Any] = {}
+        self.devices: list[Any] = []
 
         # Explicitly type as Any to prevent strict mode from complaining about missing mock attributes
         self._engine: Any = unittest.mock.MagicMock()
@@ -66,9 +66,13 @@ class GatewayStub:
         """Act as our own DeviceRegistry for testing purposes."""
         return self
 
-    def _add_device(self, dev: Fakeable) -> None:
+    def _add_device(self, dev: Any) -> None:
         self.device_by_id[dev.id] = dev
         self.devices.append(dev)
+
+    def get_device(self, device_id: str) -> Any:
+        """Return a previously registered test device."""
+        return self.device_by_id[device_id]
 
 
 # ### FIXTURES ########################################################################
@@ -116,12 +120,33 @@ async def test_initiate_binding_process(dev_class: type[Fakeable]) -> None:
             mocked_method.assert_called_once_with((Code._22F1,))
 
             mocked_method.reset_mock()
-            configured_dev = HvacRemote(
+            configured_remote = HvacRemote(
                 gwy,
                 Address("33:123457"),
                 traits=DeviceTraits(scheme="nuaire"),
             )
 
-            await configured_dev.initiate_binding_process()
+            await configured_remote.initiate_binding_process()
 
             mocked_method.assert_called_once_with((Code._22F1,))
+
+        if isinstance(dev, HvacCarbonDioxideSensor):
+            mocked_method.reset_mock()
+            fan_id = "32:123459"
+            gwy.device_by_id[fan_id] = SimpleNamespace(
+                id=fan_id,
+                _scheme="orcon",
+                _strategy=None,
+                entity_state=SimpleNamespace(
+                    get_value=unittest.mock.AsyncMock(return_value=None)
+                ),
+            )
+            configured_sensor = HvacCarbonDioxideSensor(
+                gwy,
+                Address("29:123458"),
+            )
+            gwy.config.known_list[configured_sensor.id] = {"bound": fan_id}
+            await configured_sensor.initiate_binding_process()
+            mocked_method.assert_called_once_with(
+                (("00", Code._31E0), ("01", Code._31E0), ("00", Code._1298))
+            )

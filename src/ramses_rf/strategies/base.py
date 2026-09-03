@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from ramses_rf.models import HvacState
-from ramses_tx.const import Code
+from ramses_tx.const import Code, IndexT
 
 
 @runtime_checkable
@@ -102,6 +102,32 @@ class HvacStrategy(Protocol):
 
         :returns: Dict of command name → template.
         :rtype: dict[str, dict[str, str]]
+        """
+        ...
+
+
+@runtime_checkable
+class VentilationControlStrategy(Protocol):
+    """Capability interface for CO2 binding and demand control."""
+
+    def co2_binding_codes(
+        self,
+    ) -> tuple[Code | tuple[IndexT, Code], ...]:
+        """Codes and domains offered by a CO2 sensor.
+
+        :returns: Ordered CO2 binding codes, optionally with domain indices.
+        :rtype: tuple[Code | tuple[IndexT, Code], ...]
+        """
+        ...
+
+    def ventilation_demand_payload(self, value: float) -> str:
+        """Encode a ventilation demand for this device capability.
+
+        :param value: Demand as a value from 0.0 to 1.0.
+        :type value: float
+        :returns: Encoded 31E0 payload.
+        :rtype: str
+        :raises ValueError: If this strategy does not support demand control.
         """
         ...
 
@@ -296,6 +322,18 @@ class HvacStrategyBase:
         :rtype: tuple[Code, ...]
         """
         return self._binding_codes
+
+    def co2_binding_codes(
+        self,
+    ) -> tuple[Code | tuple[IndexT, Code], ...]:
+        """Return the generic CO2 sensor binding offer."""
+        return (Code._31E0, Code._1298, Code._2E10)
+
+    def ventilation_demand_payload(self, value: float) -> str:
+        """Reject ventilation demand when the capability is unknown."""
+        raise ValueError(
+            f"ventilation demand is not supported for scheme '{self.scheme}'"
+        )
 
     #: Vendor-specific commands hardcoded in the strategy.
     #: Subclasses override with vendor-specific commands (bypass, filter

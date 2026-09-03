@@ -32,7 +32,7 @@ from ramses_rf.const import SZ_OEM_CODE, SZ_PHASE
 from ramses_rf.devices import Fakeable
 from ramses_rf.enums import Action
 from ramses_rf.gateway import GatewayConfig
-from ramses_tx import Address, Verb
+from ramses_tx import Address, IndexT, Verb
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.protocol import PortProtocol
 
@@ -96,6 +96,21 @@ TEST_SUITE_300 = [
             " W --- 18:126620 37:154011 --:------ 1FC9 012 00-31D9-49EE9C 00-31DA-49EE9C",
             " I --- 37:154011 18:126620 --:------ 1FC9 001 00",
             " I --- 37:154011 63:262142 --:------ 10E0 038 00-000100280901-01-FEFFFFFFFFFF140107E5564D532D31324333390000000000000000000000",
+        ),
+    },
+    #
+    {  # CO2 to FAN (orcon)
+        SZ_RESPONDENT: {
+            "32:134044": {"class": "FAN", "scheme": "orcon"},
+        },
+        SZ_SUPPLICANT: {
+            "29:150156": {"class": "CO2", "scheme": "orcon", "faked": True}
+        },
+        PKT_FLOW: (
+            " I --- 29:150156 --:------ 29:150156 1FC9 030 00-31E0-764A8C 01-31E0-764A8C 00-1298-764A8C 67-10E0-764A8C 00-1FC9-764A8C",
+            " W --- 32:134044 29:150156 --:------ 1FC9 012 00-31D9-820B9C 00-31DA-820B9C",
+            " I --- 29:150156 32:134044 --:------ 1FC9 001 00",
+            " I --- 29:150156 63:262142 --:------ 10E0 038 00-0001C8500B01-67-FEFFFFFFFFFF090307E1564D532D31354331360000000000000000000000",
         ),
     },
     #
@@ -433,8 +448,11 @@ async def _test_flow_20x(
 
     # Step S1: Supplicant sends an Offer (makes Offer) and expects an Accept
     payload = packet_flow_expected[_TENDER][46:]
-    offer_codes = [payload[i : i + 4] for i in range(2, len(payload), 12)]
-    offer_codes = [c for c in offer_codes if c != Code._1FC9]
+    offer_codes = [
+        (cast(IndexT, payload[i : i + 2]), Code(payload[i + 2 : i + 6]))
+        for i in range(0, len(payload), 12)
+        if payload[i + 2 : i + 6] != Code._1FC9
+    ]
 
     confirm_code = packet_flow_expected[_AFFIRM][48:52] or None
     if len(packet_flow_expected) > _RATIFY:

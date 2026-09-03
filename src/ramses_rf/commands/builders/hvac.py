@@ -13,7 +13,7 @@ from ramses_rf.models.hvac_schemas import (
     _2411_PARAMS_SCHEMA,
 )
 from ramses_rf.protocol.ramses import _31DA_FAN_INFO
-from ramses_rf.strategies import HvacStrategy
+from ramses_rf.strategies import HvacStrategy, VentilationControlStrategy
 from ramses_tx.address import NON_DEV_ADDR
 from ramses_tx.const import DEFAULT_NUM_REPEATS, I_, RQ, W_, Code, Priority
 from ramses_tx.dtos import CommandDTO
@@ -140,6 +140,38 @@ def build_put_co2_level(intent: Command) -> CommandDTO:
         addr2=addr2,
         addr3=addr3,
         code=Code._1298,
+        payload=payload,
+        priority=Priority.DEFAULT,
+        num_repeats=DEFAULT_NUM_REPEATS,
+    )
+
+
+def build_put_ventilation_demand(intent: Command) -> CommandDTO:
+    """Translate a transient ventilation demand into a 31E0 DTO.
+
+    :param intent: The command intent containing the demand and strategy.
+    :type intent: Command
+    :returns: The encoded Orcon demand command.
+    :rtype: CommandDTO
+    :raises TypeError: If no HVAC strategy is provided.
+    :raises ValueError: If the demand or strategy is unsupported.
+    """
+    demand = float(intent.get("ventilation_demand"))
+    if not 0.0 <= demand <= 1.0:
+        raise ValueError("ventilation_demand must be between 0.0 and 1.0")
+
+    strategy = intent.get("strategy")
+    if not isinstance(strategy, VentilationControlStrategy):
+        raise TypeError("strategy must implement VentilationControlStrategy")
+
+    payload = strategy.ventilation_demand_payload(demand)
+    addr1, addr2, addr3 = resolve_addrs(intent.src, intent.dst)
+    return CommandDTO(
+        verb=I_,
+        addr1=addr1,
+        addr2=addr2,
+        addr3=addr3,
+        code=Code._31E0,
         payload=payload,
         priority=Priority.DEFAULT,
         num_repeats=DEFAULT_NUM_REPEATS,

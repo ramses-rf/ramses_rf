@@ -412,7 +412,7 @@ class BindingManagerSupplicant(BindingManagerBase):
 
     async def initiate_binding_process(
         self,
-        offer_codes: Iterable[Code],
+        offer_codes: Iterable[Code | tuple[IndexT, Code]],
         /,
         *,
         confirm_code: Code | None = None,
@@ -466,7 +466,7 @@ class BindingManagerSupplicant(BindingManagerBase):
 
     async def _make_offer(
         self,
-        codes: Iterable[Code],
+        codes: Iterable[Code | tuple[IndexT, Code]],
         vendor_code: str | None = None,
     ) -> Message:
         """Supp sends an Offer & returns the corresponding Message.

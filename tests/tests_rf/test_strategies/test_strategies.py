@@ -21,6 +21,7 @@ from ramses_rf.strategies import (
     HvacStrategy,
     IthoStrategy,
     NuaireStrategy,
+    OrconHrc350Strategy,
     OrconStrategy,
     VascoStrategy,
     best_hvac_strategy,
@@ -439,6 +440,20 @@ class TestBestHvacStrategy:
         strategy = best_hvac_strategy("32:123456", scheme="unknown")
 
         assert isinstance(strategy, OrconStrategy)
+
+    def test_orcon_hrc350_model_selects_first_domain_capability(self) -> None:
+        strategy = best_hvac_strategy(
+            "32:134044", scheme="orcon", model="VMD-15RMS64"
+        )
+
+        assert isinstance(strategy, OrconHrc350Strategy)
+
+    def test_other_orcon_model_keeps_second_domain_capability(self) -> None:
+        strategy = best_hvac_strategy(
+            "32:153289", scheme="orcon", model="VMD-15RMS86-2"
+        )
+
+        assert type(strategy) is OrconStrategy
 
 
 class TestQuirkDispatch:
