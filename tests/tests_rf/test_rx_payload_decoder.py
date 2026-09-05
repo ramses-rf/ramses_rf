@@ -167,3 +167,41 @@ def test_30c9_controller_still_injects_zone_index() -> None:
     result: Any = decode_packet(packet.to_dto())
     assert result.get(SZ_ZONE_INDEX, result.get("zone_index")) == "05"
     assert result.get("temperature") is not None
+
+
+# ---------------------------------------------------------------------------
+# Regression: ramses_cc issue 1159 — DT4R 0016 payloads with zone_index
+#
+# DT4R zone thermostats send 0016 (system_mode) RP packets with their
+# zone_index (e.g. 02, 03).  0016 was in CODE_INDEX_ARE_NONE, which
+# rejected any non-zero index with a 0xAA warning.  Moving it to
+# CODE_INDEX_ARE_SIMPLE accepts the packet without raising.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        # DT4R THM responding to CTL with zone_index 02
+        "067 RP --- 22:014503 01:128378 --:------ 0016 002 0233",
+        # DT4R THM responding to CTL with zone_index 03
+        "067 RP --- 22:014583 01:128378 --:------ 0016 002 032F",
+        # BDR responding with zone_index 02 (existing fixture packet)
+        "067 RP --- 13:042805 01:063844 --:------ 0016 002 001F",
+    ],
+)
+def test_0016_with_zone_index_accepted(frame: str) -> None:
+    """0016 RP with a non-zero zone_index must not raise (issue 1159)."""
+    packet: Any = Packet.from_file(_DTM, frame)
+    dto: Any = packet.to_dto()
+    result: Any = decode_packet(dto)  # must not raise PacketPayloadInvalid
+    assert isinstance(result, dict)
+
+
+def test_0016_with_zero_index_still_works() -> None:
+    """0016 with index 00 must still parse normally."""
+    packet: Any = Packet.from_file(
+        _DTM, "067 RP --- 01:063844 18:140805 --:------ 0016 002 0000"
+    )
+    result: Any = decode_packet(packet.to_dto())
+    assert isinstance(result, dict)

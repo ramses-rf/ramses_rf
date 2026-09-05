@@ -255,6 +255,7 @@ CODE_INDEX_ARE_SIMPLE: set[Code] = {
     Code._0009,
     Code._000A,
     Code._000E,
+    Code._0016,
     Code._01D0,
     Code._01E9,
     Code._01FF,
@@ -334,7 +335,6 @@ CODE_INDEX_ARE_SIMPLE: set[Code] = {
 CODE_INDEX_ARE_NONE: set[Code] = {
     Code._0001,
     Code._0006,
-    Code._0016,
     Code._0100,
 }
 CODE_INDEX_ARE_NONE |= {Code._2389, Code._4401}
