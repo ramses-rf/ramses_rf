@@ -39,6 +39,7 @@ from ramses_rf.const import (
     Code,
 )
 from ramses_rf.protocol.ramses import (
+    _22F1_MODE_ORCON,
     _31DA_FAN_INFO,
     _2411_PARAMS_SCHEMA,
     SZ_DESCRIPTION,
@@ -2589,6 +2590,11 @@ class HvacBypassStatePayload(PayloadBase):
                 0xC8: "III (boost)",
                 0x50: "I (low)",
                 0x1E: "0 (very low)",
+            }
+        elif is_4b_orcon:
+            fan_mode_map = {
+                int(mode_index, 16): fan_mode
+                for mode_index, fan_mode in _22F1_MODE_ORCON.items()
             }
         else:
             fan_mode_map = {0: "off", 5: "auto"}

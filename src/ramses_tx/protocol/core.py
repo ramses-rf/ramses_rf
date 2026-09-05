@@ -36,6 +36,7 @@ from ..exceptions import (
     TransportError,
 )
 from ..packet import Packet
+from ..routing import RoutedCommand, RouteRequest, SourcePolicy, WriteOutcome
 from ..typing import DeviceIdT, HeaderT, MsgHandlerT, QosParams
 from .base import DEFAULT_QOS, _DeviceIdFilterMixin
 
@@ -105,12 +106,15 @@ class ReadProtocol(_DeviceIdFilterMixin):
         super().connection_made(transport)
 
     def resume_writing(self) -> None:
-        """Raise an exception as the Protocol cannot send Commands.
+        """No-op for read-only protocols.
 
-        :raises NotImplementedError: Always raised as ReadProtocol is
-            read-only.
+        ``asyncio`` calls this when the transport's write buffer drains.
+        Read-only protocols (eavesdrop/listen mode) never write, but the
+        transport may still call this during connection setup. Silently
+        ignore rather than raising — the exception broke CLI listen mode
+        over MQTT.
         """
-        raise NotImplementedError(f"{self}: The chosen Protocol is Read-Only")
+        _LOGGER.debug("%s: resume_writing (read-only, ignoring)", self)
 
     async def send_cmd(
         self,
@@ -212,6 +216,7 @@ class PortProtocol(_DeviceIdFilterMixin):
                 int,
                 QosParams,
                 asyncio.Future[Packet],
+                SourcePolicy,
             ]
         ] = asyncio.PriorityQueue()
         self._seq = 0
@@ -222,6 +227,7 @@ class PortProtocol(_DeviceIdFilterMixin):
 
         self._pending_cmd: CommandDTO | None = None
         self._pending_fut: asyncio.Future[Packet] | None = None
+        self._pending_routed: RoutedCommand | None = None
 
     def __repr__(self) -> str:
         """Return an unambiguous string representation of this object.
@@ -349,10 +355,11 @@ class PortProtocol(_DeviceIdFilterMixin):
             self._pending_fut.set_exception(exc_val)
             self._pending_fut = None
             self._pending_cmd = None
+            self._pending_routed = None
 
         while not self._queue.empty():
             try:
-                *_, fut = self._queue.get_nowait()
+                *_, fut, _sp = self._queue.get_nowait()
                 if not fut.done():
                     fut.set_exception(exc_val)
                 self._queue.task_done()
@@ -418,6 +425,7 @@ class PortProtocol(_DeviceIdFilterMixin):
                     num_repeats,
                     qos,
                     fut,
+                    source_policy,
                 ) = await self._queue.get()
 
                 if fut.cancelled():
@@ -425,7 +433,7 @@ class PortProtocol(_DeviceIdFilterMixin):
                     continue
 
                 await self._process_tx_item(
-                    cmd, gap_duration, num_repeats, qos, fut
+                    cmd, gap_duration, num_repeats, qos, fut, source_policy
                 )
                 self._queue.task_done()
             except asyncio.CancelledError:
@@ -440,11 +448,17 @@ class PortProtocol(_DeviceIdFilterMixin):
         num_repeats: int,
         qos: QosParams,
         fut: asyncio.Future[Packet],
+        source_policy: SourcePolicy = SourcePolicy.GATEWAY,
     ) -> None:
-        """Transmit a command with link-layer echo backoff retries."""
-        self._pending_cmd = cmd
-        self._pending_fut = fut
+        """Transmit a command with link-layer echo backoff retries.
 
+        Uses the pre-serialization routing API (PR 2): the command is
+        wrapped in a :class:`RouteRequest`, the transport selects a
+        child and resolves the source address, and the final routed
+        DTO becomes the pending QoS command.  Each QoS attempt
+        prepares a new route (which may select a different child if
+        route quality changed) and serializes the final DTO once.
+        """
         max_retries = (
             qos.max_retries
             if qos.max_retries is not None
@@ -464,9 +478,43 @@ class PortProtocol(_DeviceIdFilterMixin):
                     break
 
                 tx_count += 1
+
+                # Prepare the route for this attempt.  Each QoS retry
+                # may select a different child if route quality changed.
+                # The source policy is determined in send_cmd() based
+                # on whether the command source is the gateway
+                # placeholder (GATEWAY) or an intentional non-gateway
+                # source (PRESERVE, e.g. faked-device commands).
+                request = RouteRequest(
+                    command=cmd,
+                    source_policy=source_policy,
+                )
                 try:
-                    await self._send_frame(
-                        str(cmd),
+                    if self._transport is None:
+                        raise ProtocolSendFailed("Transport is not connected")
+                    routed = self._transport.prepare_command(request)
+                except Exception as prep_err:
+                    if not fut.done():
+                        fut.set_exception(
+                            ProtocolSendFailed(
+                                f"Failed to prepare route: {prep_err}"
+                            )
+                        )
+                    return
+
+                # Set pending command from the final routed DTO so QoS
+                # echo matching uses the actual source-patched command.
+                self._pending_cmd = routed.command
+                self._pending_fut = fut
+                self._pending_routed = routed
+
+                # Serialize the final DTO once for this attempt.
+                frame = str(routed.command)
+
+                try:
+                    await self._send_routed_frame(
+                        routed,
+                        frame,
                         num_repeats=num_repeats,
                         gap_duration=gap_duration,
                     )
@@ -509,6 +557,40 @@ class PortProtocol(_DeviceIdFilterMixin):
         finally:
             self._pending_cmd = None
             self._pending_fut = None
+            self._pending_routed = None
+
+    async def _send_routed_frame(
+        self,
+        routed: RoutedCommand,
+        frame: str,
+        num_repeats: int = 0,
+        gap_duration: float = 0.0,
+    ) -> None:
+        """Send a routed frame via the transport's routing API.
+
+        Applies outbound regex to the serialized frame, then dispatches
+        via ``write_routed()``.  Transport-level repeats reuse the same
+        routed command and frame.
+
+        :param routed: The routed command from ``prepare_command()``.
+        :param frame: The serialized frame.
+        :param num_repeats: Number of additional repeat transmissions.
+        :param gap_duration: Gap between repeats in seconds.
+        """
+        if self._transport is None:
+            raise ProtocolSendFailed("Transport is not connected")
+
+        # Apply outbound regex to the serialized frame.
+        frame = self._apply_regex(frame, self._outbound_regex)
+
+        outcome = await self._transport.write_routed(routed, frame)
+        if outcome is WriteOutcome.AMBIGUOUS:
+            raise ProtocolSendFailed(
+                f"Ambiguous write outcome for frame: {frame}"
+            )
+        for _ in range(num_repeats - 1):
+            await asyncio.sleep(gap_duration)
+            await self._transport.write_routed(routed, frame)
 
     async def send_cmd(
         self,
@@ -581,12 +663,39 @@ class PortProtocol(_DeviceIdFilterMixin):
         ):
             num_repeats = 0
 
+        # Determine the source policy for pre-serialization routing.
+        # If the patched source is the gateway placeholder or the
+        # active HGI ID, the transport may substitute the source to
+        # match the selected child (GATEWAY).  Otherwise, the source
+        # is an intentional non-gateway address (e.g. faked-device
+        # commands) and must be preserved as-is (PRESERVE).
+        from ..address import HGI_DEV_ADDR
+
+        if patched_cmd.addr1 in (HGI_DEV_ADDR.id, self.hgi_id):
+            source_policy = SourcePolicy.GATEWAY
+        else:
+            source_policy = SourcePolicy.PRESERVE
+
         if _DBG_DISABLE_QOS:
-            await self._send_frame(
-                str(patched_cmd),
-                num_repeats=num_repeats,
-                gap_duration=gap_duration,
+            # Debug path: skip QoS, send directly via routing API.
+            request = RouteRequest(
+                command=patched_cmd, source_policy=source_policy
             )
+            try:
+                if self._transport is None:
+                    raise ProtocolSendFailed("Transport is not connected")
+                routed = self._transport.prepare_command(request)
+                frame = str(routed.command)
+                await self._send_routed_frame(
+                    routed,
+                    frame,
+                    num_repeats=num_repeats,
+                    gap_duration=gap_duration,
+                )
+            except Exception as send_err:
+                raise ProtocolSendFailed(
+                    f"Failed to transmit frame: {send_err}"
+                ) from send_err
             return None  # type: ignore[return-value]
 
         fut: asyncio.Future[Packet] = self._loop.create_future()
@@ -607,6 +716,7 @@ class PortProtocol(_DeviceIdFilterMixin):
                 num_repeats,
                 qos,
                 fut,
+                source_policy,
             )
         )
 

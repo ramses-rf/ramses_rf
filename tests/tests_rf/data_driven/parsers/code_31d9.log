@@ -27,7 +27,7 @@
 
 
 # parse_fan_info:          31D9[4:6] == 31DA[36:38] ?Orcon, ignore speed
-2023-11-15T22:21:04.358292 076  I --- 32:134044 --:------ 32:134044 31D9 004 00000200                                                    # {'hvac_id': '00', 'fan_mode': '02',                                         'passive': False, 'damper_only': False, 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0], '_unknown_3': '00'}
+2023-11-15T22:21:04.358292 076  I --- 32:134044 --:------ 32:134044 31D9 004 00000200                                                    # {'hvac_id': '00', 'fan_mode': 'medium',                                     'passive': False, 'damper_only': False, 'filter_dirty': False, 'frost_cycle': False, 'has_fault': False, '_flags': [0, 0, 0, 0, 0, 0, 0, 0], '_unknown_3': '00'}
 2023-11-15T22:21:04.496217 077  I --- 32:134044 --:------ 32:134044 31DA 029 00EF007FFF3E30042406B806D8055FF800000248480000EFEF0F810F9D  # {'hvac_id': '00', 'exhaust_fan_speed': 0.36,  'fan_info': 'speed 2, medium', '_unknown_fan_info_flags': [0, 0, 0], 'air_quality': None, 'co2_level': None, 'indoor_humidity': 0.62, 'outdoor_humidity': 0.48, 'exhaust_temp': 10.6, 'supply_temp': 17.2, 'indoor_temp': 17.52, 'outdoor_temp': 13.75, 'speed_capabilities': ['off', 'low_med_high', 'timer', 'boost', 'auto'], 'bypass_position': 0.0, 'supply_fan_speed': 0.36, 'remaining_mins': 0, 'post_heat': None, 'pre_heat': None, 'supply_flow': 39.69, 'exhaust_flow': 39.97}
 
 # parse_exhaust_fan_speed: 31D9[4:6] == 31DA[38:40] ?Itho = speed %, ignore mode

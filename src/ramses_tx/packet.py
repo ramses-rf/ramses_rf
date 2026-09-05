@@ -89,6 +89,7 @@ class Packet:
         "_lifespan",
         "_is_echo",
         "_is_tx",
+        "_ingress_hgi_id",
     )
 
     _dto: PacketDTO
@@ -112,6 +113,7 @@ class Packet:
     _lifespan: bool | td
     _is_echo: bool
     _is_tx: bool
+    _ingress_hgi_id: str | None
 
     def __init__(
         self,
@@ -172,6 +174,7 @@ class Packet:
             self._index_ = None
             self._repr = None
             self._lifespan = False
+            self._ingress_hgi_id = None
             return
 
         self._dto = dto_or_dtm
@@ -210,6 +213,7 @@ class Packet:
         self._index_ = None
         self._repr = None
         self._lifespan = False
+        self._ingress_hgi_id = None
 
         self._validate(strict_checking=False)
 
@@ -344,6 +348,7 @@ class Packet:
         packet._index_ = None
         packet._repr = None
         packet._lifespan = False
+        packet._ingress_hgi_id = None
 
         packet._validate(strict_checking=False)
         return packet
@@ -478,6 +483,18 @@ class Packet:
         :rtype: str
         """
         return self._dto.rssi or "..."
+
+    @property
+    def ingress_hgi_id(self) -> str | None:
+        """Return the HGI that heard this frame, if known.
+
+        Set by :class:`PooledTransport` when forwarding packets from
+        child transports.  ``None`` for packets that did not arrive
+        through a pool (single-HGI, log replay, etc.).
+
+        :returns: The ingress HGI device ID, or ``None``.
+        """
+        return self._ingress_hgi_id
 
     @property
     def verb(self) -> Verb:

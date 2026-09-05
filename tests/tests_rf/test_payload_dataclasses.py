@@ -10,6 +10,7 @@ import ramses_rf.payloads.system
 import ramses_tx.const as tx_const
 from ramses_rf.const import (
     SZ_DIAGNOSTIC_CODE,
+    SZ_FAN_MODE,
     SZ_FLAGS,
     SZ_FRAME_CODE,
     SZ_HEAT_DEMAND,
@@ -735,6 +736,31 @@ def test_hvac_bypass_state_payload_31d9_parity() -> None:
     assert payload.mode_flags == 0
     assert reencoded == raw_hex
     assert as_dict == {"bypass_position": 100, "mode_flags": 0}
+
+
+@pytest.mark.parametrize(
+    ("mode_index", "fan_mode"),
+    (
+        (0, "away"),
+        (1, "low"),
+        (2, "medium"),
+        (3, "high"),
+        (4, "auto"),
+        (5, "auto_alt"),
+        (6, "boost"),
+        (7, "off"),
+        (8, "08"),
+    ),
+)
+def test_hvac_bypass_state_payload_31d9_orcon_modes(
+    mode_index: int, fan_mode: str
+) -> None:
+    """Decode 4-byte Orcon 31D9 mode feedback without conflating away/off."""
+    payload = HvacBypassStatePayload.from_bytes(
+        bytes((0x00, 0x20, mode_index, 0x00))
+    )
+
+    assert payload.to_dict()[SZ_FAN_MODE] == fan_mode
 
 
 def test_hvac_air_quality_payload_3110_parity() -> None:

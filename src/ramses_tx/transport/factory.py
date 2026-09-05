@@ -16,6 +16,7 @@ from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from .base import TransportConfig
 from .file import FileTransport
 from .mqtt import MqttTransport
+from .pooled import PooledTransport, _ChildProtocolProxy
 from .port import PortTransport
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 _DEFAULT_TIMEOUT_PORT: Final[float] = 3.0
 _DEFAULT_TIMEOUT_MQTT: Final[float] = 60.0
 _DEFAULT_TIMEOUT_ZIGBEE: Final[float] = 60.0
+_DEFAULT_TIMEOUT_POOL: Final[float] = 10.0
 
 RamsesTransportT: TypeAlias = TransportInterface
 
@@ -162,6 +164,190 @@ async def transport_factory(
 
     if os.name == "nt" or port_name.startswith(("rfc2217://", "socket://")):
         issue_warning()
+
+    transport_port = PortTransport(
+        port_name,
+        protocol,
+        port_config=ser_config,
+        config=config,
+        extra=extra,
+        loop=loop,
+    )
+
+    try:
+        await protocol.wait_for_connection_made(
+            timeout=config.timeout or _DEFAULT_TIMEOUT_PORT
+        )
+    except exc.TransportSerialError as err:
+        transport_port.close()
+        raise exc.TransportSourceInvalid(
+            f"Unable to open the serial port {port_name}: {err}"
+        ) from err
+    except Exception:
+        transport_port.close()
+        raise
+
+    return transport_port
+
+
+async def pooled_transport_factory(
+    protocol: RamsesProtocolT,
+    /,
+    *,
+    config: TransportConfig,
+    port_names: list[SerPortNameT],
+    port_configs: list[PortConfigT] | None = None,
+    extra: dict[str, object] | None = None,
+    loop: asyncio.AbstractEventLoop | None = None,
+    dedup_window: float = 0.5,
+) -> RamsesTransportT:
+    """Create a :class:`PooledTransport` from multiple port names.
+
+    Each port name gets its own child transport (serial, MQTT, or
+    Zigbee) created with a :class:`_ChildProtocolProxy` that routes
+    inbound packets through the pool's deduplication filter.
+
+    :param protocol: The real protocol that receives deduplicated
+        packets.
+    :type protocol: RamsesProtocolT
+    :param config: Transport configuration shared by all children.
+    :type config: TransportConfig
+    :param port_names: List of port names (serial, MQTT URLs, etc.).
+    :type port_names: list[SerPortNameT]
+    :param port_configs: Optional per-child port configurations for
+        serial ports.  If provided, must be the same length as
+        ``port_names``.  If ``None``, serial children will use a
+        default config.
+    :type port_configs: list[PortConfigT] | None
+    :param extra: Extra configuration options shared by all children.
+    :type extra: dict[str, object] | None
+    :param loop: Asyncio event loop.
+    :type loop: asyncio.AbstractEventLoop | None
+    :param dedup_window: Deduplication window in seconds.
+    :type dedup_window: float
+    :returns: A :class:`PooledTransport` wrapping all child transports.
+    :rtype: PooledTransport
+    :raises ValueError: If ``port_names`` is empty or ``port_configs``
+        length doesn't match.
+    """
+    if not port_names:
+        raise ValueError(
+            "pooled_transport_factory requires at least one port_name"
+        )
+    if port_configs is not None and len(port_configs) != len(port_names):
+        raise ValueError("port_configs must be the same length as port_names")
+
+    # Apply regex rules to the Protocol before binding any Transport.
+    if config.use_regex:
+        protocol.set_regex_rules(config.use_regex)
+
+    # Create the pool first so we can create child proxies.
+    # Pre-allocate children with None transports; successful children
+    # are injected after creation.
+    num_children = len(port_names)
+    pool = PooledTransport(
+        protocol,
+        [None] * num_children,  # placeholders, replaced below
+        config=config,
+        loop=loop,
+        dedup_window=dedup_window,
+        port_names=[str(p) for p in port_names],
+    )
+
+    for i, pname in enumerate(port_names):
+        proxy = _ChildProtocolProxy(pool, i)
+        pconfig = port_configs[i] if port_configs else None
+
+        # Create the child transport via the standard factory, but
+        # with the proxy protocol instead of the real one.
+        # Tolerate individual child failures — the pool can operate
+        # with a subset of children (e.g. if a USB HGI is unplugged
+        # or in use by another process).
+        try:
+            child = await _create_single_child(
+                proxy,
+                config=config,
+                port_name=pname,
+                port_config=pconfig,
+                extra=extra,
+                loop=loop,
+            )
+        except Exception as err:
+            _LOGGER.warning(
+                "PooledTransport: child %d (%s) failed to connect: %s — "
+                "continuing with remaining children",
+                i,
+                pname,
+                err,
+            )
+            continue
+
+        # Replace the placeholder with the real transport.
+        pool._children[i].transport = child
+
+    # Wait for at least one child to connect.
+    await pool._wait_for_any_connection(
+        timeout=config.timeout or _DEFAULT_TIMEOUT_POOL
+    )
+
+    return pool
+
+
+async def _create_single_child(
+    protocol: RamsesProtocolT,
+    /,
+    *,
+    config: TransportConfig,
+    port_name: SerPortNameT,
+    port_config: PortConfigT | None,
+    extra: dict[str, object] | None,
+    loop: asyncio.AbstractEventLoop | None,
+) -> TransportInterface:
+    """Create a single child transport for the pool.
+
+    This is a simplified version of :func:`transport_factory` that
+    does not support packet_log/packet_dict (pools only work with
+    live transports) and uses a shorter default timeout.
+    """
+    # Zigbee
+    if port_name[:6] == "zigbee":
+        from .zigbee import ZigbeeTransport
+
+        transport = ZigbeeTransport(
+            port_name,
+            protocol,
+            config=config,
+            loop=loop,
+        )
+        try:
+            await protocol.wait_for_connection_made(
+                timeout=_DEFAULT_TIMEOUT_ZIGBEE
+            )
+        except Exception:
+            transport.close()
+            raise
+        return transport
+
+    # MQTT
+    if port_name[:4] == "mqtt":
+        mqtt_timeout = config.timeout or _DEFAULT_TIMEOUT_MQTT
+        transport = MqttTransport(
+            port_name,
+            protocol,
+            config=config,
+            extra=extra,
+            loop=loop,
+        )
+        try:
+            await protocol.wait_for_connection_made(timeout=mqtt_timeout)
+        except Exception:
+            transport.close()
+            raise
+        return transport
+
+    # Serial
+    assert port_config is not None  # serial requires port_config
+    ser_config = SCH_SERIAL_PORT_CONFIG(port_config)
 
     transport_port = PortTransport(
         port_name,

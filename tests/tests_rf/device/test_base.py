@@ -5,6 +5,8 @@ This module combines tests for DeviceBase, HgiGateway, and BatteryState
 which all reside in ramses_rf/device/base.py.
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime as dt, timedelta as td
 from unittest.mock import MagicMock
 
@@ -14,6 +16,7 @@ from ramses_rf.const import GATEWAY_MESSAGE_TIMEOUT
 from ramses_rf.devices.dev_base import BatteryState, DeviceBase, HgiGateway
 from ramses_rf.gateway import Gateway
 from ramses_tx import Address
+from ramses_tx.rssi_tracker import RssiTracker
 
 
 @pytest.fixture
@@ -227,3 +230,165 @@ class TestHgiGateway:
 
         hgi_gateway._gateway._engine._protocol._this_msg = mock_msg
         assert await hgi_gateway.is_active() is True
+
+
+class TestCommunicationQuality:
+    """Test DeviceBase.communication_quality with pooled transports.
+
+    Regression tests for the fix that gathers RSSI trackers from all
+    connected pool children via ``transport.get_extra_info(
+    "pool_rssi_trackers")`` so that ``best_rssi`` reflects the strongest
+    signal across all HGIs, not just the primary.
+    """
+
+    def _make_pool_transport(self, trackers: list[RssiTracker]) -> MagicMock:
+        """Create a mock transport that exposes pool_rssi_trackers.
+
+        :param trackers: The list of RssiTracker objects to return.
+        :type trackers: list[RssiTracker]
+        :return: A mock transport object.
+        :rtype: MagicMock
+        """
+        transport = MagicMock()
+        transport.get_extra_info = lambda name, default=None: (
+            trackers if name == "pool_rssi_trackers" else default
+        )
+        return transport
+
+    def _make_gateway_with_tracker(
+        self, tracker: RssiTracker, transport: MagicMock | None = None
+    ) -> MagicMock:
+        """Create a mock gateway with an RSSI tracker and optional transport.
+
+        :param tracker: The gateway's primary RSSI tracker.
+        :type tracker: RssiTracker
+        :param transport: Optional transport (e.g. PooledTransport).
+        :type transport: MagicMock | None
+        :return: A mock gateway.
+        :rtype: MagicMock
+        """
+        gwy = MagicMock(spec=Gateway)
+        gwy._rssi_tracker = tracker
+        gwy._engine = MagicMock()
+        gwy._engine._transport = transport
+        return gwy
+
+    def test_single_hgi_no_pool(self) -> None:
+        """Without a pool, communication_quality uses the gateway tracker."""
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
+        tracker.record("32:153289", "-70", now)
+
+        gwy = self._make_gateway_with_tracker(tracker, transport=None)
+        dev = DeviceBase(gwy, Address("32:153289"))
+        dev._last_msg_dtm = now
+
+        q = dev.communication_quality
+        assert q is not None
+        assert q.best_rssi == -70
+        assert q.rssi_quality == "normal"
+
+    def test_pool_uses_strongest_across_all_hgis(self) -> None:
+        """With 2 pool trackers, best_rssi is the strongest (-39 vs -89)."""
+        now = dt(2026, 1, 1, 12, 0, 0)
+
+        # Primary gateway tracker (would show weak signal alone)
+        gw_tracker = RssiTracker(ttl=None)
+        gw_tracker.record("32:153289", "-89", now)
+
+        # Pool child 0: strong signal (-39)
+        tracker_0 = RssiTracker(ttl=None)
+        tracker_0.record("32:153289", "-39", now)
+
+        # Pool child 1: weak signal (-89)
+        tracker_1 = RssiTracker(ttl=None)
+        tracker_1.record("32:153289", "-89", now)
+
+        transport = self._make_pool_transport([tracker_0, tracker_1])
+        gwy = self._make_gateway_with_tracker(gw_tracker, transport=transport)
+        dev = DeviceBase(gwy, Address("32:153289"))
+        dev._last_msg_dtm = now
+
+        q = dev.communication_quality
+        assert q is not None
+        assert q.best_rssi == -39  # strongest, not weakest
+        assert q.rssi_quality == "strong"
+
+    def test_pool_all_weak_reports_weak(self) -> None:
+        """When all pool trackers are weak, quality is weak."""
+        now = dt(2026, 1, 1, 12, 0, 0)
+
+        gw_tracker = RssiTracker(ttl=None)
+        gw_tracker.record("32:153289", "-90", now)
+
+        tracker_0 = RssiTracker(ttl=None)
+        tracker_0.record("32:153289", "-91", now)
+
+        tracker_1 = RssiTracker(ttl=None)
+        tracker_1.record("32:153289", "-89", now)
+
+        transport = self._make_pool_transport([tracker_0, tracker_1])
+        gwy = self._make_gateway_with_tracker(gw_tracker, transport=transport)
+        dev = DeviceBase(gwy, Address("32:153289"))
+        dev._last_msg_dtm = now
+
+        q = dev.communication_quality
+        assert q is not None
+        assert q.best_rssi == -89  # best of the weak ones
+        assert q.rssi_quality == "weak"
+
+    def test_pool_empty_trackers_falls_back_to_gateway(self) -> None:
+        """Empty pool_rssi_trackers falls back to the gateway tracker."""
+        now = dt(2026, 1, 1, 12, 0, 0)
+
+        gw_tracker = RssiTracker(ttl=None)
+        gw_tracker.record("32:153289", "-55", now)
+
+        transport = self._make_pool_transport([])
+        gwy = self._make_gateway_with_tracker(gw_tracker, transport=transport)
+        dev = DeviceBase(gwy, Address("32:153289"))
+        dev._last_msg_dtm = now
+
+        q = dev.communication_quality
+        assert q is not None
+        assert q.best_rssi == -55  # from gateway tracker, not pool
+
+    def test_no_gateway_tracker_returns_none(self) -> None:
+        """Without a gateway RSSI tracker, returns None."""
+        gwy = MagicMock(spec=Gateway)
+        gwy._rssi_tracker = None
+        gwy._engine = MagicMock()
+        gwy._engine._transport = None
+
+        dev = DeviceBase(gwy, Address("32:153289"))
+        assert dev.communication_quality is None
+
+    def test_faked_device_not_reported_as_weak(self) -> None:
+        """A faked device with weak RSSI is still faked — discovery skips it.
+
+        This test verifies that ``is_faked`` returns True when a binding
+        manager is attached, so the discovery weak-signal check can skip
+        faked devices.  The communication_quality itself still computes
+        (it's the caller's responsibility to check ``is_faked`` first).
+        """
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
+        tracker.record("37:168270", "-90", now)
+
+        gwy = self._make_gateway_with_tracker(tracker, transport=None)
+        dev = DeviceBase(gwy, Address("37:168270"))
+        dev._last_msg_dtm = now
+
+        # Simulate a faked device by attaching a binding manager
+        dev._binding_manager = MagicMock()
+        dev._binding_manager.is_binding = False
+
+        # is_faked must be True so discovery can skip it
+        assert dev.is_faked is True
+
+        # communication_quality still computes (caller checks is_faked)
+        q = dev.communication_quality
+        assert q is not None
+        assert q.rssi_quality == "weak"
+        # But the caller (discovery.py) would skip this device via:
+        #   if getattr(device, "is_faked", False): continue

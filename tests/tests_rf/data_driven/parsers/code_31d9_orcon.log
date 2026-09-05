@@ -1,0 +1,3 @@
+2026-09-04T11:14:01.434787 ...  I --- 32:123456 --:------ 32:123456 31D9 004 00200000 # {'fan_mode': 'away', 'passive': False, 'damper_only': False, 'filter_dirty': True, 'frost_cycle': False, 'has_fault': False}
+2026-09-04T11:14:49.358065 ...  I --- 32:123456 --:------ 32:123456 31D9 004 00200400 # {'fan_mode': 'auto', 'passive': False, 'damper_only': False, 'filter_dirty': True, 'frost_cycle': False, 'has_fault': False}
+2026-09-04T11:14:38.816443 ...  I --- 32:123456 --:------ 32:123456 31D9 004 00200700 # {'fan_mode': 'off', 'passive': False, 'damper_only': False, 'filter_dirty': True, 'frost_cycle': False, 'has_fault': False}

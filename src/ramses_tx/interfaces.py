@@ -10,6 +10,9 @@ if TYPE_CHECKING:
     from .packet import Packet
     from .typing import QosParams
 
+# These are needed at runtime for the default implementations.
+from .routing import RoutedCommand, RouteRequest, WriteOutcome
+
 
 class TransportInterface(ABC):
     """Interface for the Packet Transport layer."""
@@ -29,6 +32,49 @@ class TransportInterface(ABC):
     @abstractmethod
     async def write_frame(self, frame: str) -> None:
         """Write a frame (legacy alias for send_frame)."""
+
+    # -- Pre-serialization routing contract (PR 2) ---------------------
+
+    def prepare_command(self, request: RouteRequest) -> RoutedCommand:
+        """Prepare a command for routed transmission.
+
+        Non-pooled transports return the command as-is (after
+        protocol-level source patching is applied by the caller).
+        ``PooledTransport`` overrides this to select a child and
+        resolve the source address before serialization.
+
+        :param request: Immutable route request carrying the command
+            and source policy.
+        :returns: Routed command with a pinned child ID and the final
+            command DTO.
+        """
+        # Default: no routing, child_id is "self".
+        return RoutedCommand(child_id="self", command=request.command)
+
+    async def write_routed(
+        self,
+        routed: RoutedCommand,
+        frame: str,
+        *,
+        disable_tx_limits: bool = False,
+    ) -> WriteOutcome:
+        """Dispatch a routed command to the pinned child.
+
+        Non-pooled transports delegate to ``write_frame()``.
+        ``PooledTransport`` overrides this to dispatch to the child
+        identified by ``routed.child_id``.
+
+        :param routed: The routed command from ``prepare_command()``.
+        :param frame: The serialized frame (from ``str(routed.command)``).
+        :param disable_tx_limits: If True, bypass per-child rate
+            limiting.
+        :returns: Conservative write outcome classification.
+        """
+        try:
+            await self.write_frame(frame)
+            return WriteOutcome.SUBMITTED
+        except Exception:
+            return WriteOutcome.AMBIGUOUS
 
 
 class ProtocolInterface(ABC, asyncio.Protocol):

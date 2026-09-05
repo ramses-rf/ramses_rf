@@ -5,7 +5,7 @@ See: https://github.com/ramses-rf/ramses_cc/issues/1047
 
 from __future__ import annotations
 
-from datetime import UTC, datetime as dt, timedelta as td
+from datetime import datetime as dt, timedelta as td
 
 from ramses_rf.models.state_signal import (
     RSSI_NORMAL,
@@ -23,8 +23,8 @@ class TestComputeQuality:
 
     def test_single_hgi_strong_signal(self) -> None:
         """Strong RSSI from one HGI → strong quality."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-55", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -36,8 +36,8 @@ class TestComputeQuality:
 
     def test_single_hgi_normal_signal(self) -> None:
         """Normal RSSI → normal quality."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-70", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -46,8 +46,8 @@ class TestComputeQuality:
 
     def test_single_hgi_weak_signal(self) -> None:
         """Weak RSSI → weak quality."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-90", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -56,8 +56,8 @@ class TestComputeQuality:
 
     def test_single_hgi_very_weak_signal(self) -> None:
         """Very weak RSSI → very_weak quality."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-110", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -66,8 +66,8 @@ class TestComputeQuality:
 
     def test_no_data(self) -> None:
         """No readings → unknown quality, no staleness."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
 
         q = compute_quality("04:123456", [tracker], now=now)
         assert q.best_rssi is None
@@ -78,9 +78,9 @@ class TestComputeQuality:
 
     def test_multi_hgi_best_across_all(self) -> None:
         """Best RSSI across multiple HGIs is the strongest."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker_a = RssiTracker()
-        tracker_b = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker_a = RssiTracker(ttl=None)
+        tracker_b = RssiTracker(ttl=None)
 
         # HGI A hears device weakly
         tracker_a.record("04:123456", "-90", now)
@@ -96,9 +96,9 @@ class TestComputeQuality:
 
     def test_multi_hgi_one_weak_one_strong(self) -> None:
         """One HGI weak, one strong → no warning (best wins)."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker_a = RssiTracker()
-        tracker_b = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker_a = RssiTracker(ttl=None)
+        tracker_b = RssiTracker(ttl=None)
 
         tracker_a.record("04:123456", "-100", now)
         tracker_b.record("04:123456", "-60", now)
@@ -109,9 +109,9 @@ class TestComputeQuality:
 
     def test_multi_hgi_all_weak(self) -> None:
         """All HGIs weak → warning (best is still weak)."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker_a = RssiTracker()
-        tracker_b = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker_a = RssiTracker(ttl=None)
+        tracker_b = RssiTracker(ttl=None)
 
         tracker_a.record("04:123456", "-100", now)
         tracker_b.record("04:123456", "-98", now)
@@ -122,8 +122,8 @@ class TestComputeQuality:
 
     def test_staleness_fresh(self) -> None:
         """Recent packet → not stale."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-70", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -132,10 +132,10 @@ class TestComputeQuality:
 
     def test_staleness_stale(self) -> None:
         """Old packet → stale."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = dt(2026, 1, 1, 12, 0, 0)
         old = now - td(seconds=STALE_WARN_SECONDS + 60)
 
-        tracker = RssiTracker()
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-70", old)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -145,10 +145,10 @@ class TestComputeQuality:
 
     def test_staleness_custom_threshold(self) -> None:
         """Custom stale threshold works."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = dt(2026, 1, 1, 12, 0, 0)
         recent = now - td(seconds=60)
 
-        tracker = RssiTracker()
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-70", recent)
 
         # Default threshold (300s) → not stale
@@ -163,12 +163,12 @@ class TestComputeQuality:
 
     def test_last_seen_multi_hgi(self) -> None:
         """last_seen is the most recent across all HGIs."""
-        t1 = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        t2 = dt(2026, 1, 1, 12, 5, 0, tzinfo=UTC)
-        t3 = dt(2026, 1, 1, 12, 10, 0, tzinfo=UTC)
+        t1 = dt(2026, 1, 1, 12, 0, 0)
+        t2 = dt(2026, 1, 1, 12, 5, 0)
+        t3 = dt(2026, 1, 1, 12, 10, 0)
 
-        tracker_a = RssiTracker()
-        tracker_b = RssiTracker()
+        tracker_a = RssiTracker(ttl=None)
+        tracker_b = RssiTracker(ttl=None)
 
         tracker_a.record("04:123456", "-70", t1)
         tracker_a.record("04:123456", "-72", t3)
@@ -179,8 +179,8 @@ class TestComputeQuality:
 
     def test_immutable_snapshot(self) -> None:
         """CommunicationQuality is frozen."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-        tracker = RssiTracker()
+        now = dt(2026, 1, 1, 12, 0, 0)
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", "-70", now)
 
         q = compute_quality("04:123456", [tracker], now=now)
@@ -199,7 +199,7 @@ class TestComputeQuality:
 
     def test_empty_trackers(self) -> None:
         """No trackers at all → unknown quality."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = dt(2026, 1, 1, 12, 0, 0)
         q = compute_quality("04:123456", [], now=now)
         assert q.best_rssi is None
         assert q.rssi_quality == "unknown"
@@ -207,40 +207,40 @@ class TestComputeQuality:
 
     def test_threshold_boundaries(self) -> None:
         """Test exact threshold boundaries."""
-        now = dt(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+        now = dt(2026, 1, 1, 12, 0, 0)
 
         # Exactly RSSI_STRONG (-60) → strong
-        tracker = RssiTracker()
+        tracker = RssiTracker(ttl=None)
         tracker.record("04:123456", str(RSSI_STRONG), now)
         q = compute_quality("04:123456", [tracker], now=now)
         assert q.rssi_quality == "strong"
 
         # RSSI_STRONG - 1 (-61) → normal
-        tracker2 = RssiTracker()
+        tracker2 = RssiTracker(ttl=None)
         tracker2.record("04:123456", str(RSSI_STRONG - 1), now)
         q2 = compute_quality("04:123456", [tracker2], now=now)
         assert q2.rssi_quality == "normal"
 
         # Exactly RSSI_NORMAL (-75) → normal
-        tracker3 = RssiTracker()
+        tracker3 = RssiTracker(ttl=None)
         tracker3.record("04:123456", str(RSSI_NORMAL), now)
         q3 = compute_quality("04:123456", [tracker3], now=now)
         assert q3.rssi_quality == "normal"
 
         # RSSI_NORMAL - 1 (-76) → weak
-        tracker4 = RssiTracker()
+        tracker4 = RssiTracker(ttl=None)
         tracker4.record("04:123456", str(RSSI_NORMAL - 1), now)
         q4 = compute_quality("04:123456", [tracker4], now=now)
         assert q4.rssi_quality == "weak"
 
         # Exactly RSSI_WEAK (-95) → weak
-        tracker5 = RssiTracker()
+        tracker5 = RssiTracker(ttl=None)
         tracker5.record("04:123456", str(RSSI_WEAK), now)
         q5 = compute_quality("04:123456", [tracker5], now=now)
         assert q5.rssi_quality == "weak"
 
         # RSSI_WEAK - 1 (-96) → very_weak
-        tracker6 = RssiTracker()
+        tracker6 = RssiTracker(ttl=None)
         tracker6.record("04:123456", str(RSSI_WEAK - 1), now)
         q6 = compute_quality("04:123456", [tracker6], now=now)
         assert q6.rssi_quality == "very_weak"

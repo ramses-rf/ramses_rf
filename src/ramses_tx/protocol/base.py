@@ -258,6 +258,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
                 task.cancel()
         self._handler_tasks.clear()
 
+        # Reset connection-scoped state so connection_made() can run
+        # cleanly on reconnect (e.g. MQTT broker reconnect, issue 1119)
+        self._active_hgi = None
+        self._is_evofw3 = None
+
         self._wait_connection_made = self._loop.create_future()
         if error:
             self._wait_connection_lost.set_exception(error)
@@ -583,7 +588,13 @@ class _DeviceIdFilterMixin(_BaseProtocol):
         when the real ID arrives, and the hgi_id property reads it from
         there.  See issue 1002.
         """
-        assert self._active_hgi is None  # should only be called once
+        if self._active_hgi is not None and self._active_hgi != device_id:
+            _LOGGER.warning(
+                "Active gateway already set to %s, overwriting with %s "
+                "(connection_made called twice without connection_lost)",
+                self._active_hgi,
+                device_id,
+            )
 
         # MQTT bridges: HGI ID not known yet (ramses_esp hasn't sent
         # its "online" LWT message).  Defer the check — the transport

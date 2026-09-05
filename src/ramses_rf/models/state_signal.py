@@ -118,8 +118,19 @@ def compute_quality(
 
         seen = tracker.last_seen(device_id)
         if seen is not None:
-            if last_seen is None or seen > last_seen:
+            # Strip tzinfo for comparison to handle mixed aware/naive
+            # timestamps from different transport types (MQTT vs serial).
+            seen_naive = seen.replace(tzinfo=None) if seen.tzinfo else seen
+            if last_seen is None:
                 last_seen = seen
+            else:
+                last_seen_naive = (
+                    last_seen.replace(tzinfo=None)
+                    if last_seen.tzinfo
+                    else last_seen
+                )
+                if seen_naive > last_seen_naive:
+                    last_seen = seen
 
     staleness_seconds: float | None = None
     is_stale = False

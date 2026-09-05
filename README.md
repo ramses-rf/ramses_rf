@@ -13,7 +13,7 @@
 > [!NOTE]
 > Ramses RF can **not** interpret the new Honeywell Ramses-III (R3) messages used after a firmware upgrade since 2025 and (some) new devices.
 
-It requires a USB-to-RF device, either a Honeywell HGI80 (somewhat rare, expensive) or a USB/MQTT dongle running the [ramses_esp](https://github.com/IndaloTech/ramses_esp) or [evofw3](https://github.com/ghoti57/evofw3) firmware, such as the one from [here](https://indalo-tech.onlineweb.shop/) or your own ESP32-S3-WROOM-1 N16R8 with a CC1100 transponder.
+It requires a USB-to-RF device, either a Honeywell HGI80 (somewhat rare, expensive), a USB/MQTT dongle running the [ramses_esp](https://github.com/IndaloTech/ramses_esp), [evofw3](https://github.com/ghoti57/evofw3) firmware, such as the one from [here](https://indalo-tech.onlineweb.shop/), your own ESP32-S3-WROOM-1 N16R8 with a CC1100 transponder or _a combination of dongles_ for better RF coverage.
 
 It does four things:
  - decodes RAMSES II-compatible packets and converts them into useful JSON
