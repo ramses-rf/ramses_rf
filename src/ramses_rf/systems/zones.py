@@ -388,12 +388,39 @@ class DhwZone(ZoneSchedule):  # CS92A
         return self.temp_state.temperature
 
     async def heat_demand(self) -> float | None:  # 3150
-        """Return the DHW heat demand percentage (0.0 to 1.0)."""
-        return self.demand_state.heat_demand
+        """Return the DHW heat demand percentage (0.0 to 1.0).
+
+        The controller does not broadcast 3150|FA for DHW, so
+        ``demand_state.heat_demand`` is typically None.  Fall back to
+        the hotwater_valve BDR's relay_demand, which is the closest
+        proxy for DHW heat demand (ramses-rf/ramses_cc issue 1130).
+
+        :returns: Heat demand as a fraction (0.0 to 1.0), or None.
+        :rtype: float | None
+        """
+        if self.demand_state.heat_demand is not None:
+            return self.demand_state.heat_demand
+        if self._dhw_valve is not None:
+            return await self._dhw_valve.relay_demand()
+        return None
 
     async def relay_demand(self) -> float | None:  # 0008
-        """Return the DHW relay demand percentage (0.0 to 1.0)."""
-        return self.demand_state.relay_demand
+        """Return the DHW relay demand percentage (0.0 to 1.0).
+
+        The controller's 0008|FA packet usually carries 0% — the real
+        DHW relay state is tracked by the hotwater_valve BDR via its
+        3EF0 actuator state.  Fall back to the BDR's relay_demand when
+        ``demand_state.relay_demand`` is not populated
+        (ramses-rf/ramses_cc issue 1130).
+
+        :returns: Relay demand as a fraction (0.0 to 1.0), or None.
+        :rtype: float | None
+        """
+        if self.demand_state.relay_demand is not None:
+            return self.demand_state.relay_demand
+        if self._dhw_valve is not None:
+            return await self._dhw_valve.relay_demand()
+        return None
 
     async def relay_failsafe(self) -> float | None:  # 0009
         """Return DHW relay failsafe demand percentage (0.0 to 1.0)."""
