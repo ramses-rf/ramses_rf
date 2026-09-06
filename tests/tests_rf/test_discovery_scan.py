@@ -563,14 +563,31 @@ class TestClassify:
         result = _classify("37:154519", Code._313F, Verb.RQ, is_source=True)
         assert result == DevType.REM
 
-    def test_37_31d9_is_fan(self) -> None:
-        """37: sending 31D9 I should be FAN — some FANs use 37: prefix.
+    def test_37_31d9_is_fan_as_source(self) -> None:
+        """37: sending 31D9 I as source should be FAN — some FANs use 37: prefix.
 
         31D9 I maps to FAN in HVAC_KLASS_BY_VC_PAIR, and 37: is ambiguous
         (FAN/REM/CO2/HUM/DIS) so FAN is a valid type for 37:.
         """
         result = _classify("37:154519", Code._31D9, Verb.I_, is_source=True)
         assert result == DevType.FAN
+
+    def test_37_31d9_as_destination_is_not_fan(self) -> None:
+        """37: receiving 31D9 I should NOT be FAN — VC pair classifies sender.
+
+        When a FAN (32:) sends I 31D9 to a REM/DIS (37:), the (I, 31D9)
+        pair tells us the sender is a FAN.  The receiver should fall back
+        to the prefix default (REM), not inherit the sender's classification.
+        """
+        result = _classify("37:169161", Code._31D9, Verb.I_, is_source=False)
+        assert result == DevType.REM
+
+    def test_37_31da_as_destination_is_not_fan(self) -> None:
+        """37: receiving 31DA I/RP should NOT be FAN — same direction logic."""
+        result = _classify("37:169161", Code._31DA, Verb.I_, is_source=False)
+        assert result == DevType.REM
+        result = _classify("37:169161", Code._31DA, Verb.RP, is_source=False)
+        assert result == DevType.REM
 
     def test_32_31d9_is_fan(self) -> None:
         """32: sending 31D9 I should be FAN (unambiguous prefix)."""

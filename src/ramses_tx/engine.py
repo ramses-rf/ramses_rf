@@ -221,10 +221,12 @@ class Engine:
 
         # MQTT transports (HA-native pool bridge, direct paho) may take
         # longer than the default 1s to call connection_made(), especially
-        # with a remote broker.  Use a longer timeout for MQTT port names.
-        # Serial/USB binds near-instantly, so keep the default for those.
+        # with a remote broker or when waiting for an HGI to come online
+        # via LWT.  The pool bridge waits up to 30s for a child to connect,
+        # so the bind timeout must be at least that long.  Serial/USB binds
+        # near-instantly, so keep the default for those.
         bind_timeout = (
-            10.0
+            60.0
             if isinstance(self.ser_name, str)
             and self.ser_name.startswith("mqtt://")
             else 1.0
