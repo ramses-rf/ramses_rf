@@ -1381,12 +1381,20 @@ def _classify(
     #    For ambiguous HVAC prefixes (e.g. 37:), only accept VC pairs that
     #    map to a type valid for that prefix (e.g. 31D9 I→FAN is rejected
     #    for 37: because FAN is 32: only).
-    vc_key = (verb, code)
-    if vc_key in _VC_TO_TYPE:
-        vc_type = _VC_TO_TYPE[vc_key]
-        valid_types = _AMBIGUOUS_HVAC_PREFIX_TYPES.get(prefix)
-        if valid_types is None or vc_type in valid_types:
-            return vc_type
+    #
+    #    IMPORTANT: the VC pair classifies the SENDER, not the receiver.
+    #    When a FAN (32:) sends I 31D9 to a REM/DIS (37:), the (I, 31D9)
+    #    pair tells us the sender is a FAN — it says nothing about the
+    #    receiver.  Without this is_source guard, the destination 37:
+    #    device would be incorrectly classified as FAN just because it
+    #    received a packet from a FAN.
+    if is_source:
+        vc_key = (verb, code)
+        if vc_key in _VC_TO_TYPE:
+            vc_type = _VC_TO_TYPE[vc_key]
+            valid_types = _AMBIGUOUS_HVAC_PREFIX_TYPES.get(prefix)
+            if valid_types is None or vc_type in valid_types:
+                return vc_type
 
     # 4. Check accumulated codes if we have a device
     if device and is_source:
