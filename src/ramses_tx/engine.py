@@ -219,7 +219,17 @@ class Engine:
             **packet_source,
         )
 
-        await self._protocol.wait_for_connection_made()
+        # MQTT transports (HA-native pool bridge, direct paho) may take
+        # longer than the default 1s to call connection_made(), especially
+        # with a remote broker.  Use a longer timeout for MQTT port names.
+        # Serial/USB binds near-instantly, so keep the default for those.
+        bind_timeout = (
+            10.0
+            if isinstance(self.ser_name, str)
+            and self.ser_name.startswith("mqtt://")
+            else 1.0
+        )
+        await self._protocol.wait_for_connection_made(timeout=bind_timeout)
 
         if self._input_file:
             await self._protocol.wait_for_connection_lost(timeout=86400)
