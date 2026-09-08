@@ -483,6 +483,53 @@ def load_fan(
     return fan
 
 
+def _load_ufh_system(
+    gateway: Gateway, tcs: SystemBase, ufh_system: Any
+) -> None:
+    """Hydrate UFH controllers and circuits from system schema.
+
+    :param gateway: The Gateway instance managing the system.
+    :param tcs: The Temperature Control System instance.
+    :param ufh_system: The underfloor heating schema dictionary.
+    """
+    if not isinstance(ufh_system, dict):
+        return
+
+    zones_map: dict[str, Any] = getattr(tcs, "zone_by_index", {})
+    device_registry = getattr(gateway, "device_registry", None)
+    cqrs_actuators: dict[str, set[str]] = getattr(
+        device_registry, "_cqrs_actuators", {}
+    )
+
+    for device_id, ufc_schema in ufh_system.items():
+        if not isinstance(ufc_schema, dict):
+            continue
+
+        ufc = _get_device(gateway, device_id, parent=tcs)
+        if not hasattr(ufc, "get_circuit"):
+            continue
+
+        circuits_dict = ufc_schema.get(SZ_CIRCUITS)
+        if not isinstance(circuits_dict, dict):
+            continue
+
+        for ufh_index, circuit_schema in circuits_dict.items():
+            if not isinstance(circuit_schema, dict):
+                continue
+
+            zone_index = circuit_schema.get(SZ_ZONE_INDEX)
+            if zone_index is None:
+                continue
+
+            circuit = ufc.get_circuit(str(ufh_index))
+            zone_index_str = str(zone_index)
+            if zone := zones_map.get(zone_index_str):
+                circuit.set_zone(zone)
+
+            zone_key = f"{tcs.id}_{zone_index_str}"
+            cqrs_actuators.setdefault(zone_key, set()).add(circuit.id)
+
+
 def load_tcs(
     gateway: Gateway, controller_id: DeviceIdT, schema: dict[str, Any]
 ) -> SystemBase:
@@ -508,8 +555,7 @@ def load_tcs(
     if hasattr(controller.tcs, "_update_schema"):
         controller.tcs._update_schema(**schema)
 
-    for dev_id in schema.get(SZ_UFH_SYSTEM, {}):  # UFH controllers
-        _get_device(gateway, dev_id, parent=controller.tcs)  # , **_schema)
+    _load_ufh_system(gateway, controller.tcs, schema.get(SZ_UFH_SYSTEM))
 
     for dev_id in schema.get(SZ_ORPHANS, []):
         _get_device(gateway, dev_id, parent=controller)
