@@ -9,6 +9,7 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt
+from enum import Enum, auto
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
@@ -26,6 +27,25 @@ _MAX_TRACKED_DURATION = 300
 _DBG_DISABLE_REGEX_WARNINGS = False
 
 _TxKeyT: TypeAlias = tuple[str, str, str, str, str, str]
+
+
+class SignaturePolicy(Enum):
+    """Startup signature probe policy for serial transports.
+
+    Controls when (and whether) the startup ``7FFF`` signature probe
+    is sent to discover the HGI device ID after port open.
+
+    - ``IMMEDIATE``: send probes immediately after open (default,
+      backward-compatible with existing single-USB behavior).
+    - ``DELAYED``: wait ``startup_grace`` seconds after open before
+      sending probes (for ESP32 USB devices that reset on open).
+    - ``SKIP``: never send probes; the child is receive-only until the
+      HGI ID is learned from inbound traffic or configured explicitly.
+    """
+
+    IMMEDIATE = auto()
+    DELAYED = auto()
+    SKIP = auto()
 
 
 @dataclass
@@ -50,6 +70,18 @@ class TransportConfig:
     :type timeout: float | None
     :param app_context: Optional application context.
     :type app_context: Any | None
+    :param signature_policy: Startup signature probe policy for serial
+        transports (Phase 2, issue 1119).  ``IMMEDIATE`` sends probes
+        right after port open (default, backward-compatible).
+        ``DELAYED`` waits ``startup_grace`` seconds before probing
+        (for ESP32 USB devices that reset on open).  ``SKIP`` never
+        probes — the child is receive-only until identity is learned.
+    :type signature_policy: SignaturePolicy
+    :param startup_grace: Grace period in seconds before sending
+        signature probes when ``signature_policy`` is ``DELAYED``.
+        Ignored for ``IMMEDIATE`` and ``SKIP``.  Default 3.0s based on
+        the hardware feasibility gate (ESP32 cold boot ~1.9s).
+    :type startup_grace: float | None
     """
 
     disable_sending: bool = False
@@ -61,6 +93,8 @@ class TransportConfig:
     use_regex: dict[str, dict[str, str]] = field(default_factory=dict)
     timeout: float | None = None
     app_context: Any | None = None
+    signature_policy: SignaturePolicy = SignaturePolicy.IMMEDIATE
+    startup_grace: float | None = None
 
 
 class _BaseTransport:
@@ -314,6 +348,8 @@ class _FullTransport(_ReadTransport):
             else _MAX_TRACKED_TRANSMITS
         )
         self._disable_sending: bool = config.disable_sending
+        self._signature_policy: SignaturePolicy = config.signature_policy
+        self._startup_grace: float = config.startup_grace or 3.0
 
     def _dt_now(self) -> dt:
         """Get a precise datetime, using the current dtm."""

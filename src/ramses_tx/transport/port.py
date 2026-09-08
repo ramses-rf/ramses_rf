@@ -74,7 +74,7 @@ from ..schemas import (
 )
 from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from ..version import VERSION
-from .base import TransportConfig, _FullTransport
+from .base import SignaturePolicy, TransportConfig, _FullTransport
 from .helpers import _normalise, _str
 
 _LOGGER = logging.getLogger(__name__)
@@ -392,10 +392,43 @@ class PortTransport(_FullTransport):
             self._make_connection(gateway_id=None)
             return
 
+        async def connect_with_delayed_signature() -> None:
+            """Wait grace period, then poll with signatures.
+
+            For ESP32 USB devices that reset on port open (DTR/RTS
+            transition pulses EN).  The grace period allows the ESP32
+            to boot before sending probes (Phase 2, issue 1119).
+            """
+            grace = self._startup_grace
+            _LOGGER.info(
+                "PortTransport: waiting %.1fs grace before signature "
+                "probe (signature_policy=DELAYED)",
+                grace,
+            )
+            await asyncio.sleep(grace)
+            await connect_with_signature()
+
+        # Dispatch based on disable_sending and signature_policy.
+        # disable_sending=True always skips the probe (permanent
+        # receive-only, backward-compatible).  When False, the
+        # signature_policy controls startup behavior:
+        # - IMMEDIATE: probe right after open (default, backward-compatible)
+        # - DELAYED: wait startup_grace seconds, then probe
+        # - SKIP: no probe; identity learned from inbound traffic
         if self._disable_sending:
             self._init_task = self._loop.create_task(
                 connect_sans_signature(),
                 name="PortTransport.connect_sans_signature()",
+            )
+        elif self._signature_policy is SignaturePolicy.SKIP:
+            self._init_task = self._loop.create_task(
+                connect_sans_signature(),
+                name="PortTransport.connect_sans_signature(skip)",
+            )
+        elif self._signature_policy is SignaturePolicy.DELAYED:
+            self._init_task = self._loop.create_task(
+                connect_with_delayed_signature(),
+                name="PortTransport.connect_with_delayed_signature()",
             )
         else:
             self._init_task = self._loop.create_task(
@@ -403,8 +436,17 @@ class PortTransport(_FullTransport):
                 name="PortTransport.connect_with_signature()",
             )
 
+        # Extend the init timeout when delayed to account for the
+        # grace period on top of the signature probe window.
+        init_timeout: float = _SIGNATURE_MAX_SECS
+        if (
+            self._signature_policy is SignaturePolicy.DELAYED
+            and not self._disable_sending
+        ):
+            init_timeout += self._startup_grace
+
         try:
-            await asyncio.wait_for(self._init_fut, timeout=_SIGNATURE_MAX_SECS)
+            await asyncio.wait_for(self._init_fut, timeout=init_timeout)
         except TimeoutError as err:
             raise exc.TransportSerialError(
                 f"Failed to initialise Transport within {_SIGNATURE_MAX_SECS} secs"
