@@ -233,6 +233,7 @@ class PortTransport(_FullTransport):
     _init_task: asyncio.Task[None]
     _leaker_task: asyncio.Task[None]
     _conn_task: asyncio.Task[None] | None
+    _reconnect_task: asyncio.Task[None] | None = None
 
     _serial_transport: BaseSerialTransport | None
     _port_name: SerPortNameT
@@ -302,6 +303,8 @@ class PortTransport(_FullTransport):
         self._tx_bits_in_bucket = None
         self._tx_last_time_bit_added = None
         self._log_all = config.log_all
+        self._enable_reconnect: bool = config.enable_reconnect
+        self._max_reconnect_attempts: int = config.max_reconnect_attempts
 
         self._init_fut = self._loop.create_future()
 
@@ -503,11 +506,68 @@ class PortTransport(_FullTransport):
     def _connection_lost(self, error: Exception | None) -> None:
         """Handle underlying transport disconnection.
 
+        When ``enable_reconnect`` is True and the transport is not
+        being explicitly closed, start a reconnect loop with
+        exponential backoff (Phase 2, issue 1119).
+
         :param error: The exception that caused connection loss, or None.
         :type error: Exception | None
         """
-        if not self._closing:
-            self._close(exc=exc.TransportSerialError(error) if error else None)
+        if self._closing:
+            return
+        self._close(exc=exc.TransportSerialError(error) if error else None)
+        if self._enable_reconnect and not self._closing:
+            self._reconnect_task = self._loop.create_task(
+                self._reconnect_loop(),
+                name="PortTransport._reconnect_loop()",
+            )
+
+    async def _reconnect_loop(self) -> None:
+        """Reconnect to the serial port with exponential backoff.
+
+        Tries to reopen the port up to ``max_reconnect_attempts`` times
+        with exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 30s).
+        On successful reopen, re-runs the signature probe.  Uses the
+        original port name (which may be a stable ``/dev/serial/by-id/``
+        path) so the same physical device is found after replug.
+        """
+        backoff = 1.0
+        max_backoff = 30.0
+        for attempt in range(1, self._max_reconnect_attempts + 1):
+            await asyncio.sleep(backoff)
+            if self._closing:
+                return
+            _LOGGER.info(
+                "PortTransport: reconnect attempt %d/%d to %s (backoff %.1fs)",
+                attempt,
+                self._max_reconnect_attempts,
+                self._port_name,
+                backoff,
+            )
+            # Reset connection state for a fresh attempt
+            self._serial_transport = None
+            self._init_fut = self._loop.create_future()
+            try:
+                await self._create_connection()
+                _LOGGER.info(
+                    "PortTransport: reconnected to %s on attempt %d",
+                    self._port_name,
+                    attempt,
+                )
+                return
+            except Exception as err:
+                _LOGGER.warning(
+                    "PortTransport: reconnect attempt %d to %s failed: %s",
+                    attempt,
+                    self._port_name,
+                    err,
+                )
+                backoff = min(backoff * 2, max_backoff)
+        _LOGGER.error(
+            "PortTransport: giving up after %d reconnect attempts to %s",
+            self._max_reconnect_attempts,
+            self._port_name,
+        )
 
     def _packet_read(self, packet: Packet) -> None:
         if (
@@ -597,3 +657,6 @@ class PortTransport(_FullTransport):
 
         if conn_task := getattr(self, "_conn_task", None):
             conn_task.cancel()
+
+        if reconnect_task := getattr(self, "_reconnect_task", None):
+            reconnect_task.cancel()

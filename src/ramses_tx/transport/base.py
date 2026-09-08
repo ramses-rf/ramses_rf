@@ -82,6 +82,13 @@ class TransportConfig:
         Ignored for ``IMMEDIATE`` and ``SKIP``.  Default 3.0s based on
         the hardware feasibility gate (ESP32 cold boot ~1.9s).
     :type startup_grace: float | None
+    :param enable_reconnect: Enable automatic reconnect with exponential
+        backoff when the serial port disconnects (Phase 2, issue 1119).
+        Default False preserves existing single-USB behavior.
+    :type enable_reconnect: bool
+    :param max_reconnect_attempts: Maximum number of reconnect attempts
+        before giving up.  Default 5.
+    :type max_reconnect_attempts: int
     """
 
     disable_sending: bool = False
@@ -95,6 +102,8 @@ class TransportConfig:
     app_context: Any | None = None
     signature_policy: SignaturePolicy = SignaturePolicy.IMMEDIATE
     startup_grace: float | None = None
+    enable_reconnect: bool = False
+    max_reconnect_attempts: int = 5
 
 
 class _BaseTransport:
