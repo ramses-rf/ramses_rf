@@ -697,6 +697,7 @@ class PooledTransport(TransportInterface):
                 await child.transport.send_frame(frame)
                 return WriteOutcome.SUBMITTED
             except Exception:
+                child.record_error()
                 return WriteOutcome.AMBIGUOUS
 
         try:
@@ -708,8 +709,10 @@ class PooledTransport(TransportInterface):
                 await write(frame)
                 return WriteOutcome.SUBMITTED
             except Exception:
+                child.record_error()
                 return WriteOutcome.AMBIGUOUS
         except Exception:
+            child.record_error()
             return WriteOutcome.AMBIGUOUS
 
     async def write_frame(
