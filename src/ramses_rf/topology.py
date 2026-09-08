@@ -402,9 +402,6 @@ class Parent[ChildT: Child]:
         :raises SystemSchemaInconsistent: If the child contradicts existing schema.
         :raises SchemaInconsistentError: If the combination is invalid.
         """
-        if hasattr(self, "childs") and child not in self.childs:
-            pass
-
         child_id_val = getattr(child, "id", None)
 
         try:
@@ -497,7 +494,8 @@ class Parent[ChildT: Child]:
             )
             raise
 
-        self.childs.append(child)
+        if child not in self.childs:
+            self.childs.append(child)
         self.child_by_id[str(child_id_val or child)] = child
 
     def _detach_child(self, child: ChildT) -> None:
