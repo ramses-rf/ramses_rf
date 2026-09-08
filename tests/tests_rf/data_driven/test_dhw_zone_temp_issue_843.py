@@ -103,10 +103,14 @@ async def test_dhw_zone_relay_demand_and_failsafe_hydrated() -> None:
             f"DHW relay_failsafe expected False: {relay_failsafe!r}"
         )
 
-        # heat_demand must NOT be wrongly set from relay_demand (old bug)
+        # heat_demand falls back to the hotwater_valve BDR's relay_demand
+        # when demand_state.heat_demand is None (no 3150|FA packets for
+        # DHW on real systems).  The BDR 13:109598 has relay_demand=0.0
+        # (relay off), so heat_demand should be 0.0, not None.
+        # See: ramses-rf/ramses_cc issue 1130
         heat_demand = await tcs.dhw.heat_demand()
-        assert heat_demand is None, (
-            f"DHW heat_demand wrongly set from relay_demand: {heat_demand!r}"
+        assert heat_demand == 0.0, (
+            f"DHW heat_demand expected 0.0 (BDR fallback): {heat_demand!r}"
         )
     finally:
         await gwy.stop()

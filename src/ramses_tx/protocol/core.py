@@ -347,7 +347,9 @@ class PortProtocol(_DeviceIdFilterMixin):
 
         if self._tx_worker_task and not self._tx_worker_task.done():
             self._tx_worker_task.cancel()
-            self._tx_worker_task = None
+            # NOTE: do NOT null out _tx_worker_task here — engine.stop()
+            # needs to await the cancelled task to avoid
+            # "Task was destroyed but it is pending" warnings (issue 1171).
 
         exc_val = TransportError("Connection lost") if error is None else error
 
