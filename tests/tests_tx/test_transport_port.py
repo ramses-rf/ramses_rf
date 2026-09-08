@@ -345,3 +345,216 @@ async def test_abort_and_close_cancels_tasks() -> None:
 
     assert mock_init_task.cancel.call_count == 2
     assert mock_leaker_task.cancel.call_count == 2
+
+
+# -- Phase 2: signature policy tests -------------------------------------
+
+
+async def test_signature_policy_skip_uses_connect_sans_signature() -> None:
+    """SKIP policy calls connect_sans_signature (no probes sent)."""
+    from ramses_tx.transport.base import SignaturePolicy, TransportConfig
+
+    mock_serial = MagicMock(spec=BaseSerialTransport)
+    mock_serial.serial = MagicMock()
+    mock_serial.name = "/dev/ttyUSB0"
+    mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_protocol = MagicMock()
+    config = TransportConfig(signature_policy=SignaturePolicy.SKIP)
+
+    loop = asyncio.get_running_loop()
+    with (
+        patch.object(loop, "add_reader"),
+        patch.object(loop, "remove_reader"),
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+    ):
+        transport = PortTransport(
+            mock_serial, mock_protocol, config=config, extra={}
+        )
+
+    for task in asyncio.all_tasks():
+        if task.get_name() == "PortTransport._create_connection()":
+            task.cancel()
+
+    transport._init_fut = loop.create_future()
+    with (
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch.object(transport, "_make_connection") as mock_make,
+    ):
+        await transport._create_connection()
+
+    # SKIP should call _make_connection with gateway_id=None (no probe).
+    mock_make.assert_called_once_with(gateway_id=None)
+    transport._close()
+
+
+async def test_signature_policy_delayed_creates_delayed_task() -> None:
+    """DELAYED policy creates a connect_with_delayed_signature task."""
+    from ramses_tx.transport.base import SignaturePolicy, TransportConfig
+
+    mock_serial = MagicMock(spec=BaseSerialTransport)
+    mock_serial.serial = MagicMock()
+    mock_serial.name = "/dev/ttyUSB0"
+    mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_protocol = MagicMock()
+    config = TransportConfig(
+        signature_policy=SignaturePolicy.DELAYED, startup_grace=0.01
+    )
+
+    loop = asyncio.get_running_loop()
+    with (
+        patch.object(loop, "add_reader"),
+        patch.object(loop, "remove_reader"),
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+    ):
+        transport = PortTransport(
+            mock_serial, mock_protocol, config=config, extra={}
+        )
+
+    for task in asyncio.all_tasks():
+        if task.get_name() == "PortTransport._create_connection()":
+            task.cancel()
+
+    # Pre-resolve init_fut so _create_connection doesn't block.
+    transport._init_fut = loop.create_future()
+    transport._init_fut.set_result(None)
+
+    init_task_names: list[str] = []
+    original_create_task = loop.create_task
+
+    def track_create_task(coro, *, name=None, context=None):
+        if name:
+            init_task_names.append(name)
+        return original_create_task(coro, name=name, context=context)
+
+    with (
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch.object(transport, "_make_connection"),
+        patch.object(transport, "_write_frame", new_callable=AsyncMock),
+        patch.object(loop, "create_task", side_effect=track_create_task),
+    ):
+        await transport._create_connection()
+
+    # DELAYED should create a delayed signature task.
+    assert any("delayed" in name.lower() for name in init_task_names)
+    transport._close()
+
+
+async def test_signature_policy_immediate_creates_immediate_task() -> None:
+    """IMMEDIATE policy (default) creates a connect_with_signature task."""
+    from ramses_tx.transport.base import SignaturePolicy, TransportConfig
+
+    mock_serial = MagicMock(spec=BaseSerialTransport)
+    mock_serial.serial = MagicMock()
+    mock_serial.name = "/dev/ttyUSB0"
+    mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_protocol = MagicMock()
+    config = TransportConfig(signature_policy=SignaturePolicy.IMMEDIATE)
+
+    loop = asyncio.get_running_loop()
+    with (
+        patch.object(loop, "add_reader"),
+        patch.object(loop, "remove_reader"),
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+    ):
+        transport = PortTransport(
+            mock_serial, mock_protocol, config=config, extra={}
+        )
+
+    for task in asyncio.all_tasks():
+        if task.get_name() == "PortTransport._create_connection()":
+            task.cancel()
+
+    transport._init_fut = loop.create_future()
+    transport._init_fut.set_result(None)
+
+    init_task_names: list[str] = []
+    original_create_task = loop.create_task
+
+    def track_create_task(coro, *, name=None, context=None):
+        if name:
+            init_task_names.append(name)
+        return original_create_task(coro, name=name, context=context)
+
+    with (
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch.object(transport, "_make_connection"),
+        patch.object(transport, "_write_frame", new_callable=AsyncMock),
+        patch.object(loop, "create_task", side_effect=track_create_task),
+    ):
+        await transport._create_connection()
+
+    # IMMEDIATE should create a connect_with_signature task (not delayed).
+    assert any("with_signature" in name for name in init_task_names)
+    assert not any("delayed" in name.lower() for name in init_task_names)
+    transport._close()
+
+
+async def test_reconnect_task_created_on_connection_lost() -> None:
+    """connection_lost starts reconnect loop when enable_reconnect is True."""
+    from ramses_tx.transport.base import TransportConfig
+
+    mock_serial = MagicMock(spec=BaseSerialTransport)
+    mock_serial.serial = MagicMock()
+    mock_serial.name = "/dev/ttyUSB0"
+    mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_protocol = MagicMock()
+    config = TransportConfig(enable_reconnect=True)
+
+    loop = asyncio.get_running_loop()
+    with (
+        patch.object(loop, "add_reader"),
+        patch.object(loop, "remove_reader"),
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+    ):
+        transport = PortTransport(
+            mock_serial, mock_protocol, config=config, extra={}
+        )
+
+    for task in asyncio.all_tasks():
+        if task.get_name() == "PortTransport._create_connection()":
+            task.cancel()
+
+    # Simulate connection lost (not closing).
+    transport._closing = False
+    with (
+        patch.object(transport, "_close"),
+        patch.object(transport, "_reconnect_loop", new_callable=AsyncMock),
+    ):
+        transport._connection_lost(RuntimeError("unplugged"))
+        await asyncio.sleep(0.01)
+
+    assert transport._reconnect_task is not None
+    transport._close()
+
+
+async def test_reconnect_not_created_when_enable_reconnect_false() -> None:
+    """connection_lost does not start reconnect when enable_reconnect=False."""
+    from ramses_tx.transport.base import TransportConfig
+
+    mock_serial = MagicMock(spec=BaseSerialTransport)
+    mock_serial.serial = MagicMock()
+    mock_serial.name = "/dev/ttyUSB0"
+    mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_protocol = MagicMock()
+    config = TransportConfig(enable_reconnect=False)
+
+    loop = asyncio.get_running_loop()
+    with (
+        patch.object(loop, "add_reader"),
+        patch.object(loop, "remove_reader"),
+        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+    ):
+        transport = PortTransport(
+            mock_serial, mock_protocol, config=config, extra={}
+        )
+
+    for task in asyncio.all_tasks():
+        if task.get_name() == "PortTransport._create_connection()":
+            task.cancel()
+
+    transport._closing = False
+    with patch.object(transport, "_close"):
+        transport._connection_lost(RuntimeError("unplugged"))
+
+    assert transport._reconnect_task is None
+    transport._close()

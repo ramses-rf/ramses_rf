@@ -21,6 +21,7 @@ import pytest
 from ramses_tx.const import I_, SZ_ACTIVE_HGI, Code
 from ramses_tx.transport.base import TransportConfig
 from ramses_tx.transport.pooled import (
+    ConnectionState,
     IngressFrame,
     NodeAvailability,
     PoolChild,
@@ -1031,3 +1032,96 @@ def test_empty_transport_list_does_not_raise(
         proto, [], config=TransportConfig(), loop=event_loop
     )
     assert len(pool._children) == 0
+
+
+# -- Phase 2: signature policy and serial child state --------------------
+
+
+def test_identity_unknown_child_is_not_sendable() -> None:
+    """A child with no HGI identity is not sendable (receive-only)."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.accepted = True
+    # No HGI identity learned yet.
+    assert child.hgi_id is None
+    assert not child.is_sendable
+    assert not child.send_ready
+
+
+def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
+    """A child becomes sendable after learning its HGI identity."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.accepted = True
+    assert not child.is_sendable
+    child.learn_hgi(DeviceIdT("18:001234"))
+    assert child.hgi_id == DeviceIdT("18:001234")
+    assert child.send_ready
+    assert child.is_sendable
+
+
+async def test_write_failure_increments_child_error_counter(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A write failure in write_routed increments the child's errors."""
+    from ramses_tx.routing import RoutedCommand, WriteOutcome
+
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t0.write_frame = AsyncMock(side_effect=RuntimeError("port gone"))
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    routed = RoutedCommand(child_id="0", command=MagicMock())
+    outcome = await pool.write_routed(routed, "test frame")
+    assert outcome is WriteOutcome.AMBIGUOUS
+    assert pool._children[0].consecutive_errors == 1
+
+
+async def test_identity_unknown_child_not_selected_for_outbound(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A child with unknown identity is not selected for outbound routing."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)  # no HGI identity
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    # Connect both children.
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    # Feed a packet to child 1 to make it online + send-ready.
+    pool._on_child_packet(1, _make_packet(rssi="050", payload="FFFF"))
+
+    # Child 0 has no HGI identity and should not be sendable.
+    assert not pool._children[0].is_sendable
+    # Child 1 should be sendable.
+    assert pool._children[1].is_sendable
+
+    # Select a child for outbound — should pick child 1, not 0.
+    child = pool._select_child("04:123456")
+    assert child is not None
+    assert child.child_id == 1
+
+
+def test_disconnected_child_resets_send_ready() -> None:
+    """A disconnected child loses send_ready and must re-validate identity."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.accepted = True
+    child.learn_hgi(DeviceIdT("18:001234"))
+    assert child.is_sendable
+
+    child.mark_disconnected()
+    assert not child.is_sendable
+    assert not child.send_ready
+    assert child.connection_state is ConnectionState.DISCONNECTED
