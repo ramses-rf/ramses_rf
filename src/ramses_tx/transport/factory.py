@@ -200,6 +200,7 @@ async def pooled_transport_factory(
     extra: dict[str, object] | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     dedup_window: float = 0.5,
+    callback_port_names: list[str] | None = None,
 ) -> RamsesTransportT:
     """Create a :class:`PooledTransport` from multiple port names.
 
@@ -207,12 +208,21 @@ async def pooled_transport_factory(
     Zigbee) created with a :class:`_ChildProtocolProxy` that routes
     inbound packets through the pool's deduplication filter.
 
+    ``callback_port_names`` reserves additional callback-driven child
+    slots (transport stays ``None``).  The caller is responsible for
+    wiring a callback adapter (e.g. ``MqttCallbackPoolAdapter``) to
+    feed packets into these children.  This enables hybrid pools
+    where serial children are transport-driven and MQTT children are
+    callback-driven via the HA-native MQTT integration (Phase 2,
+    issue 1119 — no paho inside HA).
+
     :param protocol: The real protocol that receives deduplicated
         packets.
     :type protocol: RamsesProtocolT
     :param config: Transport configuration shared by all children.
     :type config: TransportConfig
-    :param port_names: List of port names (serial, MQTT URLs, etc.).
+    :param port_names: List of port names for transport-driven
+        children (serial, MQTT URLs, etc.).
     :type port_names: list[SerPortNameT]
     :param port_configs: Optional per-child port configurations for
         serial ports.  If provided, must be the same length as
@@ -225,14 +235,22 @@ async def pooled_transport_factory(
     :type loop: asyncio.AbstractEventLoop | None
     :param dedup_window: Deduplication window in seconds.
     :type dedup_window: float
-    :returns: A :class:`PooledTransport` wrapping all child transports.
+    :param callback_port_names: Optional list of port names for
+        callback-driven children (transport stays ``None``).  The
+        caller wires the callback adapter for these children.
+    :type callback_port_names: list[str] | None
+    :returns: A :class:`PooledTransport` wrapping all child
+        transports.  Transport-driven children come first (indices
+        0..len(port_names)-1), callback-driven children follow
+        (indices len(port_names)..len(port_names)+len(callback_port_names)-1).
     :rtype: PooledTransport
     :raises ValueError: If ``port_names`` is empty or ``port_configs``
         length doesn't match.
     """
-    if not port_names:
+    if not port_names and not callback_port_names:
         raise ValueError(
-            "pooled_transport_factory requires at least one port_name"
+            "pooled_transport_factory requires at least one port_name "
+            "or callback_port_name"
         )
     if port_configs is not None and len(port_configs) != len(port_names):
         raise ValueError("port_configs must be the same length as port_names")
@@ -243,17 +261,21 @@ async def pooled_transport_factory(
 
     # Create the pool first so we can create child proxies.
     # Pre-allocate children with None transports; successful children
-    # are injected after creation.
-    num_children = len(port_names)
+    # are injected after creation.  Callback-driven children stay None.
+    all_port_names = [str(p) for p in port_names]
+    if callback_port_names:
+        all_port_names.extend(callback_port_names)
+    num_children = len(all_port_names)
     pool = PooledTransport(
         protocol,
         [None] * num_children,  # placeholders, replaced below
         config=config,
         loop=loop,
         dedup_window=dedup_window,
-        port_names=[str(p) for p in port_names],
+        port_names=all_port_names,
     )
 
+    # Create transport-driven children (serial, MQTT paho, Zigbee).
     for i, pname in enumerate(port_names):
         proxy = _ChildProtocolProxy(pool, i)
         pconfig = port_configs[i] if port_configs else None
@@ -284,6 +306,19 @@ async def pooled_transport_factory(
 
         # Replace the placeholder with the real transport.
         pool._children[i].transport = child
+
+    # Callback-driven children (indices len(port_names)..) stay None.
+    # The caller wires the callback adapter (e.g. MqttCallbackPoolAdapter)
+    # to feed packets into these children via the pool's
+    # _on_child_packet() method.
+    if callback_port_names:
+        _LOGGER.info(
+            "PooledTransport: %d callback-driven children reserved "
+            "(indices %d..%d) for external callback adapter",
+            len(callback_port_names),
+            len(port_names),
+            num_children - 1,
+        )
 
     # Wait for at least one child to connect.
     await pool._wait_for_any_connection(
