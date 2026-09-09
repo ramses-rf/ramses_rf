@@ -30,7 +30,7 @@ _TxKeyT: TypeAlias = tuple[str, str, str, str, str, str]
 
 
 class SignaturePolicy(Enum):
-    """Startup signature probe policy for serial transports.
+    r"""Startup signature probe policy for serial transports.
 
     Controls when (and whether) the startup ``7FFF`` signature probe
     is sent to discover the HGI device ID after port open.
@@ -41,11 +41,16 @@ class SignaturePolicy(Enum):
       sending probes (for ESP32 USB devices that reset on open).
     - ``SKIP``: never send probes; the child is receive-only until the
       HGI ID is learned from inbound traffic or configured explicitly.
+    - ``ID_COMMAND``: send evofw3's ``!I\r`` serial command to
+      discover the HGI ID directly over serial (no RF loopback needed).
+      Works on all evofw3 hardware, including ATmega devices that
+      cannot echo the ``_PUZZ`` signature (Gap E, Phase 2).
     """
 
     IMMEDIATE = auto()
     DELAYED = auto()
     SKIP = auto()
+    ID_COMMAND = auto()
 
 
 @dataclass
@@ -89,6 +94,12 @@ class TransportConfig:
     :param max_reconnect_attempts: Maximum number of reconnect attempts
         before giving up.  Default 5.
     :type max_reconnect_attempts: int
+    :param configured_hgi_id: Manually configured HGI device ID for
+        devices that cannot be queried via ``!I`` or ``_PUZZ`` (e.g.
+        HGI80, or as a fallback when ``!I`` fails).  When set, the
+        transport uses this ID without sending any probe (Gap B,
+        Phase 2).
+    :type configured_hgi_id: str | None
     """
 
     disable_sending: bool = False
@@ -104,6 +115,7 @@ class TransportConfig:
     startup_grace: float | None = None
     enable_reconnect: bool = False
     max_reconnect_attempts: int = 5
+    configured_hgi_id: str | None = None
 
 
 class _BaseTransport:
@@ -283,8 +295,28 @@ class _ReadTransport(_BaseTransport, TransportInterface):
         return False
 
     def _frame_read(self, dtm_str: str, frame: str) -> None:
-        """Make a Packet from the Frame and process it."""
+        """Make a Packet from the Frame and process it.
+
+        Filters evofw3 debug responses (lines starting with ``#``)
+        before the packet parser so they don't get logged as
+        ``PacketInvalid`` (Gap F, Phase 2).  These are valid evofw3
+        serial command responses (version, ID, config), not RAMSES
+        packets.
+
+        :param dtm_str: Timestamp string from the transport.
+        :type dtm_str: str
+        :param frame: Raw ASCII frame string from transport.
+        :type frame: str
+        """
         if not frame.strip():
+            return
+
+        # Gap F: filter evofw3 debug responses (lines starting with #).
+        # These are ``!V``, ``!I``, ``!C`` etc. command responses, not
+        # RAMSES packets.  Log at debug level instead of warning.
+        stripped = frame.strip()
+        if stripped.startswith("#"):
+            _LOGGER.debug("evofw3 debug response: %s", stripped)
             return
 
         is_echo = self._is_recent_tx(frame)
@@ -359,6 +391,7 @@ class _FullTransport(_ReadTransport):
         self._disable_sending: bool = config.disable_sending
         self._signature_policy: SignaturePolicy = config.signature_policy
         self._startup_grace: float = config.startup_grace or 3.0
+        self._configured_hgi_id: str | None = config.configured_hgi_id
 
     def _dt_now(self) -> dt:
         """Get a precise datetime, using the current dtm."""

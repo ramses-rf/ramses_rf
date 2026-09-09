@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -201,6 +202,7 @@ async def pooled_transport_factory(
     loop: asyncio.AbstractEventLoop | None = None,
     dedup_window: float = 0.5,
     callback_port_names: list[str] | None = None,
+    per_child_config_overrides: list[dict[str, object]] | None = None,
 ) -> RamsesTransportT:
     """Create a :class:`PooledTransport` from multiple port names.
 
@@ -215,6 +217,14 @@ async def pooled_transport_factory(
     where serial children are transport-driven and MQTT children are
     callback-driven via the HA-native MQTT integration (Phase 2,
     issue 1119 — no paho inside HA).
+
+    ``per_child_config_overrides`` allows each transport-driven child
+    to receive its own :class:`TransportConfig` derived from the shared
+    ``config`` via :func:`dataclasses.replace`.  This is required for
+    mixed USB pools where different device types need different
+    ``signature_policy``, ``startup_grace``, or ``configured_hgi_id``
+    values (Gap D, Phase 2).  If provided, must be the same length as
+    ``port_names``.
 
     :param protocol: The real protocol that receives deduplicated
         packets.
@@ -239,13 +249,19 @@ async def pooled_transport_factory(
         callback-driven children (transport stays ``None``).  The
         caller wires the callback adapter for these children.
     :type callback_port_names: list[str] | None
+    :param per_child_config_overrides: Optional per-child config
+        overrides (Gap D).  Each dict is merged into the shared
+        ``config`` via :func:`dataclasses.replace`.  Must be the same
+        length as ``port_names`` if provided.
+    :type per_child_config_overrides: list[dict[str, object]] | None
     :returns: A :class:`PooledTransport` wrapping all child
         transports.  Transport-driven children come first (indices
         0..len(port_names)-1), callback-driven children follow
         (indices len(port_names)..len(port_names)+len(callback_port_names)-1).
     :rtype: PooledTransport
-    :raises ValueError: If ``port_names`` is empty or ``port_configs``
-        length doesn't match.
+    :raises ValueError: If ``port_names`` is empty, ``port_configs``
+        length doesn't match, or ``per_child_config_overrides`` length
+        doesn't match.
     """
     if not port_names and not callback_port_names:
         raise ValueError(
@@ -254,6 +270,12 @@ async def pooled_transport_factory(
         )
     if port_configs is not None and len(port_configs) != len(port_names):
         raise ValueError("port_configs must be the same length as port_names")
+    if per_child_config_overrides is not None and len(
+        per_child_config_overrides
+    ) != len(port_names):
+        raise ValueError(
+            "per_child_config_overrides must be the same length as port_names"
+        )
 
     # Apply regex rules to the Protocol before binding any Transport.
     if config.use_regex:
@@ -280,6 +302,19 @@ async def pooled_transport_factory(
         proxy = _ChildProtocolProxy(pool, i)
         pconfig = port_configs[i] if port_configs else None
 
+        # Apply per-child config overrides (Gap D, Phase 2).
+        # Each override is merged into the shared config via
+        # dataclasses.replace, allowing per-child signature_policy,
+        # startup_grace, configured_hgi_id, etc.
+        child_config = config
+        if per_child_config_overrides is not None:
+            override = per_child_config_overrides[i]
+            if override:
+                child_config = dataclasses.replace(
+                    config,
+                    **override,  # type: ignore[arg-type]
+                )
+
         # Create the child transport via the standard factory, but
         # with the proxy protocol instead of the real one.
         # Tolerate individual child failures — the pool can operate
@@ -288,7 +323,7 @@ async def pooled_transport_factory(
         try:
             child = await _create_single_child(
                 proxy,
-                config=config,
+                config=child_config,
                 port_name=pname,
                 port_config=pconfig,
                 extra=extra,

@@ -41,6 +41,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 from collections.abc import Callable, Coroutine, Iterable
 from datetime import datetime as dt
 from functools import wraps
@@ -82,6 +83,11 @@ _LOGGER = logging.getLogger(__name__)
 _SIGNATURE_GAP_SECS: Final[float] = 0.05
 _SIGNATURE_MAX_TRYS: Final[int] = 40  # was: 24
 _SIGNATURE_MAX_SECS: Final[int] = 3
+
+# evofw3 ``!I`` command response: ``# 18:000730\r\n`` (Gap E).
+# The ID is class:id, both read from EEPROM — no RF needed.
+_EVOFW3_ID_RE: Final[re.Pattern[str]] = re.compile(r"^#\s*(\d{2}):(\d{6})\s*$")
+_ID_COMMAND_TIMEOUT: Final[float] = 2.0
 
 _DBG_DISABLE_DUTY_CYCLE_LIMIT: Final[bool] = False
 _DBG_FORCE_FRAME_LOGGING: Final[bool] = False
@@ -354,9 +360,16 @@ class PortTransport(_FullTransport):
         self._is_hgi80 = await is_hgi80(self._port_name)
 
         async def connect_sans_signature() -> None:
-            """Call connection_made() without waiting for signature."""
+            """Call connection_made() without waiting for signature.
+
+            Uses ``configured_hgi_id`` if set (Gap B), otherwise
+            ``None`` (identity learned from inbound traffic).
+            """
             self._init_fut.set_result(None)
-            self._make_connection(gateway_id=None)
+            gateway_id: str | None = self._configured_hgi_id
+            self._make_connection(
+                gateway_id=gateway_id  # type: ignore[arg-type]
+            )
 
         async def connect_with_signature() -> None:
             """Poll with signatures; connect after first echo."""
@@ -392,7 +405,11 @@ class PortTransport(_FullTransport):
             if not self._init_fut.done():
                 self._init_fut.set_result(None)
 
-            self._make_connection(gateway_id=None)
+            # Fall back to configured_hgi_id if set (Gap B).
+            gateway_id: str | None = self._configured_hgi_id
+            self._make_connection(
+                gateway_id=gateway_id  # type: ignore[arg-type]
+            )
             return
 
         async def connect_with_delayed_signature() -> None:
@@ -411,22 +428,143 @@ class PortTransport(_FullTransport):
             await asyncio.sleep(grace)
             await connect_with_signature()
 
-        # Dispatch based on disable_sending and signature_policy.
+        async def connect_with_id_command() -> None:
+            r"""Send ``!I\r`` to discover the HGI ID over serial.
+
+            evofw3's ``!I`` command returns ``# 18:000730\r\n``
+            directly from EEPROM — no RF TX, no RF loopback, no
+            ``_PUZZ`` echo.  Works on all evofw3 hardware including
+            ATmega devices that cannot echo ``_PUZZ`` (Gap E, Phase 2).
+
+            Falls back to ``configured_hgi_id`` (Gap B) or
+            ``connect_with_signature()`` if ``!I`` fails.
+            """
+            # Wait for the device to boot if it resets on open.
+            if self._startup_grace and self._startup_grace > 0:
+                _LOGGER.info(
+                    "PortTransport: waiting %.1fs before !I command "
+                    "(signature_policy=ID_COMMAND)",
+                    self._startup_grace,
+                )
+                await asyncio.sleep(self._startup_grace)
+
+            id_future: asyncio.Future[str] = self._loop.create_future()
+
+            def _check_id_response(line: str) -> None:
+                """Check if a received line is an ``!I`` response."""
+                if id_future.done():
+                    return
+                match = _EVOFW3_ID_RE.match(line.strip())
+                if match:
+                    hgi_id = f"{match.group(1)}:{match.group(2)}"
+                    id_future.set_result(hgi_id)
+
+            # Temporarily hook into the frame reader to catch the
+            # ``# CC:IIIIII`` response.  The response is NOT a RAMSES
+            # packet — it's an evofw3 debug response that would
+            # normally be logged as PacketInvalid (Gap F).
+            original_frame_read = self._frame_read
+
+            def _frame_read_intercept(dtm_str: str, frame: str) -> None:
+                """Intercept ``#`` lines before the packet parser."""
+                stripped = frame.strip()
+                if stripped.startswith("#"):
+                    _check_id_response(stripped)
+                    _LOGGER.debug(
+                        "PortTransport: evofw3 debug response: %s",
+                        stripped,
+                    )
+                    return  # Don't feed to packet parser (Gap F)
+                original_frame_read(dtm_str, frame)
+
+            self._frame_read = _frame_read_intercept  # type: ignore[method-assign]
+
+            try:
+                # Send the ``!I`` command.
+                _LOGGER.debug(
+                    "PortTransport: sending !I command to %s",
+                    self._port_name,
+                )
+                self._write(b"!I\r")
+
+                try:
+                    hgi_id = await asyncio.wait_for(
+                        id_future, timeout=_ID_COMMAND_TIMEOUT
+                    )
+                    _LOGGER.info(
+                        "PortTransport: !I command returned HGI ID %s",
+                        hgi_id,
+                    )
+                    self._init_fut.set_result(None)
+                    self._make_connection(
+                        gateway_id=hgi_id  # type: ignore[arg-type]
+                    )
+                    return
+                except TimeoutError:
+                    _LOGGER.warning(
+                        "PortTransport: !I command timed out after "
+                        "%.1fs on %s, falling back",
+                        _ID_COMMAND_TIMEOUT,
+                        self._port_name,
+                    )
+            finally:
+                # Restore the original frame reader.
+                self._frame_read = original_frame_read  # type: ignore[method-assign]
+
+            # Fall back to configured_hgi_id (Gap B) or signature.
+            if self._configured_hgi_id is not None:
+                _LOGGER.info(
+                    "PortTransport: using configured_hgi_id %s "
+                    "after !I failure",
+                    self._configured_hgi_id,
+                )
+                self._init_fut.set_result(None)
+                self._make_connection(
+                    gateway_id=self._configured_hgi_id  # type: ignore[arg-type]
+                )
+                return
+
+            # Final fallback: try the _PUZZ signature probe.
+            _LOGGER.info(
+                "PortTransport: falling back to _PUZZ signature "
+                "probe after !I failure"
+            )
+            await connect_with_signature()
+
+        # Dispatch based on disable_sending, _is_hgi80, and
+        # signature_policy.
         # disable_sending=True always skips the probe (permanent
-        # receive-only, backward-compatible).  When False, the
-        # signature_policy controls startup behavior:
+        # receive-only, backward-compatible).  HGI80 auto-selects SKIP
+        # (Gap C) — it's not evofw3 and can't respond to !I or _PUZZ.
+        # When False and not HGI80, the signature_policy controls
+        # startup behavior:
         # - IMMEDIATE: probe right after open (default, backward-compatible)
         # - DELAYED: wait startup_grace seconds, then probe
         # - SKIP: no probe; identity learned from inbound traffic
+        # - ID_COMMAND: send !I to discover HGI ID over serial (Gap E)
         if self._disable_sending:
             self._init_task = self._loop.create_task(
                 connect_sans_signature(),
                 name="PortTransport.connect_sans_signature()",
             )
+        elif self._is_hgi80:
+            # Gap C: HGI80 can't respond to !I or _PUZZ — auto-SKIP.
+            _LOGGER.info(
+                "PortTransport: HGI80 detected, auto-selecting SKIP (Gap C)"
+            )
+            self._init_task = self._loop.create_task(
+                connect_sans_signature(),
+                name="PortTransport.connect_sans_signature(hgi80)",
+            )
         elif self._signature_policy is SignaturePolicy.SKIP:
             self._init_task = self._loop.create_task(
                 connect_sans_signature(),
                 name="PortTransport.connect_sans_signature(skip)",
+            )
+        elif self._signature_policy is SignaturePolicy.ID_COMMAND:
+            self._init_task = self._loop.create_task(
+                connect_with_id_command(),
+                name="PortTransport.connect_with_id_command()",
             )
         elif self._signature_policy is SignaturePolicy.DELAYED:
             self._init_task = self._loop.create_task(
@@ -447,6 +585,11 @@ class PortTransport(_FullTransport):
             and not self._disable_sending
         ):
             init_timeout += self._startup_grace
+        elif (
+            self._signature_policy is SignaturePolicy.ID_COMMAND
+            and not self._disable_sending
+        ):
+            init_timeout = self._startup_grace + _ID_COMMAND_TIMEOUT
 
         try:
             await asyncio.wait_for(self._init_fut, timeout=init_timeout)

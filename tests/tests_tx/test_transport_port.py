@@ -32,7 +32,9 @@ def _get_transport() -> PortTransport:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial,
@@ -106,6 +108,7 @@ async def test_create_connection_sans_signature() -> None:
     # Test skipping signature polling when sending is disabled
     transport = _get_transport()
     transport._disable_sending = True
+    transport._configured_hgi_id = None
     transport._make_connection = MagicMock()
 
     with patch(
@@ -165,6 +168,7 @@ async def test_create_connection_with_signature_timeout() -> None:
     # Test timeout falling back to connect_sans_signature when no signature replies
     transport = _get_transport()
     transport._disable_sending = False
+    transport._configured_hgi_id = None
     transport._make_connection = MagicMock()
     transport._write_frame = AsyncMock()
 
@@ -365,7 +369,9 @@ async def test_signature_policy_skip_uses_connect_sans_signature() -> None:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial, mock_protocol, config=config, extra={}
@@ -377,7 +383,9 @@ async def test_signature_policy_skip_uses_connect_sans_signature() -> None:
 
     transport._init_fut = loop.create_future()
     with (
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
         patch.object(transport, "_make_connection") as mock_make,
     ):
         await transport._create_connection()
@@ -404,7 +412,9 @@ async def test_signature_policy_delayed_creates_delayed_task() -> None:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial, mock_protocol, config=config, extra={}
@@ -427,7 +437,9 @@ async def test_signature_policy_delayed_creates_delayed_task() -> None:
         return original_create_task(coro, name=name, context=context)
 
     with (
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
         patch.object(transport, "_make_connection"),
         patch.object(transport, "_write_frame", new_callable=AsyncMock),
         patch.object(loop, "create_task", side_effect=track_create_task),
@@ -454,7 +466,9 @@ async def test_signature_policy_immediate_creates_immediate_task() -> None:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial, mock_protocol, config=config, extra={}
@@ -476,7 +490,9 @@ async def test_signature_policy_immediate_creates_immediate_task() -> None:
         return original_create_task(coro, name=name, context=context)
 
     with (
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
         patch.object(transport, "_make_connection"),
         patch.object(transport, "_write_frame", new_callable=AsyncMock),
         patch.object(loop, "create_task", side_effect=track_create_task),
@@ -504,7 +520,9 @@ async def test_reconnect_task_created_on_connection_lost() -> None:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial, mock_protocol, config=config, extra={}
@@ -542,7 +560,9 @@ async def test_reconnect_not_created_when_enable_reconnect_false() -> None:
     with (
         patch.object(loop, "add_reader"),
         patch.object(loop, "remove_reader"),
-        patch("ramses_tx.transport.port.is_hgi80", AsyncMock()),
+        patch(
+            "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+        ),
     ):
         transport = PortTransport(
             mock_serial, mock_protocol, config=config, extra={}
