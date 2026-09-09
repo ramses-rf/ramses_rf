@@ -365,7 +365,8 @@ class PortTransport(_FullTransport):
             Uses ``configured_hgi_id`` if set (Gap B), otherwise
             ``None`` (identity learned from inbound traffic).
             """
-            self._init_fut.set_result(None)
+            if not self._init_fut.done():
+                self._init_fut.set_result(None)
             gateway_id: str | None = self._configured_hgi_id
             self._make_connection(
                 gateway_id=gateway_id  # type: ignore[arg-type]
@@ -518,7 +519,8 @@ class PortTransport(_FullTransport):
                     "after !I failure",
                     self._configured_hgi_id,
                 )
-                self._init_fut.set_result(None)
+                if not self._init_fut.done():
+                    self._init_fut.set_result(None)
                 self._make_connection(
                     gateway_id=self._configured_hgi_id  # type: ignore[arg-type]
                 )
@@ -589,7 +591,12 @@ class PortTransport(_FullTransport):
             self._signature_policy is SignaturePolicy.ID_COMMAND
             and not self._disable_sending
         ):
-            init_timeout = self._startup_grace + _ID_COMMAND_TIMEOUT
+            # ID_COMMAND: grace + !I timeout + slack for fallback.
+            # If !I fails, the fallback (configured_hgi_id or _PUZZ)
+            # needs additional time.
+            init_timeout = (
+                self._startup_grace + _ID_COMMAND_TIMEOUT + _SIGNATURE_MAX_SECS
+            )
 
         try:
             await asyncio.wait_for(self._init_fut, timeout=init_timeout)

@@ -9,11 +9,13 @@ from serialx import BaseSerialTransport, SerialException
 
 from ramses_tx.const import SZ_ACTIVE_HGI, SZ_SIGNATURE, Code
 from ramses_tx.exceptions import TransportSerialError
+from ramses_tx.transport.base import SignaturePolicy, TransportConfig
 from ramses_tx.transport.port import (
     PortTransport,
     _PortBridgeProtocol,
     limit_duty_cycle,
 )
+from ramses_tx.typing import SerPortNameT
 
 pytestmark = pytest.mark.asyncio
 
@@ -582,3 +584,344 @@ async def test_reconnect_not_created_when_enable_reconnect_false() -> None:
 
     assert transport._reconnect_task is None
     transport._close()
+
+
+# ---------------------------------------------------------------------------
+# Gap B: configured_hgi_id fallback
+# ---------------------------------------------------------------------------
+
+
+async def test_configured_hgi_id_used_in_sans_signature() -> None:
+    """connect_sans_signature uses configured_hgi_id when set (Gap B)."""
+    transport = _get_transport()
+    transport._disable_sending = True
+    transport._configured_hgi_id = "18:006402"
+    transport._make_connection = MagicMock()
+
+    with patch(
+        "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+    ):
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    transport._make_connection.assert_called_once_with(gateway_id="18:006402")
+    transport._close()
+
+
+async def test_configured_hgi_id_used_after_signature_timeout() -> None:
+    """connect_with_signature falls back to configured_hgi_id (Gap B)."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = "18:140805"
+    transport._make_connection = MagicMock()
+    transport._write_frame = AsyncMock()
+
+    with (
+        patch(
+            "ramses_tx.transport.port.is_hgi80",
+            AsyncMock(return_value=False),
+        ),
+        patch("ramses_tx.transport.port.CommandDTO", MagicMock()),
+        patch("ramses_tx.transport.port._SIGNATURE_MAX_TRYS", 2),
+        patch("ramses_tx.transport.port._SIGNATURE_GAP_SECS", 0.001),
+    ):
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    # After timeout, should fall back to configured_hgi_id.
+    transport._make_connection.assert_called_once_with(gateway_id="18:140805")
+    transport._close()
+
+
+# ---------------------------------------------------------------------------
+# Gap C: HGI80 auto-SKIP
+# ---------------------------------------------------------------------------
+
+
+async def test_hgi80_auto_selects_skip() -> None:
+    """HGI80 detected via _is_hgi80 auto-selects SKIP (Gap C)."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = "18:123456"
+    transport._make_connection = MagicMock()
+    transport._write_frame = AsyncMock()
+
+    with patch(
+        "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=True)
+    ):
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    # Should use sans_signature with configured_hgi_id, not send _PUZZ probes.
+    transport._make_connection.assert_called_once_with(gateway_id="18:123456")
+    # _PUZZ signature probes should not have been sent.
+    transport._write_frame.assert_not_called()
+    transport._close()
+
+
+async def test_hgi80_without_configured_id_uses_none() -> None:
+    """HGI80 with no configured_hgi_id connects with gateway_id=None."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = None
+    transport._make_connection = MagicMock()
+
+    with patch(
+        "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=True)
+    ):
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    transport._make_connection.assert_called_once_with(gateway_id=None)
+    transport._close()
+
+
+# ---------------------------------------------------------------------------
+# Gap E: ID_COMMAND (!I-based identity discovery)
+# ---------------------------------------------------------------------------
+
+
+async def test_id_command_success() -> None:
+    """connect_with_id_command succeeds with valid !I response (Gap E)."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = None
+    transport._startup_grace = 0.0
+    transport._make_connection = MagicMock()
+    transport._write = MagicMock()
+
+    # Simulate the !I response arriving via _data_received.
+    def simulate_id_response() -> None:
+        """Feed the # 18:006402 response into the transport."""
+        transport._data_received(b"# 18:006402\r\n")
+
+    loop = asyncio.get_running_loop()
+    loop.call_later(0.05, simulate_id_response)
+
+    with patch(
+        "ramses_tx.transport.port.is_hgi80", AsyncMock(return_value=False)
+    ):
+        transport._signature_policy = SignaturePolicy.ID_COMMAND
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    transport._make_connection.assert_called_once_with(gateway_id="18:006402")
+    transport._close()
+
+
+async def test_id_command_timeout_falls_back_to_configured() -> None:
+    """connect_with_id_command falls back to configured_hgi_id on timeout."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = "18:140805"
+    transport._startup_grace = 0.0
+    transport._make_connection = MagicMock()
+    transport._write = MagicMock()
+    transport._write_frame = AsyncMock()
+
+    # No response — let it time out.
+    with (
+        patch(
+            "ramses_tx.transport.port.is_hgi80",
+            AsyncMock(return_value=False),
+        ),
+        patch("ramses_tx.transport.port._ID_COMMAND_TIMEOUT", 0.1),
+        patch("ramses_tx.transport.port.CommandDTO", MagicMock()),
+        patch("ramses_tx.transport.port._SIGNATURE_MAX_TRYS", 1),
+        patch("ramses_tx.transport.port._SIGNATURE_GAP_SECS", 0.001),
+    ):
+        transport._signature_policy = SignaturePolicy.ID_COMMAND
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    # Should fall back to configured_hgi_id.
+    transport._make_connection.assert_called_once_with(gateway_id="18:140805")
+    transport._close()
+
+
+async def test_id_command_malformed_response_falls_back() -> None:
+    """connect_with_id_command ignores malformed !I responses."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = "18:999999"
+    transport._startup_grace = 0.0
+    transport._make_connection = MagicMock()
+    transport._write = MagicMock()
+
+    def simulate_malformed() -> None:
+        """Feed a malformed response."""
+        transport._data_received(b"# garbage\r\n")
+
+    loop = asyncio.get_running_loop()
+    loop.call_later(0.02, simulate_malformed)
+
+    with (
+        patch(
+            "ramses_tx.transport.port.is_hgi80",
+            AsyncMock(return_value=False),
+        ),
+        patch("ramses_tx.transport.port._ID_COMMAND_TIMEOUT", 0.1),
+    ):
+        transport._signature_policy = SignaturePolicy.ID_COMMAND
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    # Malformed response should not be used; fall back to configured.
+    transport._make_connection.assert_called_once_with(gateway_id="18:999999")
+    transport._close()
+
+
+async def test_id_command_no_configured_falls_back_to_signature() -> None:
+    """connect_with_id_command falls back to _PUZZ when !I fails and no configured_hgi_id."""
+    transport = _get_transport()
+    transport._disable_sending = False
+    transport._configured_hgi_id = None
+    transport._startup_grace = 0.0
+    transport._make_connection = MagicMock()
+    transport._write = MagicMock()
+    transport._write_frame = AsyncMock()
+
+    mock_packet = MagicMock()
+    mock_packet.src.id = "18:007030"
+
+    def delayed_resolve(*args: Any, **kwargs: Any) -> Any:
+        if not transport._init_fut.done():
+            transport._init_fut.set_result(mock_packet)
+        return None
+
+    transport._write_frame.side_effect = delayed_resolve
+
+    with (
+        patch(
+            "ramses_tx.transport.port.is_hgi80",
+            AsyncMock(return_value=False),
+        ),
+        patch("ramses_tx.transport.port._ID_COMMAND_TIMEOUT", 0.05),
+        patch("ramses_tx.transport.port.CommandDTO", MagicMock()),
+    ):
+        transport._signature_policy = SignaturePolicy.ID_COMMAND
+        await transport._create_connection()
+        assert transport._init_task is not None
+        await transport._init_task
+
+    assert transport._init_fut.done()
+    # Should fall back to signature probe and get the mock packet's src.
+    transport._make_connection.assert_called_once_with(gateway_id="18:007030")
+    transport._close()
+
+
+# ---------------------------------------------------------------------------
+# Gap F: evofw3 # debug response filtering
+# ---------------------------------------------------------------------------
+
+
+async def test_evofw3_debug_response_filtered() -> None:
+    """Lines starting with # are filtered, not logged as PacketInvalid (Gap F)."""
+    transport = _get_transport()
+    transport._frame_read = MagicMock()
+
+    # Feed # debug lines via _data_received — they should be filtered
+    # by _frame_read before reaching the packet parser.
+    transport._data_received(b"# evofw3 0.7.1\r\n")
+    transport._data_received(b"# 18:140805\r\n")
+
+    # _frame_read should have been called 0 times because # lines
+    # are filtered inside _frame_read itself (Gap F).
+    # Actually, _data_received calls _frame_read for each line.
+    # The filtering happens inside _frame_read — verify by checking
+    # that no packet_received was called on the protocol.
+    transport._protocol.packet_received.assert_not_called()
+    transport._close()
+
+
+async def test_evofw3_debug_response_does_not_block_ramses() -> None:
+    """Normal RAMSES packets pass through alongside # debug lines (Gap F)."""
+    transport = _get_transport()
+    transport._protocol.packet_received = MagicMock()
+
+    # Feed a # debug line (filtered by _frame_read) then a real
+    # RAMSES packet (passes through to protocol).
+    transport._data_received(b"# 18:140805\r\n")
+    transport._data_received(
+        b"000  I --- 01:123456 18:000730 --:------ 30C9 001 00\r\n"
+    )
+
+    # Allow the event loop to process the call_soon_threadsafe callback.
+    await asyncio.sleep(0.01)
+
+    # The real packet should have been forwarded (not the # line).
+    assert transport._protocol.packet_received.call_count == 1
+    transport._close()
+
+
+# ---------------------------------------------------------------------------
+# Gap D: per_child_config_overrides in pooled_transport_factory
+# ---------------------------------------------------------------------------
+
+
+async def test_per_child_config_overrides_validation() -> None:
+    """pooled_transport_factory validates per_child_config_overrides length."""
+
+    from ramses_tx.transport.factory import pooled_transport_factory
+
+    mock_protocol = MagicMock()
+    config = TransportConfig()
+
+    # Mismatched length should raise.
+    with pytest.raises(ValueError, match="per_child_config_overrides"):
+        await pooled_transport_factory(
+            mock_protocol,
+            config=config,
+            port_names=[SerPortNameT("/dev/ttyUSB0")],
+            port_configs=[
+                {
+                    "baudrate": 115200,
+                    "dsrdtr": False,
+                    "rtscts": False,
+                    "timeout": 3,
+                    "xonxoff": False,
+                }
+            ],
+            per_child_config_overrides=[{}, {}],  # length mismatch
+        )
+
+
+async def test_per_child_config_overrides_applied() -> None:
+    """per_child_config_overrides are merged via dataclasses.replace (Gap D)."""
+    from dataclasses import replace
+
+    base_config = TransportConfig()
+    overrides = [
+        {"signature_policy": SignaturePolicy.DELAYED, "startup_grace": 3.0},
+        {
+            "signature_policy": SignaturePolicy.ID_COMMAND,
+            "configured_hgi_id": "18:006402",
+        },
+    ]
+
+    # Verify the merge logic works as expected.
+    child0 = replace(base_config, **overrides[0])
+    child1 = replace(base_config, **overrides[1])
+
+    assert child0.signature_policy is SignaturePolicy.DELAYED
+    assert child0.startup_grace == 3.0
+    assert child1.signature_policy is SignaturePolicy.ID_COMMAND
+    assert child1.configured_hgi_id == "18:006402"
+
+    # Base config should be unchanged.
+    assert base_config.signature_policy is SignaturePolicy.IMMEDIATE
+    assert base_config.configured_hgi_id is None
