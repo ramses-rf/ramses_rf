@@ -875,7 +875,6 @@ async def test_evofw3_debug_response_does_not_block_ramses() -> None:
 
 async def test_per_child_config_overrides_validation() -> None:
     """pooled_transport_factory validates per_child_config_overrides length."""
-
     from ramses_tx.transport.factory import pooled_transport_factory
 
     mock_protocol = MagicMock()

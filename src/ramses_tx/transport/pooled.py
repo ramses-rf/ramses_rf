@@ -550,10 +550,13 @@ class PooledTransport(TransportInterface):
                     if val:
                         return True
             # Callback-driven children (e.g. ramses_esp via MQTT)
-            # are treated as evofw3-compatible.
-            if any(
-                c.is_connected and c.callback_driven for c in self._children
-            ):
+            # are treated as evofw3-compatible.  Check ALL children
+            # (not just connected) because the first command may be
+            # sent before any child comes online via LWT.  Without
+            # this, the protocol patches the HGI ID to 18:000730
+            # (HGI80 mode), causing outbound packets to use the
+            # sentinel instead of the real HGI ID.
+            if any(c.callback_driven for c in self._children):
                 return True
             return default
         if name == "pool_stats":
