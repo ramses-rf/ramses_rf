@@ -431,7 +431,9 @@ async def test_signature_policy_delayed_creates_delayed_task() -> None:
     init_task_names: list[str] = []
     original_create_task = loop.create_task
 
-    def track_create_task(coro, *, name=None, context=None):
+    def track_create_task(
+        coro: Any, *, name: str | None = None, context: Any = None
+    ) -> Any:
         if name:
             init_task_names.append(name)
         return original_create_task(coro, name=name, context=context)
@@ -484,7 +486,9 @@ async def test_signature_policy_immediate_creates_immediate_task() -> None:
     init_task_names: list[str] = []
     original_create_task = loop.create_task
 
-    def track_create_task(coro, *, name=None, context=None):
+    def track_create_task(
+        coro: Any, *, name: str | None = None, context: Any = None
+    ) -> Any:
         if name:
             init_task_names.append(name)
         return original_create_task(coro, name=name, context=context)

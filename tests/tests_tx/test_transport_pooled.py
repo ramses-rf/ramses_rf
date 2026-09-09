@@ -1123,5 +1123,8 @@ def test_disconnected_child_resets_send_ready() -> None:
 
     child.mark_disconnected()
     assert not child.is_sendable
-    assert not child.send_ready
+    # mypy narrows send_ready to Literal[False] after mark_disconnected()
+    # (which sets it to False), making this assert "unreachable" — but we
+    # want to verify the runtime value here.
+    assert not child.send_ready  # type: ignore[unreachable]
     assert child.connection_state is ConnectionState.DISCONNECTED
