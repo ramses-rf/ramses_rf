@@ -179,11 +179,12 @@ OPENTHERM_STATUS_DATA_IDS: Final[tuple[int, ...]] = (
     int(OtDataId.BOILER_OUTPUT_TEMP),
     int(OtDataId.BOILER_RETURN_TEMP),
     int(OtDataId.CONTROL_SETPOINT),
+    int(OtDataId.CH_WATER_PRESSURE),
 )
 """OpenTherm status and telemetry Data-IDs queried for bridge devices.
 
 Includes Master/Slave status (0x00), Boiler Flow Temp (0x19),
-Return Temp (0x1C), and CH Water Temp Setpoint (0x01).
+Return Temp (0x1C), CH Water Temp Setpoint (0x01) and CH Water Pressure (0x12).
 """
 
 OPENTHERM_PARAMS_DATA_IDS: Final[tuple[int, ...]] = (
