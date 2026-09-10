@@ -104,11 +104,17 @@ class _FakeDiscovery:
 
     def __init__(self) -> None:
         self.unknowns: list[tuple[str, str | None]] = []
+        self.mqtt_capable: list[tuple[str, str | None]] = []
 
     def on_unknown_hgi(
         self, hgi_id: DeviceIdT, *, topic: str | None = None
     ) -> None:
         self.unknowns.append((str(hgi_id), topic))
+
+    def on_mqtt_capable(
+        self, hgi_id: DeviceIdT, *, topic: str | None = None
+    ) -> None:
+        self.mqtt_capable.append((str(hgi_id), topic))
 
 
 def _make_callback_pool(
