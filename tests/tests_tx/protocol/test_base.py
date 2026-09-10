@@ -524,6 +524,67 @@ async def test_packet_received_excluded_bypasses_to_dto(
     mock_packet.to_dto.assert_not_called()
 
 
+async def test_packet_received_hgi80_echo_passes_enforce_include(
+    protocol: DummyProtocol,
+) -> None:
+    """HGI80 echo (src=18:000730) passes the device_id filter even with
+    enforce_include=True.
+
+    The HGI80 firmware transmits with 18:000730 as the source address.
+    The echo comes back with src=HGI_DEV_ADDR.  Without HGI_DEV_ADDR in
+    the include list, enforce_include would filter it out, causing echo
+    timeouts (issue 1185).
+    """
+    protocol.enforce_include = True
+    protocol._include += [DeviceIdT("01:111111")]  # known device
+
+    mock_packet = MagicMock()
+    mock_packet.src.id = HGI_DEV_ADDR.id  # 18:000730
+    mock_packet.dst.id = "01:111111"
+
+    with patch(
+        "ramses_tx.protocol.base._BaseProtocol._packet_received"
+    ) as mock_base_recv:
+        protocol._packet_received(mock_packet)
+        mock_base_recv.assert_called_once_with(mock_packet)
+
+
+async def test_packet_received_hgi80_echo_no_raw_handlers(
+    protocol: DummyProtocol,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """HGI80 echo with no raw handlers is excluded at the fast-exit path
+    when HGI_DEV_ADDR is not in the include list (regression guard).
+
+    This test documents the OLD behavior (before the fix) to ensure
+    the HGI_DEV_ADDR include list entry is not accidentally removed.
+    """
+    protocol.enforce_include = True
+    # Deliberately remove HGI_DEV_ADDR from the include list to simulate
+    # the pre-fix state.  This should cause the packet to be filtered.
+    protocol._include = [
+        DeviceIdT("01:111111"),
+        DeviceIdT("63:262142"),  # ALL_DEV_ADDR
+        DeviceIdT("--:------"),  # NON_DEV_ADDR
+        # HGI_DEV_ADDR intentionally missing
+    ]
+
+    mock_packet = MagicMock()
+    mock_packet.src.id = HGI_DEV_ADDR.id
+    mock_packet.dst.id = "01:111111"
+
+    with (
+        caplog.at_level(logging.DEBUG),
+        patch(
+            "ramses_tx.protocol.base._BaseProtocol._packet_received"
+        ) as mock_base_recv,
+    ):
+        protocol._packet_received(mock_packet)
+        mock_base_recv.assert_not_called()
+
+    assert "Packet excluded by device_id filter" in caplog.text
+
+
 # --- OUTBOUND COMMAND TESTS (send_cmd) ---
 
 

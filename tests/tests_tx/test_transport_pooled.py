@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from ramses_tx.const import I_, SZ_ACTIVE_HGI, Code
+from ramses_tx.const import I_, SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ramses_tx.transport.base import TransportConfig
 from ramses_tx.transport.pooled import (
     ConnectionState,
@@ -74,11 +74,20 @@ def _make_packet(
 def _make_mock_transport(
     hgi: str | None = None,
     connected: bool = True,
+    is_evofw3: bool = True,
 ) -> MagicMock:
-    """Create a mock child transport."""
+    """Create a mock child transport.
+
+    :param is_evofw3: If False, the transport reports SZ_IS_EVOFW3=False
+        (HGI80 serial device).  Default True (evofw3/MQTT).
+    """
     t = MagicMock()
     t.get_extra_info = lambda name, default=None: (
-        hgi if name == SZ_ACTIVE_HGI else default
+        hgi
+        if name == SZ_ACTIVE_HGI
+        else is_evofw3
+        if name == SZ_IS_EVOFW3
+        else default
     )
     t.write_frame = AsyncMock()
     t.send_frame = AsyncMock()
@@ -526,6 +535,138 @@ def test_get_extra_info_unknown_key_returns_default(
         pool.get_extra_info("nonexistent_key", default="fallback")
         == "fallback"
     )
+
+
+# -- get_extra_info(SZ_IS_EVOFW3) — issue 1185 -----------------------------
+
+
+def test_get_extra_info_evofw3_all_serial_evofw3(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when all serial children
+    are evofw3."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=True)
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=True)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_all_serial_hgi80(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns False when all serial children
+    are HGI80 (not evofw3)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=False)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3, default=False) is False
+
+
+def test_get_extra_info_evofw3_mixed_serial(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when at least one serial
+    child is evofw3 (even if others are HGI80)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=True)  # evofw3
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_callback_driven_returns_true(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when any child is
+    callback-driven (MQTT), even if no serial child is evofw3.
+
+    This is the hybrid-pool case from issue 1185: HGI80 serial primary
+    + MQTT callback child.  The pool should report evofw3=True so the
+    protocol doesn't apply the HGI80 reverse-patch to MQTT TX.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+
+    # Add a callback-driven child (MQTT) — no transport instance.
+    pool._children.append(
+        PoolChild(
+            child_id=1,
+            port_name="mqtt://broker/18:002222",
+            callback_driven=True,
+        )
+    )
+    pool._children[1].connection_state = ConnectionState.CONNECTED
+    pool._children[1].hgi_id = DeviceIdT("18:002222")
+    pool._children[1].send_ready = True
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_callback_driven_even_if_disconnected(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True for callback-driven
+    children even when they are not yet connected.
+
+    The first command may be sent before any MQTT child comes online
+    via LWT.  Without this, the protocol patches the HGI ID to
+    18:000730 (HGI80 mode), causing outbound packets to use the
+    sentinel instead of the real HGI ID.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+
+    # Add a disconnected callback-driven child (MQTT).
+    pool._children.append(
+        PoolChild(
+            child_id=1,
+            port_name="mqtt://broker/18:002222",
+            callback_driven=True,
+            # connection_state defaults to DISCONNECTED
+        )
+    )
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_empty_pool_returns_default(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns the default for an empty or
+    all-disconnected pool with no callback-driven children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=True)
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    # Don't connect any child.
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3, default=False) is False
 
 
 def test_repr_returns_diagnostic_string(
