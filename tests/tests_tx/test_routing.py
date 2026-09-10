@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ramses_tx.address import HGI_DEV_ADDR
-from ramses_tx.const import Code, Verb
+from ramses_tx.const import SZ_IS_EVOFW3, Code, Verb
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.routing import (
     RoutedCommand,
@@ -67,8 +67,13 @@ def _make_child(
     hgi_id: str = "18:123456",
     connected: bool = True,
     send_ready: bool = True,
+    is_evofw3: bool = True,
 ) -> PoolChild:
-    """Create a PoolChild for testing."""
+    """Create a PoolChild for testing.
+
+    :param is_evofw3: If False, the child's transport_obj reports
+        ``SZ_IS_EVOFW3=False`` (HGI80).  Default True (evofw3/MQTT).
+    """
     child = PoolChild(
         child_id=child_id,
         port_name=f"mqtt://test-{child_id}",
@@ -80,6 +85,12 @@ def _make_child(
         child.availability = NodeAvailability.ONLINE
     child.send_ready = send_ready
     child.transport.write_frame = AsyncMock()
+    # Set transport_obj so prepare_command can check SZ_IS_EVOFW3.
+    transport_obj_mock = MagicMock()
+    transport_obj_mock.get_extra_info = lambda name, default=None: (
+        is_evofw3 if name == SZ_IS_EVOFW3 else default
+    )
+    child.transport_obj = transport_obj_mock
     return child
 
 
@@ -212,7 +223,7 @@ class TestPrepareCommand:
         the selected child's HGI ID — the HGI80 firmware substitutes
         its own ID during transmission.
         """
-        child0 = _make_child(0, "18:111111")
+        child0 = _make_child(0, "18:111111", is_evofw3=False)
         transport = _make_pooled_transport([child0])
 
         request = RouteRequest(
@@ -222,6 +233,29 @@ class TestPrepareCommand:
         routed = transport.prepare_command(request)
 
         # Placeholder is kept, not patched to child's HGI ID
+        assert routed.command.addr1 == "18:000730"
+
+    def test_prepare_hgi80_swaps_real_id_to_placeholder(self) -> None:
+        """HGI80 children swap any real HGI ID to 18:000730.
+
+        When the protocol's evofw3 patch (or a previous child's
+        prepare_command) has set addr1 to a real HGI ID, and the
+        selected child is HGI80, prepare_command must swap it back
+        to the 18:000730 placeholder — the HGI80 firmware requires
+        the placeholder as the source (issue 1185).
+        """
+        child0 = _make_child(0, "18:111111", is_evofw3=False)
+        transport = _make_pooled_transport([child0])
+
+        # Simulate: protocol's evofw3 patch set addr1 to a different
+        # child's HGI ID (e.g. from an MQTT child in the pool).
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:999999"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        # HGI80: swap real ID to placeholder
         assert routed.command.addr1 == "18:000730"
 
     def test_prepare_raises_when_no_child_sendable(self) -> None:

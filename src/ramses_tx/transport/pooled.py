@@ -623,13 +623,42 @@ class PooledTransport(TransportInterface):
         final_cmd = cmd
         if request.source_policy is SourcePolicy.GATEWAY:
             child_hgi = child.hgi_id
-            if (
+
+            # Determine if the selected child is evofw3 or HGI80.
+            # Callback-driven children (MQTT) are evofw3-compatible.
+            # Serial children check their transport's SZ_IS_EVOFW3 flag.
+            child_is_evofw3: bool = True
+            if child.transport_obj is not None:
+                child_is_evofw3 = bool(
+                    child.transport_obj.get_extra_info(SZ_IS_EVOFW3, False)
+                )
+            # callback_driven children are evofw3-compatible (default True)
+
+            if not child_is_evofw3:
+                # HGI80: the firmware requires 18:000730 as the source
+                # for frames it transmits.  Swap any real HGI ID to the
+                # placeholder.  This overrides the protocol's evofw3
+                # patch (which may have set addr1 to the active HGI ID
+                # from a different child in the pool — issue 1185).
+                if cmd.addr1[:2] == "18" and cmd.addr1 != HGI_DEV_ADDR.id:
+                    final_cmd = dataclasses.replace(cmd, addr1=HGI_DEV_ADDR.id)
+                    _LOGGER.debug(
+                        "PooledTransport.prepare_command: patched "
+                        "source %s -> %s for child %d (HGI80)",
+                        cmd.addr1,
+                        HGI_DEV_ADDR.id,
+                        child.child_id,
+                    )
+            elif (
                 child_hgi
                 and cmd.addr1[:2] == "18"
-                and cmd.addr1 != HGI_DEV_ADDR.id
                 and cmd.addr1 != str(child_hgi)
             ):
                 # evofw3: patch source to the selected child's HGI ID.
+                # This handles both:
+                # - cmd.addr1 == HGI_DEV_ADDR (protocol's evofw3 patch
+                #   may have set it to a different child's HGI ID)
+                # - cmd.addr1 == another child's HGI ID
                 final_cmd = dataclasses.replace(cmd, addr1=str(child_hgi))
                 _LOGGER.debug(
                     "PooledTransport.prepare_command: patched source "
@@ -638,8 +667,7 @@ class PooledTransport(TransportInterface):
                     child_hgi,
                     child.child_id,
                 )
-            # HGI80: leave 18:000730 placeholder as-is — the firmware
-            # substitutes its own ID during transmission.
+            # HGI80 with no known ID and addr1==18:000730: leave as-is
         # SourcePolicy.PRESERVE: never modify the source.
 
         _LOGGER.debug(
@@ -754,7 +782,35 @@ class PooledTransport(TransportInterface):
         # before serialization.
         src_addr = parts[2] if len(parts) >= 4 else None
         child_hgi = child.hgi_id
+
+        # Determine if the selected child is evofw3 or HGI80 (same
+        # logic as prepare_command — see issue 1185).
+        child_is_evofw3 = True
+        if child.transport_obj is not None:
+            child_is_evofw3 = bool(
+                child.transport_obj.get_extra_info(SZ_IS_EVOFW3, False)
+            )
+
         if (
+            not child_is_evofw3
+            and src_addr
+            and src_addr[:2] == "18"
+            and src_addr != HGI_DEV_ADDR.id
+        ):
+            # HGI80: swap any real HGI ID to 18:000730 placeholder.
+            parts[2] = HGI_DEV_ADDR.id
+            leading = ""
+            if frame and frame[0].isspace():
+                leading = frame[0]
+            frame = leading + " ".join(parts)
+            _LOGGER.debug(
+                "PooledTransport.write_frame: re-patched source %s -> %s "
+                "for child %d (HGI80, legacy path)",
+                src_addr,
+                HGI_DEV_ADDR.id,
+                child.child_id,
+            )
+        elif (
             child_hgi
             and src_addr
             and src_addr[:2] == "18"
@@ -768,7 +824,7 @@ class PooledTransport(TransportInterface):
             frame = leading + " ".join(parts)
             _LOGGER.debug(
                 "PooledTransport.write_frame: re-patched source %s -> %s "
-                "for child %d (legacy path)",
+                "for child %d (evofw3, legacy path)",
                 src_addr,
                 child_hgi,
                 child.child_id,
