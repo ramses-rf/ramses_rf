@@ -459,6 +459,11 @@ class PooledTransport(TransportInterface):
         ]
 
     @property
+    def _serial_child_count(self) -> int:
+        """Count of non-callback (serial) children in the pool."""
+        return sum(1 for c in self._children if not c.callback_driven)
+
+    @property
     def _connected_children(self) -> list[PoolChild]:
         """Return connected children."""
         return [c for c in self._children if c.is_connected]
@@ -867,14 +872,17 @@ class PooledTransport(TransportInterface):
         if self._closing:
             return
 
-        # Learn the child's HGI ID from the puzzle response (7FFF)
-        # or any packet whose src is a known HGI.
-        # For serial (non-callback) children, also learn from any packet
-        # whose src starts with "18:" (HGI address range).  This is needed
-        # because ESP32s send their 7FFF at startup before the pool is
-        # ready, and don't respond to !I.  After that they only send
-        # 3150/31DA packets with their HGI ID as src (issue 1185).
-        if child.hgi_id is None:
+        # Learn the child's HGI ID from the puzzle response (7FFF).
+        #
+        # NOTE: this is only safe when there is a single non-callback
+        # (serial) child in the pool.  RF is a shared medium, so in a
+        # multi-HGI pool every serial child receives packets from every
+        # HGI, and learning from RF packets would make all children
+        # learn the same (wrong) HGI ID.  When there are multiple serial
+        # children, HGI IDs must be provided explicitly (e.g. via
+        # per-child config) or discovered via a serial-level command
+        # (!I), not inferred from RF packets (issue 1185).
+        if child.hgi_id is None and self._serial_child_count <= 1:
             src_id = packet._dto.addr1
             if src_id and packet._dto.code == Code._PUZZ:
                 child.learn_hgi(DeviceIdT(src_id))

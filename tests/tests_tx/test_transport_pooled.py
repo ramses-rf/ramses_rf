@@ -1209,12 +1209,11 @@ def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
 async def test_serial_child_learns_hgi_from_18_src_packet(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
-    """Serial child learns HGI ID from any 18:xxxxxx src packet (issue 1185).
+    """Single serial child learns HGI ID from any 18:xxxxxx src packet.
 
-    ESP32s send their 7FFF (_PUZZ) at startup before the pool is ready.
-    After that they only send 3150/31DA packets with their HGI ID as src.
-    The pool must learn the HGI ID from these packets too, not just from
-    _PUZZ, otherwise the serial child never becomes sendable for TX.
+    With only one serial child in the pool, all 18: src packets must
+    come from the HGI physically connected to that port, so learning is
+    safe (issue 1185).
     """
     proto = _make_mock_protocol()
     t0 = _make_mock_transport(hgi=None)  # HGI unknown at connect time
@@ -1235,6 +1234,42 @@ async def test_serial_child_learns_hgi_from_18_src_packet(
     assert pool._children[0].hgi_id == DeviceIdT("18:149488")
     assert pool._children[0].send_ready
     assert pool._children[0].is_sendable
+
+
+async def test_multi_serial_children_do_not_learn_hgi_from_rf(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Multiple serial children must NOT learn HGI from RF packets.
+
+    RF is a shared medium — every serial child receives packets from
+    every HGI in range.  Learning from RF would make all children
+    learn the same (wrong) HGI ID.  When there are multiple serial
+    children, HGI IDs must be provided explicitly (issue 1185).
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)
+    t1 = _make_mock_transport(hgi=None)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Feed a _PUZZ packet with src=18:149488 to child 0
+    pkt_puzz = _make_packet(src="18:149488", code=Code._PUZZ, payload="00")
+    pool._on_child_packet(0, pkt_puzz)
+    await asyncio.sleep(0.01)
+
+    # Feed a 3150 packet with src=18:149488 to child 1
+    pkt_3150 = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(1, pkt_3150)
+    await asyncio.sleep(0.01)
+
+    # Neither child should have learned — multi-serial pool
+    assert pool._children[0].hgi_id is None
+    assert pool._children[1].hgi_id is None
+    assert not pool._children[0].send_ready
+    assert not pool._children[1].send_ready
 
 
 async def test_callback_child_does_not_learn_hgi_from_18_src_packet(
