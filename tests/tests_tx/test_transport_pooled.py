@@ -1206,6 +1206,69 @@ def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
     assert child.is_sendable
 
 
+async def test_serial_child_learns_hgi_from_18_src_packet(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Serial child learns HGI ID from any 18:xxxxxx src packet (issue 1185).
+
+    ESP32s send their 7FFF (_PUZZ) at startup before the pool is ready.
+    After that they only send 3150/31DA packets with their HGI ID as src.
+    The pool must learn the HGI ID from these packets too, not just from
+    _PUZZ, otherwise the serial child never becomes sendable for TX.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)  # HGI unknown at connect time
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+
+    # Child connected but not sendable (no HGI ID yet)
+    assert not pool._children[0].is_sendable
+
+    # Feed a 3150 packet with src=18:149488 (not _PUZZ)
+    pkt = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(0, pkt)
+    await asyncio.sleep(0.01)
+
+    # Child should have learned its HGI ID and become sendable
+    assert pool._children[0].hgi_id == DeviceIdT("18:149488")
+    assert pool._children[0].send_ready
+    assert pool._children[0].is_sendable
+
+
+async def test_callback_child_does_not_learn_hgi_from_18_src_packet(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Callback-driven (MQTT) child does NOT learn from 18: src packets.
+
+    Only _PUZZ packets trigger learning for callback-driven children,
+    because multiple HGIs share the same MQTT broker and any 18:
+    packet could be from a different HGI.
+    """
+    from ramses_tx.transport.pooled import ConnectionState, PoolChild
+
+    proto = _make_mock_protocol()
+    pool = PooledTransport(
+        proto, [None], config=TransportConfig(), loop=event_loop
+    )
+    # Make child 0 callback-driven with no HGI
+    pool._children[0] = PoolChild(
+        child_id=0, port_name="mqtt_ha://18:001234", transport=None
+    )
+    pool._children[0].callback_driven = True
+    pool._children[0].connection_state = ConnectionState.CONNECTED
+    pool._children[0].accepted = True
+
+    # Feed a 3150 packet with src=18:149488 (not _PUZZ)
+    pkt = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(0, pkt)
+    await asyncio.sleep(0.01)
+
+    # Callback child should NOT have learned HGI from non-_PUZZ packet
+    assert pool._children[0].hgi_id is None
+
+
 async def test_write_failure_increments_child_error_counter(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:

@@ -869,9 +869,20 @@ class PooledTransport(TransportInterface):
 
         # Learn the child's HGI ID from the puzzle response (7FFF)
         # or any packet whose src is a known HGI.
+        # For serial (non-callback) children, also learn from any packet
+        # whose src starts with "18:" (HGI address range).  This is needed
+        # because ESP32s send their 7FFF at startup before the pool is
+        # ready, and don't respond to !I.  After that they only send
+        # 3150/31DA packets with their HGI ID as src (issue 1185).
         if child.hgi_id is None:
             src_id = packet._dto.addr1
             if src_id and packet._dto.code == Code._PUZZ:
+                child.learn_hgi(DeviceIdT(src_id))
+            elif (
+                src_id
+                and not child.callback_driven
+                and str(src_id).startswith("18:")
+            ):
                 child.learn_hgi(DeviceIdT(src_id))
 
         # HGI filtering: if an accepted set is configured, drop packets
