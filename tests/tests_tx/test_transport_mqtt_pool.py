@@ -265,6 +265,50 @@ def test_on_child_offline_transient_marks_stale() -> None:
     assert child.availability is NodeAvailability.STALE
 
 
+def test_packet_marks_callback_child_connected_without_lwt() -> None:
+    """Inbound packet marks callback-driven child as connected (issue 1185).
+
+    If the LWT online message is missed (e.g. arrived before the adapter
+    was created, or the HGI doesn't publish LWT), the child may never
+    have been marked connected via on_child_online.  Receiving a packet
+    should mark the child as connected so is_sendable becomes True and
+    TX works.
+    """
+    pool, adapter, _ = _make_callback_pool(
+        hgi_ids=["18:001111"], accepted_hgi_ids={"18:001111"}
+    )
+    child = pool._child_by_id(0)
+    # Before any packet or LWT: not connected, not sendable.
+    assert not child.is_connected
+    assert not child.is_sendable
+    # Simulate an inbound packet (no LWT online received).
+    adapter.on_child_packet(
+        "18:001111", _make_packet(src="01:123456", rssi="050")
+    )
+    # The child should now be connected and sendable.
+    assert child.is_connected
+    assert child.is_sendable
+
+
+async def test_packet_notifies_protocol_on_first_connection() -> None:
+    """First inbound packet triggers protocol.connection_made (issue 1185).
+
+    When the LWT is missed and the child is marked connected from a
+    packet, the protocol must also be notified.
+    """
+    proto = _make_mock_protocol()
+    pool, adapter, _ = _make_callback_pool(
+        proto=proto, accepted_hgi_ids={"18:001111"}
+    )
+    # No LWT — just a packet.
+    adapter.on_child_packet(
+        "18:001111", _make_packet(src="01:123456", rssi="050")
+    )
+    # connection_made is dispatched via call_soon_threadsafe.
+    await asyncio.sleep(0.01)
+    assert proto.connection_made.called
+
+
 async def test_on_child_offline_all_children_notifies_protocol() -> None:
     """When all children go offline, protocol.connection_lost is called."""
     proto = _make_mock_protocol()

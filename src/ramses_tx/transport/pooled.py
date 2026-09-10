@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime as dt, timedelta as td
@@ -831,6 +832,34 @@ class PooledTransport(TransportInterface):
             packet._ingress_hgi_id = str(resolved_ingress)
 
         # Update health tracking — any packet proves the child is alive.
+        # For callback-driven children, a packet also proves the MQTT
+        # connection is established.  If the LWT online message was missed
+        # (e.g. arrived before the adapter was created, or the HGI doesn't
+        # publish LWT), the child may never have been marked connected.
+        # Without this, is_sendable remains False and TX fails even though
+        # RX works (issue 1185).
+        if child.callback_driven and not child.is_connected:
+            child.connection_state = ConnectionState.CONNECTED
+            _LOGGER.info(
+                "PooledTransport: callback child %d marked connected "
+                "from inbound packet (HGI=%s)",
+                child.child_id,
+                child.hgi_id,
+            )
+            # Notify the real protocol if this is the first connection.
+            if not self._protocol_connected:
+                self._protocol_connected = True
+                with contextlib.suppress(RuntimeError):
+                    self._loop.call_soon_threadsafe(
+                        functools.partial(
+                            self._protocol.connection_made,
+                            self,
+                            ramses=True,
+                        )
+                    )
+            # Resolve the connection future if waiting.
+            if self._conn_fut is not None and not self._conn_fut.done():
+                self._conn_fut.set_result(self)
         child.mark_online()
 
         # Record RSSI in the child's tracker, EXCLUDING loopback
