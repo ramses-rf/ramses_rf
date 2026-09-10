@@ -25,6 +25,7 @@ from ..const import (
     MAX_GAP_DURATION,
     MAX_NUM_REPEATS,
     SZ_ACTIVE_HGI,
+    SZ_IS_EVOFW3,
     Code,
     Priority,
 )
@@ -318,10 +319,26 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         18:000730, as the HGI80 firmware requires the placeholder as
         source for its own transmissions.  Using the real ID causes a
         silent drop and WantEcho timeout (issue 835).
+
+        For PooledTransports, the evofw3 flag is queried dynamically
+        (not from the cached ``_is_evofw3``) so that callback-driven
+        children (e.g. ramses_esp via MQTT) are correctly treated as
+        evofw3-compatible even if they join the pool after
+        ``connection_made`` was called for the serial primary (issue 1185).
         """
+        # Query the transport for the current evofw3 status — this is
+        # dynamic for PooledTransports (children may join after
+        # connection_made).  Falls back to the cached value for
+        # non-pooled transports (or when no transport is bound).
+        is_evofw3 = self._is_evofw3
+        if self._transport:
+            live = self._transport.get_extra_info(SZ_IS_EVOFW3)
+            if live is not None:
+                is_evofw3 = live
+
         if (
             self.hgi_id
-            and self._is_evofw3  # Only patch if using evofw3 (not HGI80)
+            and is_evofw3  # Only patch if using evofw3 (not HGI80)
             and command.addr1 == HGI_DEV_ADDR.id
             and self.hgi_id != HGI_DEV_ADDR.id
         ):
@@ -340,7 +357,7 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         # silent drop and WantEcho timeout (issue 835, cc 864).
         if (
             self.hgi_id
-            and not self._is_evofw3  # HGI80
+            and not is_evofw3  # HGI80
             and command.addr1 == self.hgi_id
             and self.hgi_id != HGI_DEV_ADDR.id
         ):

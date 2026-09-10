@@ -644,3 +644,41 @@ async def test_patch_cmd_if_needed_hgi80_no_change_when_impersonating(
 
     assert patched_cmd is original_cmd  # no change — not the HGI ID
     assert patched_cmd.addr1 == "21:057310"
+
+
+async def test_patch_cmd_if_needed_dynamic_evofw3_from_transport(
+    protocol: DummyProtocol,
+) -> None:
+    """_patch_cmd_if_needed queries the transport for evofw3 dynamically.
+
+    In a PooledTransport with a serial HGI80 primary + MQTT callback
+    children, the cached ``_is_evofw3`` is False (set during
+    ``connection_made`` for the HGI80).  But the pool's
+    ``get_extra_info(SZ_IS_EVOFW3)`` returns True because of the
+    callback-driven children.  The patch should use the live value
+    from the transport, not the stale cached value (issue 1185).
+    """
+    from ramses_tx.const import SZ_IS_EVOFW3
+    from ramses_tx.dtos import CommandDTO as Command
+
+    # Simulate: cached _is_evofw3 is False (HGI80 primary), but the
+    # transport reports True (callback-driven MQTT child in the pool)
+    protocol._is_evofw3 = False
+    protocol._known_hgi = DeviceIdT("18:123456")
+    protocol._transport = MagicMock()
+    protocol._transport.get_extra_info = lambda name, default=None: (
+        True if name == SZ_IS_EVOFW3 else default
+    )
+
+    # Command with the real HGI ID as source — HGI80 patch would swap
+    # it to 18:000730 if it used the cached _is_evofw3=False.
+    original_cmd = Command.from_cli(
+        "RQ --- 18:123456 01:222222 --:------ 12B0 001 00"
+    )
+
+    patched_cmd = protocol._patch_cmd_if_needed(original_cmd)
+
+    # With dynamic evofw3=True from the transport, the HGI80 patch
+    # should NOT fire — the command is returned unchanged.
+    assert patched_cmd is original_cmd
+    assert patched_cmd.addr1 == "18:123456"
