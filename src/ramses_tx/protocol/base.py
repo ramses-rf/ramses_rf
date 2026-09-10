@@ -559,7 +559,13 @@ class _DeviceIdFilterMixin(_BaseProtocol):
         self.enforce_include = enforce_include_list
         self._exclude = list(exclude_list)
         self._include = list(include_list)
-        self._include += [ALL_DEV_ADDR.id, NON_DEV_ADDR.id]
+        # HGI_DEV_ADDR (18:000730) is the generic HGI broadcast address
+        # used by HGI80s that can't send with their real address.  When
+        # the HGI80 patch swaps the source to HGI_DEV_ADDR for TX, the
+        # echo comes back with src=HGI_DEV_ADDR.  Without this, the
+        # echo is filtered out by enforce_include, causing echo
+        # timeouts (issue 1185).
+        self._include += [ALL_DEV_ADDR.id, NON_DEV_ADDR.id, HGI_DEV_ADDR.id]
 
         self._active_hgi: DeviceIdT | None = None
         self._known_hgi = hgi_id
@@ -691,7 +697,12 @@ class _DeviceIdFilterMixin(_BaseProtocol):
             # responses to it (issue 822), and an INFO-level message is
             # logged so the user can decide whether to configure it.
             # HGI_DEV_ADDR (18:000730, the generic broadcast address) is
-            # always subject to the normal block/include checks below.
+            # always in the include list (added in __init__), so it
+            # passes the normal block/include checks below.  This is
+            # needed because HGI80s send with HGI_DEV_ADDR as the
+            # source (the HGI80 patch swaps the real HGI ID to
+            # HGI_DEV_ADDR for TX), and the echo comes back with
+            # src=HGI_DEV_ADDR (issue 1185).
             if dev_id[:2] == "18" and dev_id != HGI_DEV_ADDR.id:
                 if dev_id == self._active_hgi:
                     continue

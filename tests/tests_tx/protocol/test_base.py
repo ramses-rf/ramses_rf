@@ -166,9 +166,17 @@ async def test_is_wanted_addrs_active_hgi(protocol: DummyProtocol) -> None:
 
 
 async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
-    """Test that sending to the generic HGI address is permitted."""
+    """Test that the generic HGI address is always permitted.
+
+    HGI_DEV_ADDR (18:000730) is the generic HGI broadcast address used
+    by HGI80s that can't send with their real address.  It's always in
+    the include list (added in __init__), so it passes both for sending
+    and receiving (issue 1185 — HGI80 echo was being filtered).
+    """
     protocol.enforce_include = True
-    protocol._include = [DeviceIdT("01:111111")]
+    # Preserve the default include entries (ALL_DEV_ADDR, NON_DEV_ADDR,
+    # HGI_DEV_ADDR) and add a known device.
+    protocol._include += [DeviceIdT("01:111111")]
 
     # When sending, HGI_DEV_ADDR (18:000730) is always allowed
     assert (
@@ -177,12 +185,12 @@ async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
         )
         is True
     )
-    # But not when receiving
+    # Also when receiving (HGI80 echo comes back with src=HGI_DEV_ADDR)
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), HGI_DEV_ADDR.id, sending=False
+            HGI_DEV_ADDR.id, DeviceIdT("01:111111"), sending=False
         )
-        is False
+        is True
     )
 
 
