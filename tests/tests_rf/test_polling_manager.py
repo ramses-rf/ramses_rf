@@ -787,9 +787,17 @@ def test_sch_polling_interval_rejects_negative() -> None:
 
 def test_encode_opentherm_payload_parity() -> None:
     # Arrange & Act & Assert
-    assert OPENTHERM_STATUS_DATA_IDS == (0x00, 0x19, 0x1C, 0x01)
+    assert OPENTHERM_STATUS_DATA_IDS == (0x00, 0x19, 0x1C, 0x01, 0x12)
     assert OPENTHERM_PARAMS_DATA_IDS == (0x38, 0x39)
-    assert OPENTHERM_POLL_DATA_IDS == (0x00, 0x19, 0x1C, 0x01, 0x38, 0x39)
+    assert OPENTHERM_POLL_DATA_IDS == (
+        0x00,
+        0x19,
+        0x1C,
+        0x01,
+        0x12,
+        0x38,
+        0x39,
+    )
     assert 0x0E not in OPENTHERM_POLL_DATA_IDS
     assert 0x11 not in OPENTHERM_POLL_DATA_IDS
 
@@ -820,8 +828,8 @@ def test_polling_manager_otb_expands_3220_data_id_tasks(
     assert ("10:048122", Code._10E0) in device_level
     assert ("10:048122", Code._3EF0) in device_level
 
-    assert len(ot_level) == 6
-    expected_data_ids = ("00", "19", "1C", "01", "38", "39")
+    assert len(ot_level) == 7
+    expected_data_ids = ("00", "19", "1C", "01", "12", "38", "39")
     for data_id_hex in expected_data_ids:
         assert ("10:048122", Code._3220, data_id_hex) in ot_level
 
@@ -866,9 +874,9 @@ async def test_polling_manager_otb_live_dispatch_transmits_data_id_payloads(
     processed_count = await poller.poll_due_commands()
 
     # Assert
-    # 2 device-level tasks + 6 Data-ID tasks = 8 total
-    assert processed_count == 8
-    assert mock_gateway._async_send_dto.call_count == 8
+    # 2 device-level tasks + 7 Data-ID tasks = 9 total
+    assert processed_count == 9
+    assert mock_gateway._async_send_dto.call_count == 9
 
     # Extract all 3220 commands sent
     sent_3220_payloads: set[str] = set()
@@ -887,5 +895,6 @@ async def test_polling_manager_otb_live_dispatch_transmits_data_id_payloads(
         "0080010000",
         "0080380000",
         "0000390000",
+        "0000120000",
     }
     assert sent_3220_payloads == expected_payloads
