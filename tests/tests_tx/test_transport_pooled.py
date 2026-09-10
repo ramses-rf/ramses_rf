@@ -561,7 +561,7 @@ def test_get_extra_info_evofw3_all_serial_hgi80(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
     """get_extra_info(SZ_IS_EVOFW3) returns False when all serial children
-    are HGI80 (not evofw3)."""
+    are HGI80 (not evofw3) and no callback-driven children exist."""
     proto = _make_mock_protocol()
     t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)
     t1 = _make_mock_transport(hgi="18:002222", is_evofw3=False)
@@ -571,6 +571,7 @@ def test_get_extra_info_evofw3_all_serial_hgi80(
     _connect_child(pool, 0, t0)
     _connect_child(pool, 1, t1)
 
+    # No evofw3 children and no callback-driven children → returns default
     assert pool.get_extra_info(SZ_IS_EVOFW3, default=False) is False
 
 

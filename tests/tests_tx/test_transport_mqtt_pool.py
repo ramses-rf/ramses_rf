@@ -287,7 +287,7 @@ def test_packet_marks_callback_child_connected_without_lwt() -> None:
     )
     # The child should now be connected and sendable.
     assert child.is_connected
-    assert child.is_sendable
+    assert child.is_sendable  # type: ignore[unreachable]
 
 
 async def test_packet_notifies_protocol_on_first_connection() -> None:
