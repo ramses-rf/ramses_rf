@@ -453,8 +453,10 @@ class PooledTransport(TransportInterface):
         # so _log_tx_packet is never called and the pool's RX path can't
         # recognise echoes of our own TX.  Record TX keys here and mark
         # matching inbound packets as echoes before forwarding.
-        self._recent_tx_queue: deque[tuple[dt, tuple]] = deque(maxlen=20)
-        self._recent_tx_counts: dict[tuple, int] = {}
+        self._recent_tx_queue: deque[tuple[dt, tuple[str, ...]]] = deque(
+            maxlen=20
+        )
+        self._recent_tx_counts: dict[tuple[str, ...], int] = {}
 
     # -- Child access ----------------------------------------------------
 
