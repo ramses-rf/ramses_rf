@@ -27,6 +27,7 @@ from .const import (
     Verb,
 )
 from .dtos import CommandDTO, PacketDTO
+from .exceptions import TransportError as _TransportError
 from .packet import Packet
 from .protocol import protocol_factory
 from .schemas import (
@@ -256,21 +257,31 @@ class Engine:
         with self._tasks_lock:
             for task in self._tasks:
                 if task.done() and not task.cancelled():
-                    if exc := task.exception():
+                    if _task_exc := task.exception():
                         _LOGGER.debug(
                             "Unhandled exception in background worker task: %s",
-                            exc,
+                            _task_exc,
                         )
             self._tasks.clear()
 
         if self._transport:
             self._transport.close()
-            await self._protocol.wait_for_connection_lost()
+            try:
+                await self._protocol.wait_for_connection_lost()
+            except _TransportError as err:
+                _LOGGER.debug(
+                    "Transport did not unbind within timeout during "
+                    "shutdown: %s (will still cancel tx_worker)",
+                    err,
+                )
 
         # Await the _tx_worker task if it was cancelled but not yet
         # awaited.  connection_lost() cancels it synchronously, but
         # the cancellation needs to be awaited to avoid "Task was
         # destroyed but it is pending" warnings (issue 1171).
+        # This must run even if wait_for_connection_lost() raised
+        # (e.g. PooledTransport.close() may not trigger
+        # connection_lost() within the 1s default timeout).
         tx_task = getattr(self._protocol, "_tx_worker_task", None)
         if tx_task is not None and not tx_task.done():
             tx_task.cancel()

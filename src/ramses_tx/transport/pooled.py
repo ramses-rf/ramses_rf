@@ -30,6 +30,7 @@ import contextlib
 import dataclasses
 import functools
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt, timedelta as td
 from enum import Enum, auto
@@ -447,6 +448,14 @@ class PooledTransport(TransportInterface):
         # transport instance publish frames through this callback.
         self._outbound_publisher: MqttPoolOutbound | None = None
 
+        # Recent TX recording for echo detection (issue 1185).
+        # Callback-driven (MQTT) children bypass _FullTransport.write_frame,
+        # so _log_tx_packet is never called and the pool's RX path can't
+        # recognise echoes of our own TX.  Record TX keys here and mark
+        # matching inbound packets as echoes before forwarding.
+        self._recent_tx_queue: deque[tuple[dt, tuple]] = deque(maxlen=20)
+        self._recent_tx_counts: dict[tuple, int] = {}
+
     # -- Child access ----------------------------------------------------
 
     @property
@@ -511,6 +520,90 @@ class PooledTransport(TransportInterface):
             :class:`~ramses_tx.transport.callbacks.MqttPoolOutbound`.
         """
         self._outbound_publisher = publisher
+
+    # -- TX echo recording (issue 1185) ---------------------------------
+
+    def _record_tx(self, frame: str) -> None:
+        """Record an outbound frame for echo detection.
+
+        Callback-driven (MQTT) children bypass
+        :meth:`_FullTransport.write_frame`, so
+        :meth:`_FullTransport._log_tx_packet` is never called and the
+        pool's RX path cannot recognise echoes of our own TX.  Record
+        a content key here so :meth:`_on_child_packet` can mark
+        matching inbound packets as echoes before forwarding.
+
+        :param frame: The serialized RAMSES frame string.
+        """
+        frame_clean = frame.rstrip()
+        if not frame_clean:
+            return
+        if not frame_clean[:3].isdigit():
+            frame_clean = f"000 {frame_clean}"
+        try:
+            now = dt_now()
+            packet = Packet(now, frame_clean, is_tx=True)
+            dto = packet.to_dto()
+            tx_key = (
+                dto.verb,
+                dto.code,
+                dto.addr1,
+                dto.addr2,
+                dto.addr3,
+                dto.raw_payload,
+            )
+            self._recent_tx_queue.append((now, tx_key))
+            self._recent_tx_counts[tx_key] = (
+                self._recent_tx_counts.get(tx_key, 0) + 1
+            )
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.debug("PooledTransport: failed to record TX: %s", err)
+
+    def _is_recent_tx(self, packet: Packet) -> bool:
+        """Check if a received packet matches a recent TX (echo).
+
+        Prunes entries older than 3.0 seconds, then does an O(1)
+        dict lookup.  HGI80 echoes arrive with the real HGI ID as
+        addr1, but the TX frame used the placeholder 18:000730 —
+        both variants are checked (issue 835).
+
+        :param packet: The inbound packet to check.
+        :returns: True if the packet is an echo of a recent TX.
+        """
+        now = dt_now()
+        while (
+            self._recent_tx_queue
+            and (now - self._recent_tx_queue[0][0]).total_seconds() > 3.0
+        ):
+            _, old_key = self._recent_tx_queue.popleft()
+            if old_key in self._recent_tx_counts:
+                if self._recent_tx_counts[old_key] <= 1:
+                    del self._recent_tx_counts[old_key]
+                else:
+                    self._recent_tx_counts[old_key] -= 1
+
+        try:
+            dto = packet._dto
+        except AttributeError:
+            return False
+
+        addr1_variants = (
+            (dto.addr1, HGI_DEV_ADDR.id)
+            if dto.addr1 != HGI_DEV_ADDR.id
+            else (dto.addr1,)
+        )
+        for addr1 in addr1_variants:
+            rx_key = (
+                dto.verb,
+                dto.code,
+                addr1,
+                dto.addr2,
+                dto.addr3,
+                dto.raw_payload,
+            )
+            if rx_key in self._recent_tx_counts:
+                return True
+        return False
 
     # -- TransportInterface ---------------------------------------------
 
@@ -717,6 +810,10 @@ class PooledTransport(TransportInterface):
                 return WriteOutcome.NOT_SUBMITTED
             if self._outbound_publisher is None or child.hgi_id is None:
                 return WriteOutcome.NOT_SUBMITTED
+            # Record TX for echo detection — callback-driven children
+            # bypass _FullTransport.write_frame so _log_tx_packet is
+            # never called (issue 1185).
+            self._record_tx(frame)
             try:
                 await self._outbound_publisher.publish_frame(
                     str(child.hgi_id), frame
@@ -952,30 +1049,45 @@ class PooledTransport(TransportInterface):
             if src_id not in active_hgi_ids:
                 child.rssi_tracker.record(src_id, packet._dto.rssi, dt_now())
 
-        # Dict-backed dedup with sequence-aware key.
-        key = self._dedup_key(packet)
-        now = dt_now()
-
-        # Purge stale entries from the dedup cache.
-        cutoff = now - self._dedup_window
-        # Collect stale keys (can't modify dict during iteration).
-        stale_keys = [k for k, t in self._dedup_cache.items() if t < cutoff]
-        for k in stale_keys:
-            del self._dedup_cache[k]
-
-        # Check for duplicate — O(1) dict lookup.
-        if key in self._dedup_cache:
-            self._pkts_deduped += 1
+        # Echo detection (issue 1185): callback-driven (MQTT) children
+        # bypass _FullTransport._frame_read, so the transport-level
+        # _is_recent_tx check never runs.  Check here and mark the
+        # packet as an echo so the protocol's WantEcho FSM can resolve
+        # — and skip dedup for echoes so they are forwarded upstream.
+        if self._is_recent_tx(packet):
+            packet._is_echo = True
             _LOGGER.debug(
-                "PooledTransport: deduped packet from child %d: %s",
+                "PooledTransport: echo detected from child %d: %s",
                 child_id,
                 packet,
             )
-            return
+        else:
+            # Dict-backed dedup with sequence-aware key.
+            key = self._dedup_key(packet)
+            now = dt_now()
 
-        # Not a duplicate — record and forward.
-        self._dedup_cache[key] = now
-        # Enforce max cache size.
+            # Purge stale entries from the dedup cache.
+            cutoff = now - self._dedup_window
+            # Collect stale keys (can't modify dict during iteration).
+            stale_keys = [
+                k for k, t in self._dedup_cache.items() if t < cutoff
+            ]
+            for k in stale_keys:
+                del self._dedup_cache[k]
+
+            # Check for duplicate — O(1) dict lookup.
+            if key in self._dedup_cache:
+                self._pkts_deduped += 1
+                _LOGGER.debug(
+                    "PooledTransport: deduped packet from child %d: %s",
+                    child_id,
+                    packet,
+                )
+                return
+
+            # Not a duplicate — record and forward.
+            self._dedup_cache[key] = now
+            # Enforce max cache size.
         if len(self._dedup_cache) > _MAX_DEDUP_KEYS:
             # Evict oldest entry (linear scan, but rare).
             oldest_key = min(
