@@ -4,7 +4,7 @@
 Covers:
 - Inbound deduplication (same packet from 2 children -> 1 upstream)
 - Inbound forwarding (distinct packets from different children)
-- Outbound routing (round-robin among connected children)
+- Outbound routing (stable-first among connected children)
 - Connection lifecycle (wait for any, disconnect handling)
 - get_extra_info aggregation (SZ_ACTIVE_HGI, pool_stats)
 - Close propagation to all children
@@ -301,8 +301,8 @@ async def test_outbound_routes_to_connected_child() -> None:
     t1.write_frame.assert_called_once()
 
 
-async def test_outbound_round_robin_among_connected() -> None:
-    """write_frame round-robins between connected children."""
+async def test_outbound_stable_first_among_connected() -> None:
+    """write_frame selects the first sendable child (stable-first)."""
     proto = _make_mock_protocol()
     t0 = _make_mock_transport(hgi="18:001111", connected=True)
     t1 = _make_mock_transport(hgi="18:002222", connected=True)
@@ -313,10 +313,9 @@ async def test_outbound_round_robin_among_connected() -> None:
     await pool.write_frame("frame1")
     await pool.write_frame("frame2")
 
-    # Both children should have been used (round-robin).
-    calls = [t0.write_frame.call_count, t1.write_frame.call_count]
-    assert sum(calls) == 2
-    assert all(c >= 0 for c in calls)
+    # Child 0 (first in config order) should get both calls.
+    assert t0.write_frame.call_count == 2
+    assert t1.write_frame.call_count == 0
 
 
 async def test_outbound_fails_when_no_child_connected() -> None:
@@ -1198,6 +1197,7 @@ def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
         child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
     )
     child.connection_state = ConnectionState.CONNECTED
+    child.availability = NodeAvailability.ONLINE
     child.accepted = True
     assert not child.is_sendable
     child.learn_hgi(DeviceIdT("18:001234"))
@@ -1357,6 +1357,7 @@ def test_disconnected_child_resets_send_ready() -> None:
         child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
     )
     child.connection_state = ConnectionState.CONNECTED
+    child.availability = NodeAvailability.ONLINE
     child.accepted = True
     child.learn_hgi(DeviceIdT("18:001234"))
     assert child.is_sendable

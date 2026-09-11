@@ -251,10 +251,11 @@ async def test_read_ready_compatibility_handles_serial_exception() -> None:
 
 
 async def test_connection_lost_handles_error() -> None:
-    # Test connection_lost callback closing the transport
+    # Test connection_lost callback closing the transport (non-reconnect)
     transport = _get_transport()
     transport._close = MagicMock()
     transport._closing = False
+    transport._enable_reconnect = False
 
     transport._connection_lost(SerialException("Connection Reset"))
     transport._close.assert_called_once()
@@ -512,13 +513,21 @@ async def test_signature_policy_immediate_creates_immediate_task() -> None:
 
 
 async def test_reconnect_task_created_on_connection_lost() -> None:
-    """connection_lost starts reconnect loop when enable_reconnect is True."""
+    """connection_lost starts reconnect loop when enable_reconnect is True.
+
+    Verifies the real behavior: _closing stays False (the PortTransport
+    stays alive), the underlying serial transport is closed, and a
+    reconnect task is created.  Does NOT mock _close() — that would
+    hide the bug where _close() sets _closing=True before the reconnect
+    check (issue 1119).
+    """
     from ramses_tx.transport.base import TransportConfig
 
     mock_serial = MagicMock(spec=BaseSerialTransport)
     mock_serial.serial = MagicMock()
     mock_serial.name = "/dev/ttyUSB0"
     mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_serial.close = MagicMock()
     mock_protocol = MagicMock()
     config = TransportConfig(enable_reconnect=True)
 
@@ -540,25 +549,35 @@ async def test_reconnect_task_created_on_connection_lost() -> None:
 
     # Simulate connection lost (not closing).
     transport._closing = False
-    with (
-        patch.object(transport, "_close"),
-        patch.object(transport, "_reconnect_loop", new_callable=AsyncMock),
-    ):
+    transport._serial_transport = mock_serial
+    with patch.object(transport, "_reconnect_loop", new_callable=AsyncMock):
         transport._connection_lost(RuntimeError("unplugged"))
         await asyncio.sleep(0.01)
 
+    # The PortTransport must NOT be marked as closing — it stays
+    # alive for transparent reconnection.
+    assert transport._closing is False
+    # The underlying serial transport must have been closed.
+    mock_serial.close.assert_called_once()
+    assert transport._serial_transport is None
+    # A reconnect task must have been created.
     assert transport._reconnect_task is not None
     transport._close()
 
 
 async def test_reconnect_not_created_when_enable_reconnect_false() -> None:
-    """connection_lost does not start reconnect when enable_reconnect=False."""
+    """connection_lost does full close when enable_reconnect=False.
+
+    Verifies that _closing is set to True (via the real _close()) and
+    no reconnect task is created.
+    """
     from ramses_tx.transport.base import TransportConfig
 
     mock_serial = MagicMock(spec=BaseSerialTransport)
     mock_serial.serial = MagicMock()
     mock_serial.name = "/dev/ttyUSB0"
     mock_serial.serial.name = "/dev/ttyUSB0"
+    mock_serial.close = MagicMock()
     mock_protocol = MagicMock()
     config = TransportConfig(enable_reconnect=False)
 
@@ -579,9 +598,12 @@ async def test_reconnect_not_created_when_enable_reconnect_false() -> None:
             task.cancel()
 
     transport._closing = False
-    with patch.object(transport, "_close"):
-        transport._connection_lost(RuntimeError("unplugged"))
+    transport._serial_transport = mock_serial
+    transport._connection_lost(RuntimeError("unplugged"))
 
+    # With reconnect disabled, _close() must have been called,
+    # setting _closing=True and closing the serial transport.
+    assert transport._closing is True
     assert transport._reconnect_task is None
     transport._close()
 

@@ -6,10 +6,10 @@ single coherent :class:`TransportInterface` that the protocol layer
 sees as one transport.  Inbound packets from any child are
 deduplicated within a sliding time window and forwarded upstream.
 Outbound frames are routed to the child transport with the best
-rolling-average RSSI, falling back to round-robin when no RSSI data
-is available yet.  Unhealthy children are detected via a configurable
-health timeout and excluded from outbound selection until they
-recover.
+rolling-average RSSI, falling back to stable-first selection (first
+sendable child in config order) when no RSSI data is available yet.
+Unhealthy children are detected via a configurable health timeout
+and excluded from outbound selection until they recover.
 
 This is Roadmap Item 9, PR 1 (issue 1119).
 
@@ -37,7 +37,7 @@ from enum import Enum, auto
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
-from ..address import HGI_DEV_ADDR
+from ..address import HGI_DEV_ADDR, packet_addrs
 from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
@@ -156,14 +156,20 @@ class PoolChild:
     def is_sendable(self) -> bool:
         """Return True if this child can be selected for outbound.
 
-        A child is sendable when it is connected, accepted, and
-        send-ready (has identity or has received at least one packet).
+        A child is sendable when it is connected, online (packets
+        flowing or recently connected), accepted, and send-ready
+        (has identity or has received at least one packet).
+        Stale children (connected but no packets within
+        ``health_timeout``) are excluded from routing but remain in
+        the pool — they become sendable again when a packet arrives
+        and ``mark_online()`` is called (issue 1119).
         Callback-driven children (PR 4A) do not require a transport
         instance — outbound frames go through the pool's outbound
         publisher.
         """
         return (
             self.is_connected
+            and self.is_online
             and self.accepted
             and self.send_ready
             and (self.transport is not None or self.callback_driven)
@@ -172,9 +178,13 @@ class PoolChild:
     def mark_connected(self, transport_obj: Any) -> None:
         """Mark the child as connected and capture transport metadata.
 
+        A freshly connected child is considered ONLINE (healthy) until
+        the health timeout marks it stale (issue 1119).
+
         :param transport_obj: The connected transport object.
         """
         self.connection_state = ConnectionState.CONNECTED
+        self.availability = NodeAvailability.ONLINE
         self.transport_obj = transport_obj
         # Read HGI identity from the transport if available.
         hgi = transport_obj.get_extra_info(SZ_ACTIVE_HGI)
@@ -183,6 +193,12 @@ class PoolChild:
         # A connected child with known HGI is send-ready.
         if self.hgi_id is not None:
             self.send_ready = True
+        # Reset the last-packet time so the health timeout starts
+        # counting from connection time.
+        self.last_pkt_time = dt_now()
+        # Reset error counter so a reconnected child starts with a
+        # clean slate (issue 1119).
+        self.consecutive_errors = 0
 
     def mark_disconnected(self) -> None:
         """Mark the child as disconnected and reset state."""
@@ -346,8 +362,8 @@ class PooledTransport(TransportInterface):
     Outbound frames are routed to the connected child with the best
     rolling-average RSSI (5-sample window with TTL expiry).  When no
     RSSI data is available for any child, selection falls back to
-    round-robin.  Unhealthy children (no packets for
-    ``health_timeout`` seconds, or exceeding
+    stable-first (first sendable child in config order).  Unhealthy
+    children (no packets for ``health_timeout`` seconds, or exceeding
     ``max_consecutive_errors``) are excluded from selection.
 
     Children are immutable after construction — runtime
@@ -688,6 +704,37 @@ class PooledTransport(TransportInterface):
             }
         return default
 
+    def get_pool_child_status(self) -> list[dict[str, object]]:
+        """Return per-child status for monitoring (issue 1119).
+
+        Each dict contains: ``child_id``, ``port_name``,
+        ``hgi_id``, ``connected``, ``availability``, ``accepted``,
+        ``send_ready``, ``callback_driven``, ``pkts_received``,
+        ``consecutive_errors``, ``last_pkt_time``.
+
+        :returns: List of per-child status dicts.
+        """
+        return [
+            {
+                "child_id": str(c.child_id),
+                "port_name": c.port_name,
+                "hgi_id": str(c.hgi_id) if c.hgi_id else None,
+                "connected": c.is_connected,
+                "availability": c.availability.name,
+                "accepted": c.accepted,
+                "send_ready": c.send_ready,
+                "callback_driven": c.callback_driven,
+                "pkts_received": c.pkts_received,
+                "consecutive_errors": c.consecutive_errors,
+                "last_pkt_time": (
+                    c.last_pkt_time.isoformat()
+                    if c.last_pkt_time is not None
+                    else None
+                ),
+            }
+            for c in self._children
+        ]
+
     async def send_frame(self, frame: str) -> None:
         """Send a frame via a selected child transport."""
         await self.write_frame(frame)
@@ -709,9 +756,20 @@ class PooledTransport(TransportInterface):
         """
         cmd = request.command
 
-        # Extract target device from the command's positional addresses.
-        # addr2 is the destination in standard RAMSES frames.
-        target_device = cmd.addr2 if cmd.addr2 != "--:------" else None
+        # Extract target device from the command's positional addresses
+        # using the authoritative ``packet_addrs()`` helper, which
+        # resolves src/dst correctly for all verb/address layouts
+        # (issue 1119).
+        target_device: str | None = None
+        try:
+            _src, dst, *_ = packet_addrs(
+                f"{cmd.addr1} {cmd.addr2} {cmd.addr3}"
+            )
+            if dst.id != "--:------":
+                target_device = dst.id
+        except Exception:
+            # Fall back to addr2 if address parsing fails (defensive).
+            target_device = cmd.addr2 if cmd.addr2 != "--:------" else None
 
         child = self._select_child(target_device)
         if child is None:
@@ -822,6 +880,7 @@ class PooledTransport(TransportInterface):
                 )
                 return WriteOutcome.SUBMITTED
             except Exception:
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
 
         if child.transport is None:
@@ -833,7 +892,7 @@ class PooledTransport(TransportInterface):
                 await child.transport.send_frame(frame)
                 return WriteOutcome.SUBMITTED
             except Exception:
-                child.record_error()
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
 
         try:
@@ -845,10 +904,10 @@ class PooledTransport(TransportInterface):
                 await write(frame)
                 return WriteOutcome.SUBMITTED
             except Exception:
-                child.record_error()
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
         except Exception:
-            child.record_error()
+            self._record_write_error(child)
             return WriteOutcome.AMBIGUOUS
 
     async def write_frame(
@@ -1180,6 +1239,29 @@ class PooledTransport(TransportInterface):
         if self._conn_fut is not None and not self._conn_fut.done():
             self._conn_fut.set_result(self)
 
+    def _record_write_error(self, child: PoolChild) -> None:
+        """Record a write failure and mark offline if threshold exceeded.
+
+        Unlike disconnection errors, write failures don't change the
+        connection state — the serial link may still be open but
+        writes are failing (e.g. USB cable degraded, firmware hung).
+        The child is marked OFFLINE after ``max_consecutive_errors``
+        consecutive write failures so it's excluded from routing
+        (issue 1119).
+
+        :param child: The child whose write failed.
+        """
+        child.record_error()
+        if child.consecutive_errors >= self._max_consecutive_errors:
+            if child.availability is not NodeAvailability.OFFLINE:
+                child.availability = NodeAvailability.OFFLINE
+                _LOGGER.warning(
+                    "PooledTransport: child %d marked offline "
+                    "(%d consecutive write errors)",
+                    child.child_id,
+                    child.consecutive_errors,
+                )
+
     def _on_child_disconnected(
         self, child_id: int, error: Exception | None
     ) -> None:
@@ -1246,8 +1328,9 @@ class PooledTransport(TransportInterface):
 
         Uses per-device RSSI when ``target_device`` is provided and
         per-device samples exist.  Falls back to aggregate RSSI, then
-        round-robin among connected, sendable children when no RSSI
-        data is available.  Returns ``None`` if no child is sendable.
+        stable-first selection (first sendable child in config order)
+        when no RSSI data is available.  Returns ``None`` if no child
+        is sendable.
         """
         # Check health timeouts before selecting.
         self._check_health()
@@ -1277,14 +1360,11 @@ class PooledTransport(TransportInterface):
         ):
             rssi_values = {c.child_id: self._best_rssi(c) for c in candidates}
 
-        # If no child has RSSI data, fall back to round-robin.
+        # If no child has RSSI data, use stable-first selection: the
+        # first sendable child in stable config order (issue 1119).
+        # This ensures deterministic, repeatable routing during
+        # cold-start before RSSI evidence accumulates.
         if all(v == float(_RSSI_UNKNOWN) for v in rssi_values.values()):
-            n = len(self._children)
-            for _ in range(n):
-                self._rr_index = (self._rr_index + 1) % n
-                child = self._child_by_id(self._rr_index)
-                if child in candidates:
-                    return child
             return candidates[0]
 
         # Select the child with the best (highest) average RSSI.

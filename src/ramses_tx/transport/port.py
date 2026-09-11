@@ -348,7 +348,11 @@ class PortTransport(_FullTransport):
                 )
                 self._serial_transport = transport
             except (SerialException, OSError, ValueError) as err:
-                self._close(exc=exc.TransportSerialError(err))
+                # During reconnection, _close() would set _closing=True
+                # and kill the reconnect loop.  Skip _close() and let
+                # the reconnect loop handle the failure (issue 1119).
+                if not getattr(self, "_reconnecting", False):
+                    self._close(exc=exc.TransportSerialError(err))
                 if not self._init_fut.done():
                     self._init_fut.set_exception(
                         exc.TransportSerialError(
@@ -398,9 +402,22 @@ class PortTransport(_FullTransport):
 
                 if self._init_fut.done():
                     packet = self._init_fut.result()
-                    self._make_connection(
-                        gateway_id=packet.src.id if packet else None
-                    )
+                    discovered_id = packet.src.id if packet else None
+                    # Validate discovered ID against configured ID (Gap B).
+                    if (
+                        discovered_id is not None
+                        and self._configured_hgi_id is not None
+                        and str(discovered_id) != self._configured_hgi_id
+                    ):
+                        _LOGGER.warning(
+                            "PortTransport: _PUZZ signature returned %s "
+                            "but configured_hgi_id is %s — mismatch on "
+                            "%s. Using the discovered ID.",
+                            discovered_id,
+                            self._configured_hgi_id,
+                            redact_url(self._port_name),
+                        )
+                    self._make_connection(gateway_id=discovered_id)
                     return
 
             if not self._init_fut.done():
@@ -496,6 +513,19 @@ class PortTransport(_FullTransport):
                         "PortTransport: !I command returned HGI ID %s",
                         hgi_id,
                     )
+                    # Validate discovered ID against configured ID (Gap B).
+                    if (
+                        self._configured_hgi_id is not None
+                        and hgi_id != self._configured_hgi_id
+                    ):
+                        _LOGGER.warning(
+                            "PortTransport: !I returned %s but "
+                            "configured_hgi_id is %s — mismatch on %s. "
+                            "Using the discovered ID.",
+                            hgi_id,
+                            self._configured_hgi_id,
+                            redact_url(self._port_name),
+                        )
                     self._init_fut.set_result(None)
                     self._make_connection(
                         gateway_id=hgi_id  # type: ignore[arg-type]
@@ -657,20 +687,47 @@ class PortTransport(_FullTransport):
         """Handle underlying transport disconnection.
 
         When ``enable_reconnect`` is True and the transport is not
-        being explicitly closed, start a reconnect loop with
-        exponential backoff (Phase 2, issue 1119).
+        being explicitly closed, close only the underlying serial
+        transport (keeping the PortTransport alive) and start a
+        reconnect loop with exponential backoff (Phase 2, issue 1119).
+
+        When ``enable_reconnect`` is False, perform a full close via
+        ``_close()`` which marks the transport as closing and notifies
+        the protocol.
 
         :param error: The exception that caused connection loss, or None.
         :type error: Exception | None
         """
         if self._closing:
             return
-        self._close(exc=exc.TransportSerialError(error) if error else None)
-        if self._enable_reconnect and not self._closing:
+
+        if self._enable_reconnect:
+            # Close only the underlying serial transport, not the
+            # PortTransport itself.  _close() sets _closing=True and
+            # notifies the protocol that the transport is gone — we
+            # don't want that during reconnect because the
+            # PortTransport should stay alive and re-establish the
+            # link transparently.
+            if self._serial_transport is not None:
+                with contextlib.suppress(Exception):
+                    self._serial_transport.close()
+                self._serial_transport = None
+            # Cancel any in-flight init task (it's waiting on the
+            # now-dead serial link).
+            if init_task := getattr(self, "_init_task", None):
+                init_task.cancel()
+            _LOGGER.info(
+                "PortTransport: connection lost to %s, starting "
+                "reconnect loop",
+                redact_url(self._port_name),
+            )
             self._reconnect_task = self._loop.create_task(
                 self._reconnect_loop(),
                 name="PortTransport._reconnect_loop()",
             )
+            return
+
+        self._close(exc=exc.TransportSerialError(error) if error else None)
 
     async def _reconnect_loop(self) -> None:
         """Reconnect to the serial port with exponential backoff.
@@ -683,36 +740,40 @@ class PortTransport(_FullTransport):
         """
         backoff = 1.0
         max_backoff = 30.0
-        for attempt in range(1, self._max_reconnect_attempts + 1):
-            await asyncio.sleep(backoff)
-            if self._closing:
-                return
-            _LOGGER.info(
-                "PortTransport: reconnect attempt %d/%d to %s (backoff %.1fs)",
-                attempt,
-                self._max_reconnect_attempts,
-                redact_url(self._port_name),
-                backoff,
-            )
-            # Reset connection state for a fresh attempt
-            self._serial_transport = None
-            self._init_fut = self._loop.create_future()
-            try:
-                await self._create_connection()
+        self._reconnecting = True
+        try:
+            for attempt in range(1, self._max_reconnect_attempts + 1):
+                await asyncio.sleep(backoff)
+                if self._closing:
+                    return
                 _LOGGER.info(
-                    "PortTransport: reconnected to %s on attempt %d",
-                    redact_url(self._port_name),
+                    "PortTransport: reconnect attempt %d/%d to %s (backoff %.1fs)",
                     attempt,
-                )
-                return
-            except Exception as err:
-                _LOGGER.warning(
-                    "PortTransport: reconnect attempt %d to %s failed: %s",
-                    attempt,
+                    self._max_reconnect_attempts,
                     redact_url(self._port_name),
-                    err,
+                    backoff,
                 )
-                backoff = min(backoff * 2, max_backoff)
+                # Reset connection state for a fresh attempt
+                self._serial_transport = None
+                self._init_fut = self._loop.create_future()
+                try:
+                    await self._create_connection()
+                    _LOGGER.info(
+                        "PortTransport: reconnected to %s on attempt %d",
+                        redact_url(self._port_name),
+                        attempt,
+                    )
+                    return
+                except Exception as err:
+                    _LOGGER.warning(
+                        "PortTransport: reconnect attempt %d to %s failed: %s",
+                        attempt,
+                        redact_url(self._port_name),
+                        err,
+                    )
+                    backoff = min(backoff * 2, max_backoff)
+        finally:
+            self._reconnecting = False
         _LOGGER.error(
             "PortTransport: giving up after %d reconnect attempts to %s",
             self._max_reconnect_attempts,

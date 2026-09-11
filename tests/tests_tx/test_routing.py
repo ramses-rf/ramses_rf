@@ -11,7 +11,7 @@ Tests cover:
 - QoS echo matching with routed commands
 - Safe failover: AMBIGUOUS raises, NOT_SUBMITTED does not
 - Source policy: faked-device commands preserve source
-- Cold-start fallback: round-robin when no RSSI data
+- Cold-start fallback: stable-first when no RSSI data
 """
 
 from __future__ import annotations
@@ -578,26 +578,26 @@ class TestDefaultTransportInterface:
         assert outcome is WriteOutcome.AMBIGUOUS
 
 
-# -- Cold-start fallback (round-robin) ------------------------------------
+# -- Cold-start fallback (stable-first) -----------------------------------
 
 
 class TestColdStartFallback:
-    """Tests for round-robin fallback when no RSSI data is available."""
+    """Tests for stable-first fallback when no RSSI data is available."""
 
-    def test_cold_start_round_robin(self) -> None:
-        """When no RSSI data, children are selected round-robin."""
+    def test_cold_start_stable_first(self) -> None:
+        """When no RSSI data, the first sendable child is always selected."""
         child0 = _make_child(0, "18:111111")
         child1 = _make_child(1, "18:222222")
         transport = _make_pooled_transport([child0, child1])
 
         request = RouteRequest(command=_make_cmd())
 
-        # First call should select one child, second call the other
+        # Both calls should select child 0 (first in config order).
         routed1 = transport.prepare_command(request)
         routed2 = transport.prepare_command(request)
 
-        child_ids = {routed1.child_id, routed2.child_id}
-        assert child_ids == {"0", "1"}
+        assert routed1.child_id == "0"
+        assert routed2.child_id == "0"
 
     def test_cold_start_with_rssi_uses_best(self) -> None:
         """When RSSI data exists, best RSSI child is selected."""
