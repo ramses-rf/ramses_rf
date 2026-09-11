@@ -37,6 +37,7 @@ from .schemas import (
     select_device_filter_mode,
 )
 from .transport import TransportConfig, transport_factory
+from .transport.helpers import redact_url
 from .typing import DeviceIdT, PktLogConfigT, PortConfigT, QosParams
 
 if TYPE_CHECKING:
@@ -72,7 +73,7 @@ class Engine:
         if self.config.port_name and self.config.input_file:
             _LOGGER.warning(
                 "Port (%s) specified, so file (%s) ignored",
-                self.config.port_name,
+                redact_url(self.config.port_name),
                 self.config.input_file,
             )
             self.config.input_file = None
@@ -139,15 +140,15 @@ class Engine:
     def __str__(self) -> str:
         """Return a human-readable string representation."""
         if self._hgi_id:
-            return f"{self._hgi_id} ({self.ser_name})"
+            return f"{self._hgi_id} ({redact_url(self.ser_name)})"
 
         if not self._transport:
-            return f"{HGI_DEV_ADDR.id} ({self.ser_name})"
+            return f"{HGI_DEV_ADDR.id} ({redact_url(self.ser_name)})"
 
         device_id = self._transport.get_extra_info(
             SZ_ACTIVE_HGI, default=HGI_DEV_ADDR.id
         )
-        return f"{device_id} ({self.ser_name})"
+        return f"{device_id} ({redact_url(self.ser_name)})"
 
     def _dt_now(self) -> dt:
         timesource: Callable[[], dt] = getattr(

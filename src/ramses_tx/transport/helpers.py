@@ -77,7 +77,7 @@ def _str(value: bytes) -> str:
     """Decode bytes to a string, ignoring non-printable characters.
 
     :param value: The bytes to decode.
-    :type value: bytes
+    :type value: The bytes to decode.
     :return: The decoded string.
     :rtype: str
     """
@@ -89,3 +89,38 @@ def _str(value: bytes) -> str:
         _LOGGER.warning("%s < Can't decode bytestream (ignoring)", value)
         return ""
     return result
+
+
+def redact_url(url: str | None) -> str:
+    """Redact credentials from a URL for safe logging/display.
+
+    Masks the ``user:pass`` portion of URLs like
+    ``mqtt://user:pass@host:port/path`` → ``mqtt://***:***@host:port/path``.
+
+    Handles ``mqtt://``, ``rfc2217://``, ``socket://``, and any other
+    scheme that uses ``user:pass@host`` syntax.  URLs without
+    credentials are returned unchanged.  ``None`` is returned as an
+    empty string.
+
+    :param url: The URL to redact.
+    :type url: str | None
+    :return: The URL with credentials masked, or the original string
+        if it can't be parsed or has no credentials.
+    :rtype: str
+    """
+    if not isinstance(url, str):
+        return url or ""
+    if "@" not in url:
+        return url
+    try:
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(url)
+        if parsed.username:
+            netloc = f"***:***@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            return urlunparse(parsed._replace(netloc=netloc))
+    except (ValueError, AttributeError, TypeError):
+        pass
+    return url

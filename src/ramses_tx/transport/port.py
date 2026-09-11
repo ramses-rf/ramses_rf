@@ -76,7 +76,7 @@ from ..schemas import (
 from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from ..version import VERSION
 from .base import SignaturePolicy, TransportConfig, _FullTransport
-from .helpers import _normalise, _str
+from .helpers import _normalise, _str, redact_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -352,7 +352,7 @@ class PortTransport(_FullTransport):
                 if not self._init_fut.done():
                     self._init_fut.set_exception(
                         exc.TransportSerialError(
-                            f"Failed to open {self._port_name}: {err}"
+                            f"Failed to open {redact_url(self._port_name)}: {err}"
                         )
                     )
                 return
@@ -484,7 +484,7 @@ class PortTransport(_FullTransport):
                 # Send the ``!I`` command.
                 _LOGGER.debug(
                     "PortTransport: sending !I command to %s",
-                    self._port_name,
+                    redact_url(self._port_name),
                 )
                 self._write(b"!I\r")
 
@@ -506,7 +506,7 @@ class PortTransport(_FullTransport):
                         "PortTransport: !I command timed out after "
                         "%.1fs on %s, falling back",
                         _ID_COMMAND_TIMEOUT,
-                        self._port_name,
+                        redact_url(self._port_name),
                     )
             finally:
                 # Restore the original frame reader.
@@ -691,7 +691,7 @@ class PortTransport(_FullTransport):
                 "PortTransport: reconnect attempt %d/%d to %s (backoff %.1fs)",
                 attempt,
                 self._max_reconnect_attempts,
-                self._port_name,
+                redact_url(self._port_name),
                 backoff,
             )
             # Reset connection state for a fresh attempt
@@ -701,7 +701,7 @@ class PortTransport(_FullTransport):
                 await self._create_connection()
                 _LOGGER.info(
                     "PortTransport: reconnected to %s on attempt %d",
-                    self._port_name,
+                    redact_url(self._port_name),
                     attempt,
                 )
                 return
@@ -709,14 +709,14 @@ class PortTransport(_FullTransport):
                 _LOGGER.warning(
                     "PortTransport: reconnect attempt %d to %s failed: %s",
                     attempt,
-                    self._port_name,
+                    redact_url(self._port_name),
                     err,
                 )
                 backoff = min(backoff * 2, max_backoff)
         _LOGGER.error(
             "PortTransport: giving up after %d reconnect attempts to %s",
             self._max_reconnect_attempts,
-            self._port_name,
+            redact_url(self._port_name),
         )
 
     def _packet_read(self, packet: Packet) -> None:

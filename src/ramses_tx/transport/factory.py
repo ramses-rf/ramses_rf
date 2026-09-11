@@ -16,6 +16,7 @@ from ..schemas import SCH_SERIAL_PORT_CONFIG
 from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from .base import TransportConfig
 from .file import FileTransport
+from .helpers import redact_url
 from .mqtt import MqttTransport
 from .pooled import PooledTransport, _ChildProtocolProxy
 from .port import PortTransport
@@ -102,7 +103,7 @@ async def transport_factory(
             "Input: packet_dict: %s, packet_log: %s, port_name: %s",
             packet_dict,
             packet_log,
-            port_name,
+            redact_url(port_name),
         )
         raise exc.TransportSourceInvalid(
             "Packet source must be exactly one of: packet_dict, packet_log, port_name"
@@ -182,7 +183,7 @@ async def transport_factory(
     except exc.TransportSerialError as err:
         transport_port.close()
         raise exc.TransportSourceInvalid(
-            f"Unable to open the serial port {port_name}: {err}"
+            f"Unable to open the serial port {redact_url(port_name)}: {err}"
         ) from err
     except Exception:
         transport_port.close()
@@ -334,7 +335,7 @@ async def pooled_transport_factory(
                 "PooledTransport: child %d (%s) failed to connect: %s — "
                 "continuing with remaining children",
                 i,
-                pname,
+                redact_url(pname),
                 err,
             )
             continue
@@ -435,7 +436,7 @@ async def _create_single_child(
     except exc.TransportSerialError as err:
         transport_port.close()
         raise exc.TransportSourceInvalid(
-            f"Unable to open the serial port {port_name}: {err}"
+            f"Unable to open the serial port {redact_url(port_name)}: {err}"
         ) from err
     except Exception:
         transport_port.close()
