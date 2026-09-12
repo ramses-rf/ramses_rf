@@ -608,8 +608,9 @@ async def test_last_rx_time_set_on_received(protocol: DummyProtocol) -> None:
     )
     protocol.packet_received(pkt)
 
-    assert protocol._last_rx_time is not None
-    assert protocol._last_rx_time >= before
+    rx_time: dt | None = protocol._last_rx_time
+    assert rx_time is not None
+    assert rx_time >= before
 
 
 async def test_last_rx_time_set_even_when_filtered(
@@ -640,8 +641,9 @@ async def test_last_rx_time_set_even_when_filtered(
     # _this_msg should NOT be set (packet was filtered)
     assert protocol._this_msg is None
     # But _last_rx_time SHOULD be set (packet was received)
-    assert protocol._last_rx_time is not None
-    assert protocol._last_rx_time >= before
+    rx_time: dt | None = protocol._last_rx_time
+    assert rx_time is not None
+    assert rx_time >= before
 
 
 async def test_last_rx_time_updated_on_each_packet(
