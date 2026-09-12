@@ -83,9 +83,9 @@ class TransportConfig:
         probes — the child is receive-only until identity is learned.
     :type signature_policy: SignaturePolicy
     :param startup_grace: Grace period in seconds before sending
-        signature probes when ``signature_policy`` is ``DELAYED``.
-        Ignored for ``IMMEDIATE`` and ``SKIP``.  Default 3.0s based on
-        the hardware feasibility gate (ESP32 cold boot ~1.9s).
+        startup commands when ``signature_policy`` is ``DELAYED`` or
+        ``ID_COMMAND``.  Ignored for ``IMMEDIATE`` and ``SKIP``.  Default
+        3.0s based on the hardware feasibility gate (ESP32 cold boot ~1.9s).
     :type startup_grace: float | None
     :param enable_reconnect: Enable automatic reconnect with exponential
         backoff when the serial port disconnects (Phase 2, issue 1119).
@@ -96,9 +96,9 @@ class TransportConfig:
     :type max_reconnect_attempts: int
     :param configured_hgi_id: Manually configured HGI device ID for
         devices that cannot be queried via ``!I`` or ``_PUZZ`` (e.g.
-        HGI80, or as a fallback when ``!I`` fails).  When set, the
-        transport uses this ID without sending any probe (Gap B,
-        Phase 2).
+        HGI80), or as a fallback when identity discovery fails.  A
+        discovered identity takes precedence and is checked against
+        this value (Gap B, Phase 2).
     :type configured_hgi_id: str | None
     """
 

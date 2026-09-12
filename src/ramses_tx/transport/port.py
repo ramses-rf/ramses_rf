@@ -44,7 +44,7 @@ import logging
 import re
 from collections.abc import Callable, Coroutine, Iterable
 from datetime import datetime as dt
-from functools import wraps
+from functools import partial, wraps
 from time import perf_counter, time
 from typing import Final, ParamSpec, Protocol, TypeVar, runtime_checkable
 
@@ -86,7 +86,7 @@ _SIGNATURE_MAX_SECS: Final[int] = 3
 
 # evofw3 ``!I`` command response: ``# 18:000730\r\n`` (Gap E).
 # The ID is class:id, both read from EEPROM — no RF needed.
-_EVOFW3_ID_RE: Final[re.Pattern[str]] = re.compile(r"^#\s*(\d{2}):(\d{6})\s*$")
+_EVOFW3_ID_RE: Final[re.Pattern[str]] = re.compile(r"^#\s*(18):(\d{6})\s*$")
 _ID_COMMAND_TIMEOUT: Final[float] = 2.0
 
 _DBG_DISABLE_DUTY_CYCLE_LIMIT: Final[bool] = False
@@ -311,6 +311,7 @@ class PortTransport(_FullTransport):
         self._log_all = config.log_all
         self._enable_reconnect: bool = config.enable_reconnect
         self._max_reconnect_attempts: int = config.max_reconnect_attempts
+        self._reconnecting = False
 
         self._init_fut = self._loop.create_future()
 
@@ -348,17 +349,16 @@ class PortTransport(_FullTransport):
                 )
                 self._serial_transport = transport
             except (SerialException, OSError, ValueError) as err:
-                # During reconnection, _close() would set _closing=True
-                # and kill the reconnect loop.  Skip _close() and let
-                # the reconnect loop handle the failure (issue 1119).
-                if not getattr(self, "_reconnecting", False):
-                    self._close(exc=exc.TransportSerialError(err))
+                transport_err = exc.TransportSerialError(
+                    f"Failed to open {redact_url(self._port_name)}: {err}"
+                )
+                if self._reconnecting:
+                    if not self._init_fut.done():
+                        self._init_fut.cancel()
+                    raise transport_err from err
+                self._close(exc=transport_err)
                 if not self._init_fut.done():
-                    self._init_fut.set_exception(
-                        exc.TransportSerialError(
-                            f"Failed to open {redact_url(self._port_name)}: {err}"
-                        )
-                    )
+                    self._init_fut.set_exception(transport_err)
                 return
 
         self._is_hgi80 = await is_hgi80(self._port_name)
@@ -681,7 +681,7 @@ class PortTransport(_FullTransport):
                 self._data_received(data)
             except SerialException as err:
                 if not self._closing:
-                    self._close(exc=exc.TransportSerialError(err))
+                    self._connection_lost(exc.TransportSerialError(err))
 
     def _connection_lost(self, error: Exception | None) -> None:
         """Handle underlying transport disconnection.
@@ -702,20 +702,29 @@ class PortTransport(_FullTransport):
             return
 
         if self._enable_reconnect:
-            # Close only the underlying serial transport, not the
-            # PortTransport itself.  _close() sets _closing=True and
-            # notifies the protocol that the transport is gone — we
-            # don't want that during reconnect because the
-            # PortTransport should stay alive and re-establish the
-            # link transparently.
+            if (
+                self._reconnect_task is not None
+                and not self._reconnect_task.done()
+            ):
+                return
             if self._serial_transport is not None:
                 with contextlib.suppress(Exception):
                     self._serial_transport.close()
                 self._serial_transport = None
-            # Cancel any in-flight init task (it's waiting on the
-            # now-dead serial link).
             if init_task := getattr(self, "_init_task", None):
                 init_task.cancel()
+            transport_err = (
+                error
+                if isinstance(error, exc.TransportSerialError)
+                else exc.TransportSerialError(error)
+                if error
+                else None
+            )
+            if not self._loop.is_closed():
+                with contextlib.suppress(RuntimeError):
+                    self._loop.call_soon_threadsafe(
+                        partial(self._protocol.connection_lost, transport_err)
+                    )
             _LOGGER.info(
                 "PortTransport: connection lost to %s, starting "
                 "reconnect loop",
@@ -823,7 +832,12 @@ class PortTransport(_FullTransport):
         try:
             self._write(data)
         except SerialException as err:
-            self._abort(exc.TransportSerialError(err))
+            transport_err = exc.TransportSerialError(err)
+            if self._enable_reconnect:
+                self._connection_lost(transport_err)
+            else:
+                self._abort(transport_err)
+            raise transport_err from err
 
     def _write(self, data: bytes) -> None:
         """Perform the actual write to the serial port.

@@ -204,6 +204,7 @@ async def pooled_transport_factory(
     dedup_window: float = 0.5,
     callback_port_names: list[str] | None = None,
     per_child_config_overrides: list[dict[str, object]] | None = None,
+    accepted_hgis: set[str] | None = None,
 ) -> RamsesTransportT:
     """Create a :class:`PooledTransport` from multiple port names.
 
@@ -255,6 +256,8 @@ async def pooled_transport_factory(
         ``config`` via :func:`dataclasses.replace`.  Must be the same
         length as ``port_names`` if provided.
     :type per_child_config_overrides: list[dict[str, object]] | None
+    :param accepted_hgis: Optional HGI IDs eligible for outbound routing.
+    :type accepted_hgis: set[str] | None
     :returns: A :class:`PooledTransport` wrapping all child
         transports.  Transport-driven children come first (indices
         0..len(port_names)-1), callback-driven children follow
@@ -296,6 +299,7 @@ async def pooled_transport_factory(
         loop=loop,
         dedup_window=dedup_window,
         port_names=all_port_names,
+        accepted_hgis=accepted_hgis,
     )
 
     # Create transport-driven children (serial, MQTT paho, Zigbee).
@@ -327,7 +331,7 @@ async def pooled_transport_factory(
                 config=child_config,
                 port_name=pname,
                 port_config=pconfig,
-                extra=extra,
+                extra=dict(extra) if extra is not None else None,
                 loop=loop,
             )
         except Exception as err:

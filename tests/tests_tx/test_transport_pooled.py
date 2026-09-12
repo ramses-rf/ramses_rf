@@ -250,6 +250,30 @@ async def test_dedup_key_fallback_when_sequence_absent() -> None:
     assert proto.packet_received.call_count == 1
 
 
+async def test_recent_tx_match_is_consumed() -> None:
+    """One recorded transmission must classify only one matching echo."""
+    proto = _make_mock_protocol()
+    pool = PooledTransport(proto, [None], config=TransportConfig())
+    packet = _make_packet()
+    dto = packet._dto
+    key = (
+        dto.verb,
+        dto.code,
+        dto.addr1,
+        dto.addr2,
+        dto.addr3,
+        dto.raw_payload,
+    )
+    now = dt.now()
+    pool._recent_tx_queue.append((now, key))
+    pool._recent_tx_counts[key] = 1
+
+    assert pool._is_recent_tx(packet) is True
+    assert pool._is_recent_tx(packet) is False
+    assert not pool._recent_tx_queue
+    assert key not in pool._recent_tx_counts
+
+
 async def test_dedup_cache_is_dict_backed() -> None:
     """Dedup cache is a dict, not a deque."""
     proto = _make_mock_protocol()
@@ -316,6 +340,50 @@ async def test_outbound_stable_first_among_connected() -> None:
     # Child 0 (first in config order) should get both calls.
     assert t0.write_frame.call_count == 2
     assert t1.write_frame.call_count == 0
+
+
+async def test_legacy_write_frame_routes_using_destination_address() -> None:
+    """RSSI-prefixed frames route using the resolved destination address."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+    pool._children[0].rssi_tracker.clear()
+    pool._children[1].rssi_tracker.clear()
+    now = dt.now()
+    pool._children[0].rssi_tracker.record("01:123456", "-90", now)
+    pool._children[1].rssi_tracker.record("01:123456", "-40", now)
+
+    await pool.write_frame(
+        "000  W --- 18:999999 01:123456 --:------ 0008 002 0000"
+    )
+
+    t0.write_frame.assert_not_called()
+    sent_frame = t1.write_frame.await_args.args[0]
+    assert sent_frame.split()[3] == "18:002222"
+    assert sent_frame.split()[4] == "01:123456"
+
+
+async def test_unaccepted_serial_child_is_receive_only() -> None:
+    """A known unaccepted serial HGI forwards RX but is excluded from TX."""
+    proto = _make_mock_protocol()
+    transport = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto,
+        [transport],
+        config=TransportConfig(),
+        accepted_hgis={"18:001111"},
+    )
+
+    _connect_child(pool, 0, transport)
+    pool._on_child_packet(0, _make_packet())
+    await asyncio.sleep(0.01)
+
+    assert pool._children[0].accepted is False
+    assert pool._children[0].is_sendable is False
+    proto.packet_received.assert_called_once()
 
 
 async def test_outbound_fails_when_no_child_connected() -> None:
@@ -706,6 +774,18 @@ def test_close_closes_all_children(
     t0.close.assert_called_once()
     t1.close.assert_called_once()
     assert pool.is_closing is True
+
+
+async def test_close_notifies_protocol_for_callback_only_pool() -> None:
+    """Closing a connected callback-only pool unbinds the protocol."""
+    proto = _make_mock_protocol()
+    pool = PooledTransport(proto, [None], config=TransportConfig())
+    pool._protocol_connected = True
+
+    pool.close()
+    await asyncio.sleep(0)
+
+    proto.connection_lost.assert_called_once_with(None)
 
 
 def test_close_is_idempotent(

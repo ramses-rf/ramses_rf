@@ -27,7 +27,7 @@ def _get_transport() -> PortTransport:
     mock_serial.name = "/dev/ttyUSB0"
     mock_serial.serial.name = "/dev/ttyUSB0"
     mock_protocol = MagicMock()
-    mock_config = MagicMock()
+    mock_config = TransportConfig()
 
     loop = asyncio.get_running_loop()
 
@@ -320,13 +320,14 @@ async def test_write_frame_acquires_semaphore_and_writes() -> None:
     transport._close()
 
 
-async def test_write_frame_catches_serial_exception() -> None:
+async def test_write_frame_propagates_serial_exception() -> None:
     # Test abortion flow when underlying serial write fails
     transport = _get_transport()
     transport._write = MagicMock(side_effect=SerialException("Write Error"))
     transport._abort = MagicMock()
 
-    await transport._write_frame("000 18:111111 18:222222 1234 001 00")
+    with pytest.raises(TransportSerialError, match="Write Error"):
+        await transport._write_frame("000 18:111111 18:222222 1234 001 00")
 
     transport._abort.assert_called_once()
     transport._close()
@@ -550,7 +551,9 @@ async def test_reconnect_task_created_on_connection_lost() -> None:
     # Simulate connection lost (not closing).
     transport._closing = False
     transport._serial_transport = mock_serial
-    with patch.object(transport, "_reconnect_loop", new_callable=AsyncMock):
+    with patch.object(
+        transport, "_reconnect_loop", new_callable=AsyncMock
+    ) as reconnect_loop:
         transport._connection_lost(RuntimeError("unplugged"))
         await asyncio.sleep(0.01)
 
@@ -559,9 +562,34 @@ async def test_reconnect_task_created_on_connection_lost() -> None:
     assert transport._closing is False
     # The underlying serial transport must have been closed.
     mock_serial.close.assert_called_once()
-    assert transport._serial_transport is None
+    assert transport.serial is None
     # A reconnect task must have been created.
-    assert transport._reconnect_task is not None
+    reconnect_loop.assert_awaited_once()
+    mock_protocol.connection_lost.assert_called_once()
+    transport._close()
+
+
+async def test_reconnect_loop_retries_failed_serial_open() -> None:
+    """A failed serial open must not be reported as a successful reconnect."""
+    transport = _get_transport()
+    transport._serial_transport = None
+    transport._max_reconnect_attempts = 2
+
+    with (
+        patch(
+            "ramses_tx.transport.port.asyncio.sleep", new_callable=AsyncMock
+        ),
+        patch(
+            "ramses_tx.transport.port.serialx.create_serial_connection",
+            new_callable=AsyncMock,
+            side_effect=SerialException("not connected"),
+        ) as create_connection,
+    ):
+        await transport._reconnect_loop()
+
+    assert create_connection.await_count == 2
+    assert transport._serial_transport is None
+    assert transport._reconnecting is False
     transport._close()
 
 

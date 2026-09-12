@@ -152,6 +152,7 @@ class MqttCallbackPoolAdapter:
         child.availability = NodeAvailability.ONLINE
         child.send_ready = True
         child.last_pkt_time = dt_now()
+        child.consecutive_errors = 0
         if hgi_id is not None and child.hgi_id is None:
             child.hgi_id = hgi_id
 

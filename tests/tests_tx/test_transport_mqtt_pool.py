@@ -204,11 +204,13 @@ def test_outbound_publisher_is_wired_into_pool() -> None:
 def test_on_child_online_marks_child_connected_and_sendable() -> None:
     """on_child_online marks the child as connected and send-ready."""
     pool, adapter, _ = _make_callback_pool()
-    adapter.on_child_online("18:001111")
     child = pool._child_by_id(0)
+    child.consecutive_errors = 3
+    adapter.on_child_online("18:001111")
     assert child.is_connected
     assert child.availability is NodeAvailability.ONLINE
     assert child.send_ready is True
+    assert child.consecutive_errors == 0
 
 
 async def test_on_child_online_notifies_protocol_on_first_connection() -> None:

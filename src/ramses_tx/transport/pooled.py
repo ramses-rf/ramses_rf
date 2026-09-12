@@ -37,7 +37,7 @@ from enum import Enum, auto
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
-from ..address import HGI_DEV_ADDR, packet_addrs
+from ..address import HGI_DEV_ADDR, Address, packet_addrs
 from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
@@ -388,9 +388,9 @@ class PooledTransport(TransportInterface):
     :param max_consecutive_errors: Number of consecutive errors before
         a child is marked offline.
     :type max_consecutive_errors: int
-    :param accepted_hgis: Optional set of HGI IDs that are allowed.
-        When set, packets from children whose HGI is not in this set
-        are dropped.  Construction-only — no runtime mutation.
+    :param accepted_hgis: Optional set of HGI IDs eligible for outbound
+        routing.  Other identified children remain receive-only.
+        Construction-only — no runtime mutation.
     :type accepted_hgis: set[str] | None
     :param port_names: Optional list of port names for diagnostics.
     :type port_names: list[str] | None
@@ -619,8 +619,17 @@ class PooledTransport(TransportInterface):
                 dto.addr3,
                 dto.raw_payload,
             )
-            if rx_key in self._recent_tx_counts:
-                return True
+            if rx_key not in self._recent_tx_counts:
+                continue
+            if self._recent_tx_counts[rx_key] <= 1:
+                del self._recent_tx_counts[rx_key]
+            else:
+                self._recent_tx_counts[rx_key] -= 1
+            for idx, (_, queued_key) in enumerate(self._recent_tx_queue):
+                if queued_key == rx_key:
+                    del self._recent_tx_queue[idx]
+                    break
+            return True
         return False
 
     # -- TransportInterface ---------------------------------------------
@@ -638,6 +647,12 @@ class PooledTransport(TransportInterface):
             except Exception as err:  # pragma: no cover - defensive
                 _LOGGER.debug(
                     "Error closing child %d: %s", child.child_id, err
+                )
+        if self._protocol_connected and not self._loop.is_closed():
+            self._protocol_connected = False
+            with contextlib.suppress(RuntimeError):
+                self._loop.call_soon_threadsafe(
+                    self._protocol.connection_lost, None
                 )
 
     def get_extra_info(self, name: str, default: Any = None) -> Any:
@@ -931,8 +946,17 @@ class PooledTransport(TransportInterface):
         # Parse the frame to extract target device for child selection.
         target_device: str | None = None
         parts = frame.split()
-        if len(parts) >= 4:
-            target_device = parts[3]
+        address_index: int | None = None
+        for idx in range(len(parts) - 2):
+            if all(Address.is_valid(part) for part in parts[idx : idx + 3]):
+                address_index = idx
+                break
+        if address_index is not None:
+            _src, dst, *_ = packet_addrs(
+                " ".join(parts[address_index : address_index + 3])
+            )
+            if dst.id != "--:------":
+                target_device = dst.id
 
         child = self._select_child(target_device)
         if child is None:
@@ -943,7 +967,7 @@ class PooledTransport(TransportInterface):
         # Fallback source re-patching on the serialized frame.
         # The preferred path (prepare_command) does this on the DTO
         # before serialization.
-        src_addr = parts[2] if len(parts) >= 4 else None
+        src_addr = parts[address_index] if address_index is not None else None
         child_hgi = child.hgi_id
 
         # Determine if the selected child is evofw3 or HGI80 (same
@@ -961,7 +985,8 @@ class PooledTransport(TransportInterface):
             and src_addr != HGI_DEV_ADDR.id
         ):
             # HGI80: swap any real HGI ID to 18:000730 placeholder.
-            parts[2] = HGI_DEV_ADDR.id
+            assert address_index is not None
+            parts[address_index] = HGI_DEV_ADDR.id
             leading = ""
             if frame and frame[0].isspace():
                 leading = frame[0]
@@ -980,7 +1005,8 @@ class PooledTransport(TransportInterface):
             and src_addr != HGI_DEV_ADDR.id
             and src_addr != str(child_hgi)
         ):
-            parts[2] = str(child_hgi)
+            assert address_index is not None
+            parts[address_index] = str(child_hgi)
             leading = ""
             if frame and frame[0].isspace():
                 leading = frame[0]
@@ -1051,12 +1077,7 @@ class PooledTransport(TransportInterface):
             ):
                 child.learn_hgi(DeviceIdT(src_id))
 
-        # HGI filtering: if an accepted set is configured, drop packets
-        # from children whose HGI is not accepted.
-        hgi = child.hgi_id
-        if self._accepted_hgis is not None and hgi is not None:
-            if str(hgi) not in self._accepted_hgis:
-                return
+        self._refresh_child_acceptance(child)
 
         # Carry ingress provenance onto the Packet envelope (PR 1 item 7).
         # Explicit callback value takes precedence, then the child record.
@@ -1217,10 +1238,19 @@ class PooledTransport(TransportInterface):
 
     # -- Internal: connection lifecycle ---------------------------------
 
+    def _refresh_child_acceptance(self, child: PoolChild) -> None:
+        """Update outbound eligibility after a child's identity changes."""
+        child.accepted = (
+            self._accepted_hgis is None
+            or child.hgi_id is None
+            or str(child.hgi_id) in self._accepted_hgis
+        )
+
     def _on_child_connected(self, child_id: int, transport_obj: Any) -> None:
         """Mark a child as connected and capture its HGI ID."""
         child = self._child_by_id(child_id)
         child.mark_connected(transport_obj)
+        self._refresh_child_acceptance(child)
 
         _LOGGER.info(
             "PooledTransport: child %d connected (HGI=%s), %d/%d connected",
