@@ -776,7 +776,7 @@ class HgiGateway(Device):  # HGI (18:)
 
         return GATEWAY_MESSAGE_TIMEOUT
 
-    async def is_active(self) -> bool:
+    async def is_active(self) -> bool | None:
         """Return True if the gateway has received messages recently.
 
         Uses the protocol's ``_last_rx_time`` which is updated for every
@@ -785,8 +785,13 @@ class HgiGateway(Device):  # HGI (18:)
         receiving RF traffic, even if the traffic is from devices not
         yet in the schema (issue 1185).
 
-        :return: The active operational status of the gateway interface.
-        :rtype: bool
+        Returns ``None`` when no packets have been received yet (unknown
+        state) so the entity shows "unavailable" instead of a false
+        "problem" during startup (issue 1185).
+
+        :return: True if recently active, False if inactive, None if
+            no data yet.
+        :rtype: bool | None
         """
         protocol = getattr(self._gateway._engine, "_protocol", None)
         dtm: dt | None = getattr(protocol, "_last_rx_time", None)
@@ -796,7 +801,9 @@ class HgiGateway(Device):  # HGI (18:)
             # older protocol instances that don't have _last_rx_time.
             last_msg = getattr(protocol, "_this_msg", None)
             if not last_msg or not hasattr(last_msg, "timestamp"):
-                return False
+                # No data yet — return None (unknown) so the entity
+                # shows "unavailable" instead of a false "problem".
+                return None
             dtm = last_msg.timestamp
 
         now = (

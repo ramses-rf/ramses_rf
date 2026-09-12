@@ -147,14 +147,18 @@ class TestHgiGateway:
 
     @pytest.mark.asyncio
     async def test_is_active_no_msg(self, hgi_gateway: HgiGateway) -> None:
-        """Test is_active returns False when no messages are received.
+        """Test is_active returns None when no messages have been received.
+
+        Returning None (unknown) instead of False prevents a false
+        "problem" state during startup before the first packet arrives
+        (issue 1185).
 
         :param hgi_gateway: The gateway fixture.
         :type hgi_gateway: HgiGateway
         """
         hgi_gateway._gateway._engine._protocol._this_msg = None
         hgi_gateway._gateway._engine._protocol._last_rx_time = None
-        assert not await hgi_gateway.is_active()
+        assert await hgi_gateway.is_active() is None
 
     @pytest.mark.asyncio
     async def test_is_active_rx_but_filtered(
