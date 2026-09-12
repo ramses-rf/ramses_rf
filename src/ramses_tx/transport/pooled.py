@@ -605,10 +605,14 @@ class PooledTransport(TransportInterface):
         except AttributeError:
             return False
 
+        # Always check both the received addr1 and the HGI placeholder.
+        # TX may have been recorded with either the real HGI ID (evofw3)
+        # or the placeholder 18:000730 (HGI80), and the echo may arrive
+        # with either — so check both variants unconditionally.
         addr1_variants = (
             (dto.addr1, HGI_DEV_ADDR.id)
             if dto.addr1 != HGI_DEV_ADDR.id
-            else (dto.addr1,)
+            else (HGI_DEV_ADDR.id, dto.addr1)
         )
         for addr1 in addr1_variants:
             rx_key = (
@@ -1002,7 +1006,6 @@ class PooledTransport(TransportInterface):
             child_hgi
             and src_addr
             and src_addr[:2] == "18"
-            and src_addr != HGI_DEV_ADDR.id
             and src_addr != str(child_hgi)
         ):
             assert address_index is not None
@@ -1051,10 +1054,11 @@ class PooledTransport(TransportInterface):
             boundary.  When provided, overrides the child record's HGI.
         """
         child = self._child_by_id(child_id)
-        child.pkts_received += 1
 
         if self._closing:
             return
+
+        child.pkts_received += 1
 
         # Learn the child's HGI ID from the puzzle response (7FFF).
         #
@@ -1170,12 +1174,12 @@ class PooledTransport(TransportInterface):
             # Not a duplicate — record and forward.
             self._dedup_cache[key] = now
             # Enforce max cache size.
-        if len(self._dedup_cache) > _MAX_DEDUP_KEYS:
-            # Evict oldest entry (linear scan, but rare).
-            oldest_key = min(
-                self._dedup_cache, key=lambda k: self._dedup_cache[k]
-            )
-            del self._dedup_cache[oldest_key]
+            if len(self._dedup_cache) > _MAX_DEDUP_KEYS:
+                # Evict oldest entry (linear scan, but rare).
+                oldest_key = min(
+                    self._dedup_cache, key=lambda k: self._dedup_cache[k]
+                )
+                del self._dedup_cache[oldest_key]
 
         self._pkts_forwarded += 1
 
@@ -1261,9 +1265,16 @@ class PooledTransport(TransportInterface):
         )
 
         # Notify the real protocol that the transport is connected.
+        # Use call_soon_threadsafe for thread safety — the child's
+        # connection_made may be invoked from a serial callback thread.
         if not self._protocol_connected:
             self._protocol_connected = True
-            self._protocol.connection_made(self, ramses=True)
+            with contextlib.suppress(RuntimeError):
+                self._loop.call_soon_threadsafe(
+                    functools.partial(
+                        self._protocol.connection_made, self, ramses=True
+                    )
+                )
 
         # Resolve the connection future if waiting.
         if self._conn_fut is not None and not self._conn_fut.done():
