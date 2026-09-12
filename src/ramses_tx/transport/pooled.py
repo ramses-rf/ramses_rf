@@ -909,6 +909,7 @@ class PooledTransport(TransportInterface):
         if write is None:
             try:
                 await child.transport.send_frame(frame)
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
                 self._record_write_error(child)
@@ -916,11 +917,15 @@ class PooledTransport(TransportInterface):
 
         try:
             await write(frame, disable_tx_limits=disable_tx_limits)
+            # Mark the child online — a successful TX proves the link
+            # is alive even if the HGI doesn't echo (e.g. HGI80).
+            child.mark_online()
             return WriteOutcome.SUBMITTED
         except TypeError:
             # Child's write_frame doesn't accept disable_tx_limits.
             try:
                 await write(frame)
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
                 self._record_write_error(child)
@@ -1030,6 +1035,7 @@ class PooledTransport(TransportInterface):
                 await write(frame, disable_tx_limits=disable_tx_limits)
             except TypeError:
                 await write(frame)
+        child.mark_online()
 
     # -- Internal: inbound dedup + forward -------------------------------
 
@@ -1378,6 +1384,27 @@ class PooledTransport(TransportInterface):
 
         # Only consider sendable children.
         candidates = [c for c in self._children if c.is_sendable]
+        if not candidates:
+            # Last resort: try stale children (connected but no recent
+            # packets).  A stale child can still physically send — the
+            # stale flag is for routing quality, not connectivity.
+            # If the TX succeeds, the echo marks the child online again
+            # (issue 1185).
+            candidates = [
+                c
+                for c in self._children
+                if c.is_connected
+                and c.availability is NodeAvailability.STALE
+                and c.accepted
+                and c.send_ready
+                and (c.transport is not None or c.callback_driven)
+            ]
+            if candidates:
+                _LOGGER.debug(
+                    "PooledTransport: no online children, falling back "
+                    "to stale children %s",
+                    [c.child_id for c in candidates],
+                )
         if not candidates:
             return None
 
