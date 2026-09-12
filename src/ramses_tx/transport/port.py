@@ -569,12 +569,24 @@ class PortTransport(_FullTransport):
                 )
                 return
             except TimeoutError:
-                _LOGGER.warning(
-                    "PortTransport: !I command timed out after "
-                    "%.1fs on %s, falling back",
-                    _ID_COMMAND_TIMEOUT,
-                    redact_url(self._port_name),
-                )
+                # Downgrade to INFO when configured_hgi_id is available
+                # as a fallback — the timeout is expected for older
+                # ramses_esp firmware that doesn't support !I, and the
+                # fallback works correctly (issue 1119).
+                if self._configured_hgi_id is not None:
+                    _LOGGER.info(
+                        "PortTransport: !I command timed out after "
+                        "%.1fs on %s, using configured_hgi_id fallback",
+                        _ID_COMMAND_TIMEOUT,
+                        redact_url(self._port_name),
+                    )
+                else:
+                    _LOGGER.warning(
+                        "PortTransport: !I command timed out after "
+                        "%.1fs on %s, falling back",
+                        _ID_COMMAND_TIMEOUT,
+                        redact_url(self._port_name),
+                    )
             finally:
                 # Restore the original frame reader.
                 self._frame_read = original_frame_read  # type: ignore[method-assign]
