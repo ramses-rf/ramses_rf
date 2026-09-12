@@ -8,8 +8,9 @@ deduplicated within a sliding time window and forwarded upstream.
 Outbound frames are routed to the child transport with the best
 rolling-average RSSI, falling back to stable-first selection (first
 sendable child in config order) when no RSSI data is available yet.
-Unhealthy children are detected via a configurable health timeout
-and excluded from outbound selection until they recover.
+Unhealthy children are detected via a configurable health timeout.
+Online children are preferred; connected stale children are retried only
+as a last resort and recover after a successful transmission or RX.
 
 This is Roadmap Item 9, PR 1 (issue 1119).
 
@@ -362,9 +363,9 @@ class PooledTransport(TransportInterface):
     Outbound frames are routed to the connected child with the best
     rolling-average RSSI (5-sample window with TTL expiry).  When no
     RSSI data is available for any child, selection falls back to
-    stable-first (first sendable child in config order).  Unhealthy
-    children (no packets for ``health_timeout`` seconds, or exceeding
-    ``max_consecutive_errors``) are excluded from selection.
+    stable-first (first sendable child in config order).  Connected
+    stale children are retried only when no online child is available;
+    disconnected or error-exhausted children remain excluded.
 
     Children are immutable after construction — runtime
     ``add_child()``/``remove_child()`` are deferred until a
@@ -1385,9 +1386,10 @@ class PooledTransport(TransportInterface):
 
         Uses per-device RSSI when ``target_device`` is provided and
         per-device samples exist.  Falls back to aggregate RSSI, then
-        stable-first selection (first sendable child in config order)
-        when no RSSI data is available.  Returns ``None`` if no child
-        is sendable.
+        stable-first selection (first candidate in config order) when
+        no RSSI data is available.  Connected stale children are
+        candidates only when no online child is sendable.  Returns
+        ``None`` if no online or stale child is eligible.
         """
         # Check health timeouts before selecting.
         self._check_health()
@@ -1463,9 +1465,9 @@ class PooledTransport(TransportInterface):
         """Check all children for health timeout and mark stale.
 
         A connected child that has not received any packets within
-        ``health_timeout`` is marked stale.  Stale children are not
-        re-enabled as a last resort — offline is a definitive state
-        that requires explicit reconnection.
+        ``health_timeout`` is marked stale.  Selection may retry stale
+        children as a last resort; offline is a definitive state that
+        requires explicit reconnection.
         """
         now = dt_now()
 
