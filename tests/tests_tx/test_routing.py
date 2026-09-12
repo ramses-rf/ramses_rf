@@ -11,7 +11,7 @@ Tests cover:
 - QoS echo matching with routed commands
 - Safe failover: AMBIGUOUS raises, NOT_SUBMITTED does not
 - Source policy: faked-device commands preserve source
-- Cold-start fallback: round-robin when no RSSI data
+- Cold-start fallback: stable-first when no RSSI data
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ramses_tx.address import HGI_DEV_ADDR
-from ramses_tx.const import Code, Verb
+from ramses_tx.const import SZ_IS_EVOFW3, Code, Verb
 from ramses_tx.dtos import CommandDTO
 from ramses_tx.routing import (
     RoutedCommand,
@@ -67,8 +67,13 @@ def _make_child(
     hgi_id: str = "18:123456",
     connected: bool = True,
     send_ready: bool = True,
+    is_evofw3: bool = True,
 ) -> PoolChild:
-    """Create a PoolChild for testing."""
+    """Create a PoolChild for testing.
+
+    :param is_evofw3: If False, the child's transport_obj reports
+        ``SZ_IS_EVOFW3=False`` (HGI80).  Default True (evofw3/MQTT).
+    """
     child = PoolChild(
         child_id=child_id,
         port_name=f"mqtt://test-{child_id}",
@@ -80,6 +85,12 @@ def _make_child(
         child.availability = NodeAvailability.ONLINE
     child.send_ready = send_ready
     child.transport.write_frame = AsyncMock()
+    # Set transport_obj so prepare_command can check SZ_IS_EVOFW3.
+    transport_obj_mock = MagicMock()
+    transport_obj_mock.get_extra_info = lambda name, default=None: (
+        is_evofw3 if name == SZ_IS_EVOFW3 else default
+    )
+    child.transport_obj = transport_obj_mock
     return child
 
 
@@ -212,7 +223,7 @@ class TestPrepareCommand:
         the selected child's HGI ID — the HGI80 firmware substitutes
         its own ID during transmission.
         """
-        child0 = _make_child(0, "18:111111")
+        child0 = _make_child(0, "18:111111", is_evofw3=False)
         transport = _make_pooled_transport([child0])
 
         request = RouteRequest(
@@ -222,6 +233,29 @@ class TestPrepareCommand:
         routed = transport.prepare_command(request)
 
         # Placeholder is kept, not patched to child's HGI ID
+        assert routed.command.addr1 == "18:000730"
+
+    def test_prepare_hgi80_swaps_real_id_to_placeholder(self) -> None:
+        """HGI80 children swap any real HGI ID to 18:000730.
+
+        When the protocol's evofw3 patch (or a previous child's
+        prepare_command) has set addr1 to a real HGI ID, and the
+        selected child is HGI80, prepare_command must swap it back
+        to the 18:000730 placeholder — the HGI80 firmware requires
+        the placeholder as the source (issue 1185).
+        """
+        child0 = _make_child(0, "18:111111", is_evofw3=False)
+        transport = _make_pooled_transport([child0])
+
+        # Simulate: protocol's evofw3 patch set addr1 to a different
+        # child's HGI ID (e.g. from an MQTT child in the pool).
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:999999"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        # HGI80: swap real ID to placeholder
         assert routed.command.addr1 == "18:000730"
 
     def test_prepare_raises_when_no_child_sendable(self) -> None:
@@ -264,6 +298,116 @@ class TestPrepareCommand:
         routed = transport.prepare_command(request)
 
         assert routed.command.addr1 == "01:099999"
+
+    def test_prepare_mixed_pool_evofw3_selected_patches_to_child_hgi(
+        self,
+    ) -> None:
+        """Mixed pool: when evofw3 child is selected, source is patched to
+        its HGI ID even if the protocol set it to another child's ID.
+
+        This is the hybrid-pool case from issue 1185: the protocol's
+        evofw3 patch may have set addr1 to the active HGI ID (from the
+        first connected child), but prepare_command must re-patch it to
+        the SELECTED child's HGI ID.
+        """
+        child0 = _make_child(0, "18:111111", is_evofw3=False)  # HGI80
+        child1 = _make_child(1, "18:222222", is_evofw3=True)  # evofw3
+        transport = _make_pooled_transport([child0, child1])
+
+        # Give child1 (evofw3) better RSSI so it's selected
+        child1.rssi_tracker.record("01:123456", -50, dt.now())
+        child0.rssi_tracker.record("01:123456", -80, dt.now())
+
+        # Protocol's evofw3 patch set addr1 to child0's HGI ID
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:111111"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        assert routed.child_id == "1"
+        # Source must be patched to the selected evofw3 child's HGI ID
+        assert routed.command.addr1 == "18:222222"
+
+    def test_prepare_mixed_pool_hgi80_selected_swaps_to_placeholder(
+        self,
+    ) -> None:
+        """Mixed pool: when HGI80 child is selected, source is swapped to
+        18:000730 even if the protocol set it to another child's HGI ID.
+
+        This is the core issue 1185 scenario: the protocol's evofw3
+        patch (triggered by the MQTT child in the pool) sets addr1 to
+        the active HGI ID, but when the HGI80 child is selected, the
+        source must be swapped back to 18:000730.
+        """
+        child0 = _make_child(0, "18:111111", is_evofw3=False)  # HGI80
+        child1 = _make_child(1, "18:222222", is_evofw3=True)  # evofw3
+        transport = _make_pooled_transport([child0, child1])
+
+        # Give child0 (HGI80) better RSSI so it's selected
+        child0.rssi_tracker.record("01:123456", -50, dt.now())
+        child1.rssi_tracker.record("01:123456", -80, dt.now())
+
+        # Protocol's evofw3 patch set addr1 to child1's HGI ID
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:222222"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        assert routed.child_id == "0"
+        # Source must be swapped to 18:000730 for HGI80
+        assert routed.command.addr1 == "18:000730"
+
+    def test_prepare_mixed_pool_hgi80_selected_keeps_placeholder(self) -> None:
+        """Mixed pool: when HGI80 child is selected and source is already
+        18:000730, it is kept as-is (no re-patching needed)."""
+        child0 = _make_child(0, "18:111111", is_evofw3=False)  # HGI80
+        child1 = _make_child(1, "18:222222", is_evofw3=True)  # evofw3
+        transport = _make_pooled_transport([child0, child1])
+
+        # Give child0 (HGI80) better RSSI so it's selected
+        child0.rssi_tracker.record("01:123456", -50, dt.now())
+        child1.rssi_tracker.record("01:123456", -80, dt.now())
+
+        # Source is already the placeholder
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:000730"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        assert routed.child_id == "0"
+        assert routed.command.addr1 == "18:000730"
+
+    def test_prepare_mixed_pool_callback_driven_treated_as_evofw3(
+        self,
+    ) -> None:
+        """Mixed pool: callback-driven (MQTT) child is evofw3-compatible.
+
+        When a callback-driven child is selected, the source is patched
+        to its HGI ID (not swapped to 18:000730).
+        """
+        child0 = _make_child(0, "18:111111", is_evofw3=False)  # HGI80 serial
+        child1 = _make_child(1, "18:222222", is_evofw3=True)  # MQTT callback
+        child1.callback_driven = True
+        # Callback-driven children have no transport_obj
+        child1.transport_obj = None
+        transport = _make_pooled_transport([child0, child1])
+
+        # Give child1 (MQTT) better RSSI so it's selected
+        child1.rssi_tracker.record("01:123456", -50, dt.now())
+        child0.rssi_tracker.record("01:123456", -80, dt.now())
+
+        request = RouteRequest(
+            command=_make_cmd(addr1="18:000730"),
+            source_policy=SourcePolicy.GATEWAY,
+        )
+        routed = transport.prepare_command(request)
+
+        assert routed.child_id == "1"
+        # Source patched to the MQTT child's HGI ID
+        assert routed.command.addr1 == "18:222222"
 
 
 # -- PooledTransport.write_routed() ---------------------------------------
@@ -434,26 +578,26 @@ class TestDefaultTransportInterface:
         assert outcome is WriteOutcome.AMBIGUOUS
 
 
-# -- Cold-start fallback (round-robin) ------------------------------------
+# -- Cold-start fallback (stable-first) -----------------------------------
 
 
 class TestColdStartFallback:
-    """Tests for round-robin fallback when no RSSI data is available."""
+    """Tests for stable-first fallback when no RSSI data is available."""
 
-    def test_cold_start_round_robin(self) -> None:
-        """When no RSSI data, children are selected round-robin."""
+    def test_cold_start_stable_first(self) -> None:
+        """When no RSSI data, the first sendable child is always selected."""
         child0 = _make_child(0, "18:111111")
         child1 = _make_child(1, "18:222222")
         transport = _make_pooled_transport([child0, child1])
 
         request = RouteRequest(command=_make_cmd())
 
-        # First call should select one child, second call the other
+        # Both calls should select child 0 (first in config order).
         routed1 = transport.prepare_command(request)
         routed2 = transport.prepare_command(request)
 
-        child_ids = {routed1.child_id, routed2.child_id}
-        assert child_ids == {"0", "1"}
+        assert routed1.child_id == "0"
+        assert routed2.child_id == "0"
 
     def test_cold_start_with_rssi_uses_best(self) -> None:
         """When RSSI data exists, best RSSI child is selected."""

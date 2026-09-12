@@ -35,6 +35,7 @@ def mock_gateway() -> MagicMock:
     gwy._engine = MagicMock()
     gwy._engine._protocol = MagicMock()
     gwy._engine._protocol._this_msg = None
+    gwy._engine._protocol._last_rx_time = None
     gwy._this_msg = None
     return gwy
 
@@ -146,13 +147,83 @@ class TestHgiGateway:
 
     @pytest.mark.asyncio
     async def test_is_active_no_msg(self, hgi_gateway: HgiGateway) -> None:
-        """Test is_active returns False when no messages are received.
+        """Test is_active returns None when no messages have been received.
+
+        Returning None (unknown) instead of False prevents a false
+        "problem" state during startup before the first packet arrives
+        (issue 1185).
 
         :param hgi_gateway: The gateway fixture.
         :type hgi_gateway: HgiGateway
         """
         hgi_gateway._gateway._engine._protocol._this_msg = None
+        hgi_gateway._gateway._engine._protocol._last_rx_time = None
+        assert await hgi_gateway.is_active() is None
+
+    @pytest.mark.asyncio
+    async def test_is_active_rx_but_filtered(
+        self, hgi_gateway: HgiGateway
+    ) -> None:
+        """Test is_active returns True when packets were received but
+        filtered out by the device_id filter.
+
+        This is the key scenario for gateway health: the transport is
+        receiving RF traffic, but none of the packets passed the device_id
+        filter (e.g. all from unknown devices).  The gateway should still
+        be considered active (issue 1185).
+
+        :param hgi_gateway: The gateway fixture.
+        :type hgi_gateway: HgiGateway
+        """
+        hgi_gateway._gateway._engine._protocol._this_msg = None
+        hgi_gateway._gateway._engine._protocol._last_rx_time = dt.now(UTC)
+        assert await hgi_gateway.is_active()
+
+    @pytest.mark.asyncio
+    async def test_is_active_rx_but_filtered_expired(
+        self, hgi_gateway: HgiGateway
+    ) -> None:
+        """Test is_active returns False when _last_rx_time is too old.
+
+        Even if packets were received (but filtered), the gateway is
+        considered inactive if the last reception was longer than
+        message_timeout ago (issue 1185).
+        """
+        expired = dt.now(UTC) - (GATEWAY_MESSAGE_TIMEOUT + td(seconds=1))
+        hgi_gateway._gateway._engine._protocol._this_msg = None
+        hgi_gateway._gateway._engine._protocol._last_rx_time = expired
         assert not await hgi_gateway.is_active()
+
+    @pytest.mark.asyncio
+    async def test_is_active_rx_time_takes_precedence(
+        self, hgi_gateway: HgiGateway
+    ) -> None:
+        """_last_rx_time takes precedence over _this_msg.timestamp.
+
+        If _last_rx_time is recent and _this_msg is old (e.g. the last
+        accepted packet was long ago but filtered packets kept
+        arriving), is_active should return True.
+        """
+        mock_msg = MagicMock()
+        mock_msg.timestamp = dt.now(UTC) - td(hours=1)
+        hgi_gateway._gateway._engine._protocol._this_msg = mock_msg
+        hgi_gateway._gateway._engine._protocol._last_rx_time = dt.now(UTC)
+        assert await hgi_gateway.is_active()
+
+    @pytest.mark.asyncio
+    async def test_is_active_fallback_to_this_msg(
+        self, hgi_gateway: HgiGateway
+    ) -> None:
+        """is_active falls back to _this_msg when _last_rx_time is None.
+
+        This ensures backward compatibility with protocol instances that
+        don't have _last_rx_time (e.g. older ramses_tx versions).
+        """
+        mock_msg = MagicMock()
+        mock_msg.timestamp = dt.now(UTC)
+        hgi_gateway._gateway._engine._protocol._this_msg = mock_msg
+        hgi_gateway._gateway._engine._protocol._last_rx_time = None
+        assert await hgi_gateway.is_active()
 
     @pytest.mark.asyncio
     async def test_is_active_recent_msg(self, hgi_gateway: HgiGateway) -> None:

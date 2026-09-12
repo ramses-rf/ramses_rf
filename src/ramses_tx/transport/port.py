@@ -41,9 +41,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 from collections.abc import Callable, Coroutine, Iterable
 from datetime import datetime as dt
-from functools import wraps
+from functools import partial, wraps
 from time import perf_counter, time
 from typing import Final, ParamSpec, Protocol, TypeVar, runtime_checkable
 
@@ -74,14 +75,19 @@ from ..schemas import (
 )
 from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from ..version import VERSION
-from .base import TransportConfig, _FullTransport
-from .helpers import _normalise, _str
+from .base import SignaturePolicy, TransportConfig, _FullTransport
+from .helpers import _normalise, _str, redact_url
 
 _LOGGER = logging.getLogger(__name__)
 
 _SIGNATURE_GAP_SECS: Final[float] = 0.05
 _SIGNATURE_MAX_TRYS: Final[int] = 40  # was: 24
 _SIGNATURE_MAX_SECS: Final[int] = 3
+
+# evofw3 ``!I`` command response: ``# 18:000730\r\n`` (Gap E).
+# The ID is class:id, both read from EEPROM — no RF needed.
+_EVOFW3_ID_RE: Final[re.Pattern[str]] = re.compile(r"^#\s*(18):(\d{6})\s*$")
+_ID_COMMAND_TIMEOUT: Final[float] = 2.0
 
 _DBG_DISABLE_DUTY_CYCLE_LIMIT: Final[bool] = False
 _DBG_FORCE_FRAME_LOGGING: Final[bool] = False
@@ -233,6 +239,7 @@ class PortTransport(_FullTransport):
     _init_task: asyncio.Task[None]
     _leaker_task: asyncio.Task[None]
     _conn_task: asyncio.Task[None] | None
+    _reconnect_task: asyncio.Task[None] | None = None
 
     _serial_transport: BaseSerialTransport | None
     _port_name: SerPortNameT
@@ -302,6 +309,9 @@ class PortTransport(_FullTransport):
         self._tx_bits_in_bucket = None
         self._tx_last_time_bit_added = None
         self._log_all = config.log_all
+        self._enable_reconnect: bool = config.enable_reconnect
+        self._max_reconnect_attempts: int = config.max_reconnect_attempts
+        self._reconnecting = False
 
         self._init_fut = self._loop.create_future()
 
@@ -313,6 +323,12 @@ class PortTransport(_FullTransport):
         self._conn_task = self._loop.create_task(
             self._create_connection(),
             name="PortTransport._create_connection()",
+        )
+        # Retrieve exceptions so asyncio doesn't log "Task exception
+        # was never retrieved" if _create_connection raises before
+        # anyone awaits the task.
+        self._conn_task.add_done_callback(
+            lambda t: t.exception() if not t.cancelled() else None
         )
 
     @property
@@ -339,21 +355,45 @@ class PortTransport(_FullTransport):
                 )
                 self._serial_transport = transport
             except (SerialException, OSError, ValueError) as err:
-                self._close(exc=exc.TransportSerialError(err))
+                transport_err = exc.TransportSerialError(
+                    f"Failed to open {redact_url(self._port_name)}: {err}"
+                )
+                if self._reconnecting:
+                    if not self._init_fut.done():
+                        self._init_fut.cancel()
+                    raise transport_err from err
+                self._close(exc=transport_err)
                 if not self._init_fut.done():
-                    self._init_fut.set_exception(
-                        exc.TransportSerialError(
-                            f"Failed to open {self._port_name}: {err}"
-                        )
-                    )
+                    self._init_fut.set_exception(transport_err)
                 return
 
-        self._is_hgi80 = await is_hgi80(self._port_name)
+        try:
+            self._is_hgi80 = await is_hgi80(self._port_name)
+        except (SerialException, OSError, ValueError) as err:
+            transport_err = exc.TransportSerialError(
+                f"Failed to probe HGI80 on {redact_url(self._port_name)}: {err}"
+            )
+            if self._reconnecting:
+                if not self._init_fut.done():
+                    self._init_fut.cancel()
+                raise transport_err from err
+            self._close(exc=transport_err)
+            if not self._init_fut.done():
+                self._init_fut.set_exception(transport_err)
+            return
 
         async def connect_sans_signature() -> None:
-            """Call connection_made() without waiting for signature."""
-            self._init_fut.set_result(None)
-            self._make_connection(gateway_id=None)
+            """Call connection_made() without waiting for signature.
+
+            Uses ``configured_hgi_id`` if set (Gap B), otherwise
+            ``None`` (identity learned from inbound traffic).
+            """
+            if not self._init_fut.done():
+                self._init_fut.set_result(None)
+            gateway_id: str | None = self._configured_hgi_id
+            self._make_connection(
+                gateway_id=gateway_id  # type: ignore[arg-type]
+            )
 
         async def connect_with_signature() -> None:
             """Poll with signatures; connect after first echo."""
@@ -381,21 +421,224 @@ class PortTransport(_FullTransport):
 
                 if self._init_fut.done():
                     packet = self._init_fut.result()
-                    self._make_connection(
-                        gateway_id=packet.src.id if packet else None
-                    )
+                    discovered_id = packet.src.id if packet else None
+                    # Validate discovered ID against configured ID (Gap B).
+                    if (
+                        discovered_id is not None
+                        and self._configured_hgi_id is not None
+                        and str(discovered_id) != self._configured_hgi_id
+                    ):
+                        _LOGGER.warning(
+                            "PortTransport: _PUZZ signature returned %s "
+                            "but configured_hgi_id is %s — mismatch on "
+                            "%s. Using the discovered ID.",
+                            discovered_id,
+                            self._configured_hgi_id,
+                            redact_url(self._port_name),
+                        )
+                    self._make_connection(gateway_id=discovered_id)
                     return
 
             if not self._init_fut.done():
                 self._init_fut.set_result(None)
 
-            self._make_connection(gateway_id=None)
+            # Fall back to configured_hgi_id if set (Gap B).
+            gateway_id: str | None = self._configured_hgi_id
+            self._make_connection(
+                gateway_id=gateway_id  # type: ignore[arg-type]
+            )
             return
 
+        async def connect_with_delayed_signature() -> None:
+            """Wait grace period, then poll with signatures.
+
+            For ESP32 USB devices that reset on port open (DTR/RTS
+            transition pulses EN).  The grace period allows the ESP32
+            to boot before sending probes (Phase 2, issue 1119).
+            """
+            grace = self._startup_grace
+            _LOGGER.info(
+                "PortTransport: waiting %.1fs grace before signature "
+                "probe (signature_policy=DELAYED)",
+                grace,
+            )
+            await asyncio.sleep(grace)
+            await connect_with_signature()
+
+        async def connect_with_id_command() -> None:
+            r"""Send ``!I\r`` to discover the HGI ID over serial.
+
+            evofw3's ``!I`` command returns ``# 18:000730\r\n``
+            directly from EEPROM — no RF TX, no RF loopback, no
+            ``_PUZZ`` echo.  Works on all evofw3 hardware including
+            ATmega devices that cannot echo ``_PUZZ`` (Gap E, Phase 2).
+
+            Falls back to ``configured_hgi_id`` (Gap B) or
+            ``connect_with_signature()`` if ``!I`` fails.
+            """
+            # Wait for the device to boot if it resets on open.
+            if self._startup_grace and self._startup_grace > 0:
+                _LOGGER.info(
+                    "PortTransport: waiting %.1fs before !I command "
+                    "(signature_policy=ID_COMMAND)",
+                    self._startup_grace,
+                )
+                await asyncio.sleep(self._startup_grace)
+
+            id_future: asyncio.Future[str] = self._loop.create_future()
+
+            def _check_id_response(line: str) -> None:
+                """Check if a received line is an ``!I`` response."""
+                if id_future.done():
+                    return
+                match = _EVOFW3_ID_RE.match(line.strip())
+                if match:
+                    hgi_id = f"{match.group(1)}:{match.group(2)}"
+                    id_future.set_result(hgi_id)
+
+            # Temporarily hook into the frame reader to catch the
+            # ``# CC:IIIIII`` response.  The response is NOT a RAMSES
+            # packet — it's an evofw3 debug response that would
+            # normally be logged as PacketInvalid (Gap F).
+            original_frame_read = self._frame_read
+
+            def _frame_read_intercept(dtm_str: str, frame: str) -> None:
+                """Intercept ``#`` lines before the packet parser."""
+                stripped = frame.strip()
+                if stripped.startswith("#"):
+                    _check_id_response(stripped)
+                    _LOGGER.debug(
+                        "PortTransport: evofw3 debug response: %s",
+                        stripped,
+                    )
+                    return  # Don't feed to packet parser (Gap F)
+                original_frame_read(dtm_str, frame)
+
+            self._frame_read = _frame_read_intercept  # type: ignore[method-assign]
+
+            # Send the ``!I`` command.  If the write fails (e.g. port
+            # unplugged between open and write), fall back gracefully
+            # instead of letting the exception propagate uncaught.
+            try:
+                _LOGGER.debug(
+                    "PortTransport: sending !I command to %s",
+                    redact_url(self._port_name),
+                )
+                self._write(b"!I\r")
+            except (SerialException, OSError) as write_err:
+                _LOGGER.warning(
+                    "PortTransport: !I write failed on %s: %s, falling back",
+                    redact_url(self._port_name),
+                    write_err,
+                )
+                self._frame_read = original_frame_read  # type: ignore[method-assign]
+                if self._configured_hgi_id is not None:
+                    if not self._init_fut.done():
+                        self._init_fut.set_result(None)
+                    self._make_connection(
+                        gateway_id=self._configured_hgi_id  # type: ignore[arg-type]
+                    )
+                    return
+                await connect_with_signature()
+                return
+
+            try:
+                hgi_id = await asyncio.wait_for(
+                    id_future, timeout=_ID_COMMAND_TIMEOUT
+                )
+                _LOGGER.info(
+                    "PortTransport: !I command returned HGI ID %s",
+                    hgi_id,
+                )
+                # Validate discovered ID against configured ID (Gap B).
+                if (
+                    self._configured_hgi_id is not None
+                    and hgi_id != self._configured_hgi_id
+                ):
+                    _LOGGER.warning(
+                        "PortTransport: !I returned %s but "
+                        "configured_hgi_id is %s — mismatch on %s. "
+                        "Using the discovered ID.",
+                        hgi_id,
+                        self._configured_hgi_id,
+                        redact_url(self._port_name),
+                    )
+                self._init_fut.set_result(None)
+                self._make_connection(
+                    gateway_id=hgi_id  # type: ignore[arg-type]
+                )
+                return
+            except TimeoutError:
+                _LOGGER.warning(
+                    "PortTransport: !I command timed out after "
+                    "%.1fs on %s, falling back",
+                    _ID_COMMAND_TIMEOUT,
+                    redact_url(self._port_name),
+                )
+            finally:
+                # Restore the original frame reader.
+                self._frame_read = original_frame_read  # type: ignore[method-assign]
+
+            # Fall back to configured_hgi_id (Gap B) or signature.
+            if self._configured_hgi_id is not None:
+                _LOGGER.info(
+                    "PortTransport: using configured_hgi_id %s "
+                    "after !I failure",
+                    self._configured_hgi_id,
+                )
+                if not self._init_fut.done():
+                    self._init_fut.set_result(None)
+                self._make_connection(
+                    gateway_id=self._configured_hgi_id  # type: ignore[arg-type]
+                )
+                return
+
+            # Final fallback: try the _PUZZ signature probe.
+            _LOGGER.info(
+                "PortTransport: falling back to _PUZZ signature "
+                "probe after !I failure"
+            )
+            await connect_with_signature()
+
+        # Dispatch based on disable_sending, _is_hgi80, and
+        # signature_policy.
+        # disable_sending=True always skips the probe (permanent
+        # receive-only, backward-compatible).  HGI80 auto-selects SKIP
+        # (Gap C) — it's not evofw3 and can't respond to !I or _PUZZ.
+        # When False and not HGI80, the signature_policy controls
+        # startup behavior:
+        # - IMMEDIATE: probe right after open (default, backward-compatible)
+        # - DELAYED: wait startup_grace seconds, then probe
+        # - SKIP: no probe; identity learned from inbound traffic
+        # - ID_COMMAND: send !I to discover HGI ID over serial (Gap E)
         if self._disable_sending:
             self._init_task = self._loop.create_task(
                 connect_sans_signature(),
                 name="PortTransport.connect_sans_signature()",
+            )
+        elif self._is_hgi80:
+            # Gap C: HGI80 can't respond to !I or _PUZZ — auto-SKIP.
+            _LOGGER.info(
+                "PortTransport: HGI80 detected, auto-selecting SKIP (Gap C)"
+            )
+            self._init_task = self._loop.create_task(
+                connect_sans_signature(),
+                name="PortTransport.connect_sans_signature(hgi80)",
+            )
+        elif self._signature_policy is SignaturePolicy.SKIP:
+            self._init_task = self._loop.create_task(
+                connect_sans_signature(),
+                name="PortTransport.connect_sans_signature(skip)",
+            )
+        elif self._signature_policy is SignaturePolicy.ID_COMMAND:
+            self._init_task = self._loop.create_task(
+                connect_with_id_command(),
+                name="PortTransport.connect_with_id_command()",
+            )
+        elif self._signature_policy is SignaturePolicy.DELAYED:
+            self._init_task = self._loop.create_task(
+                connect_with_delayed_signature(),
+                name="PortTransport.connect_with_delayed_signature()",
             )
         else:
             self._init_task = self._loop.create_task(
@@ -403,11 +646,34 @@ class PortTransport(_FullTransport):
                 name="PortTransport.connect_with_signature()",
             )
 
+        # Extend the init timeout when delayed to account for the
+        # grace period on top of the signature probe window.
+        init_timeout: float = _SIGNATURE_MAX_SECS
+        if (
+            self._signature_policy is SignaturePolicy.DELAYED
+            and not self._disable_sending
+        ):
+            init_timeout += self._startup_grace
+        elif (
+            self._signature_policy is SignaturePolicy.ID_COMMAND
+            and not self._disable_sending
+        ):
+            # ID_COMMAND: grace + !I timeout + slack for fallback.
+            # If !I fails, the fallback (configured_hgi_id or _PUZZ)
+            # needs additional time.
+            init_timeout = (
+                self._startup_grace + _ID_COMMAND_TIMEOUT + _SIGNATURE_MAX_SECS
+            )
+
         try:
-            await asyncio.wait_for(self._init_fut, timeout=_SIGNATURE_MAX_SECS)
+            await asyncio.wait_for(self._init_fut, timeout=init_timeout)
         except TimeoutError as err:
+            # Cancel the signature probe task so it stops writing
+            # probes to a transport the caller considers failed.
+            if init_task := getattr(self, "_init_task", None):
+                init_task.cancel()
             raise exc.TransportSerialError(
-                f"Failed to initialise Transport within {_SIGNATURE_MAX_SECS} secs"
+                f"Failed to initialise Transport within {init_timeout:.0f} secs"
             ) from err
 
     async def _leak_sem(self) -> None:
@@ -456,16 +722,123 @@ class PortTransport(_FullTransport):
                 self._data_received(data)
             except SerialException as err:
                 if not self._closing:
-                    self._close(exc=exc.TransportSerialError(err))
+                    self._connection_lost(exc.TransportSerialError(err))
 
     def _connection_lost(self, error: Exception | None) -> None:
         """Handle underlying transport disconnection.
 
+        When ``enable_reconnect`` is True and the transport is not
+        being explicitly closed, close only the underlying serial
+        transport (keeping the PortTransport alive) and start a
+        reconnect loop with exponential backoff (Phase 2, issue 1119).
+
+        When ``enable_reconnect`` is False, perform a full close via
+        ``_close()`` which marks the transport as closing and notifies
+        the protocol.
+
         :param error: The exception that caused connection loss, or None.
         :type error: Exception | None
         """
-        if not self._closing:
-            self._close(exc=exc.TransportSerialError(error) if error else None)
+        if self._closing:
+            return
+
+        if self._enable_reconnect:
+            if (
+                self._reconnect_task is not None
+                and not self._reconnect_task.done()
+            ):
+                return
+            if self._serial_transport is not None:
+                with contextlib.suppress(Exception):
+                    self._serial_transport.close()
+                self._serial_transport = None
+            if init_task := getattr(self, "_init_task", None):
+                init_task.cancel()
+            transport_err = (
+                error
+                if isinstance(error, exc.TransportSerialError)
+                else exc.TransportSerialError(error)
+                if error
+                else None
+            )
+            if not self._loop.is_closed():
+                with contextlib.suppress(RuntimeError):
+                    self._loop.call_soon_threadsafe(
+                        partial(self._protocol.connection_lost, transport_err)
+                    )
+            _LOGGER.info(
+                "PortTransport: connection lost to %s, starting "
+                "reconnect loop",
+                redact_url(self._port_name),
+            )
+            self._reconnect_task = self._loop.create_task(
+                self._reconnect_loop(),
+                name="PortTransport._reconnect_loop()",
+            )
+            return
+
+        self._close(exc=exc.TransportSerialError(error) if error else None)
+
+    async def _reconnect_loop(self) -> None:
+        """Reconnect to the serial port with exponential backoff.
+
+        Tries to reopen the port up to ``max_reconnect_attempts`` times
+        with exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 30s).
+        On successful reopen, re-runs the signature probe.  Uses the
+        original port name (which may be a stable ``/dev/serial/by-id/``
+        path) so the same physical device is found after replug.
+        """
+        backoff = 1.0
+        max_backoff = 30.0
+        self._reconnecting = True
+        try:
+            for attempt in range(1, self._max_reconnect_attempts + 1):
+                await asyncio.sleep(backoff)
+                if self._closing:
+                    return
+                _LOGGER.info(
+                    "PortTransport: reconnect attempt %d/%d to %s (backoff %.1fs)",
+                    attempt,
+                    self._max_reconnect_attempts,
+                    redact_url(self._port_name),
+                    backoff,
+                )
+                # Reset connection state for a fresh attempt
+                self._serial_transport = None
+                self._init_fut = self._loop.create_future()
+                try:
+                    await self._create_connection()
+                    _LOGGER.info(
+                        "PortTransport: reconnected to %s on attempt %d",
+                        redact_url(self._port_name),
+                        attempt,
+                    )
+                    return
+                except Exception as err:
+                    _LOGGER.warning(
+                        "PortTransport: reconnect attempt %d to %s failed: %s",
+                        attempt,
+                        redact_url(self._port_name),
+                        err,
+                    )
+                    backoff = min(backoff * 2, max_backoff)
+        finally:
+            self._reconnecting = False
+        _LOGGER.error(
+            "PortTransport: giving up after %d reconnect attempts to %s",
+            self._max_reconnect_attempts,
+            redact_url(self._port_name),
+        )
+        # Permanently close after exhaustion — without this, the
+        # transport stays in a zombie state (not connected, not
+        # closing, not reconnecting) and a subsequent
+        # _connection_lost call would start a fresh reconnect loop.
+        self._close(
+            exc=exc.TransportSerialError(
+                f"Reconnect failed after {self._max_reconnect_attempts} "
+                f"attempts to {redact_url(self._port_name)}"
+            )
+        )
 
     def _packet_read(self, packet: Packet) -> None:
         if (
@@ -510,7 +883,12 @@ class PortTransport(_FullTransport):
         try:
             self._write(data)
         except SerialException as err:
-            self._abort(exc.TransportSerialError(err))
+            transport_err = exc.TransportSerialError(err)
+            if self._enable_reconnect:
+                self._connection_lost(transport_err)
+            else:
+                self._abort(transport_err)
+            raise transport_err from err
 
     def _write(self, data: bytes) -> None:
         """Perform the actual write to the serial port.
@@ -555,3 +933,6 @@ class PortTransport(_FullTransport):
 
         if conn_task := getattr(self, "_conn_task", None):
             conn_task.cancel()
+
+        if reconnect_task := getattr(self, "_reconnect_task", None):
+            reconnect_task.cancel()

@@ -51,8 +51,10 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
         try:
             serial_for_url(serial_port, do_not_open=True)
         except (SerialException, ValueError) as err:
+            from .transport.helpers import redact_url
+
             raise exc.TransportSerialError(
-                f"Unable to find {serial_port}: {err}"
+                f"Unable to find {redact_url(serial_port)}: {err}"
             ) from err
         return None
 

@@ -166,9 +166,17 @@ async def test_is_wanted_addrs_active_hgi(protocol: DummyProtocol) -> None:
 
 
 async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
-    """Test that sending to the generic HGI address is permitted."""
+    """Test that the generic HGI address is always permitted.
+
+    HGI_DEV_ADDR (18:000730) is the generic HGI broadcast address used
+    by HGI80s that can't send with their real address.  It's always in
+    the include list (added in __init__), so it passes both for sending
+    and receiving (issue 1185 — HGI80 echo was being filtered).
+    """
     protocol.enforce_include = True
-    protocol._include = [DeviceIdT("01:111111")]
+    # Preserve the default include entries (ALL_DEV_ADDR, NON_DEV_ADDR,
+    # HGI_DEV_ADDR) and add a known device.
+    protocol._include += [DeviceIdT("01:111111")]
 
     # When sending, HGI_DEV_ADDR (18:000730) is always allowed
     assert (
@@ -177,12 +185,12 @@ async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
         )
         is True
     )
-    # But not when receiving
+    # Also when receiving (HGI80 echo comes back with src=HGI_DEV_ADDR)
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), HGI_DEV_ADDR.id, sending=False
+            HGI_DEV_ADDR.id, DeviceIdT("01:111111"), sending=False
         )
-        is False
+        is True
     )
 
 
@@ -516,6 +524,153 @@ async def test_packet_received_excluded_bypasses_to_dto(
     mock_packet.to_dto.assert_not_called()
 
 
+async def test_packet_received_hgi80_echo_passes_enforce_include(
+    protocol: DummyProtocol,
+) -> None:
+    """HGI80 echo (src=18:000730) passes the device_id filter even with
+    enforce_include=True.
+
+    The HGI80 firmware transmits with 18:000730 as the source address.
+    The echo comes back with src=HGI_DEV_ADDR.  Without HGI_DEV_ADDR in
+    the include list, enforce_include would filter it out, causing echo
+    timeouts (issue 1185).
+    """
+    protocol.enforce_include = True
+    protocol._include += [DeviceIdT("01:111111")]  # known device
+
+    mock_packet = MagicMock()
+    mock_packet.src.id = HGI_DEV_ADDR.id  # 18:000730
+    mock_packet.dst.id = "01:111111"
+
+    with patch(
+        "ramses_tx.protocol.base._BaseProtocol._packet_received"
+    ) as mock_base_recv:
+        protocol._packet_received(mock_packet)
+        mock_base_recv.assert_called_once_with(mock_packet)
+
+
+async def test_packet_received_hgi80_echo_no_raw_handlers(
+    protocol: DummyProtocol,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """HGI80 echo with no raw handlers is excluded at the fast-exit path
+    when HGI_DEV_ADDR is not in the include list (regression guard).
+
+    This test documents the OLD behavior (before the fix) to ensure
+    the HGI_DEV_ADDR include list entry is not accidentally removed.
+    """
+    protocol.enforce_include = True
+    # Deliberately remove HGI_DEV_ADDR from the include list to simulate
+    # the pre-fix state.  This should cause the packet to be filtered.
+    protocol._include = [
+        DeviceIdT("01:111111"),
+        DeviceIdT("63:262142"),  # ALL_DEV_ADDR
+        DeviceIdT("--:------"),  # NON_DEV_ADDR
+        # HGI_DEV_ADDR intentionally missing
+    ]
+
+    mock_packet = MagicMock()
+    mock_packet.src.id = HGI_DEV_ADDR.id
+    mock_packet.dst.id = "01:111111"
+
+    with (
+        caplog.at_level(logging.DEBUG),
+        patch(
+            "ramses_tx.protocol.base._BaseProtocol._packet_received"
+        ) as mock_base_recv,
+    ):
+        protocol._packet_received(mock_packet)
+        mock_base_recv.assert_not_called()
+
+    assert "Packet excluded by device_id filter" in caplog.text
+
+
+# --- _last_rx_time TESTS (gateway health, issue 1185) ---
+
+
+async def test_last_rx_time_set_on_received(protocol: DummyProtocol) -> None:
+    """packet_received sets _last_rx_time for every received packet.
+
+    This is the core guarantee for gateway health: the protocol tracks
+    the last time ANY packet was received, regardless of whether it
+    passed the device_id filter (issue 1185).
+    """
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    assert protocol._last_rx_time is None
+
+    before = dt.now()
+    pkt = Packet(
+        dt.now(),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt)
+
+    rx_time: dt | None = protocol._last_rx_time
+    assert rx_time is not None
+    assert rx_time >= before
+
+
+async def test_last_rx_time_set_even_when_filtered(
+    protocol: DummyProtocol,
+) -> None:
+    """_last_rx_time is set even when the packet is filtered out.
+
+    The gateway health check must see activity even if all recent
+    packets are from unknown devices that get dropped by the
+    device_id filter.
+    """
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    # Exclude the source device so the packet gets filtered
+    protocol._exclude = [DeviceIdT("01:999999")]
+
+    assert protocol._last_rx_time is None
+
+    before = dt.now()
+    pkt = Packet(
+        dt.now(),
+        "000  I --- 01:999999 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt)
+
+    # _this_msg should NOT be set (packet was filtered)
+    assert protocol._this_msg is None
+    # But _last_rx_time SHOULD be set (packet was received)
+    rx_time: dt | None = protocol._last_rx_time
+    assert rx_time is not None
+    assert rx_time >= before
+
+
+async def test_last_rx_time_updated_on_each_packet(
+    protocol: DummyProtocol,
+) -> None:
+    """_last_rx_time is updated on every packet, not just the first."""
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    pkt1 = Packet(
+        dt(2026, 1, 1, 12, 0, 0),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt1)
+    first_rx = protocol._last_rx_time
+    assert first_rx == dt(2026, 1, 1, 12, 0, 0)
+
+    pkt2 = Packet(
+        dt(2026, 1, 1, 12, 0, 5),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt2)
+    assert protocol._last_rx_time == dt(2026, 1, 1, 12, 0, 5)
+    assert protocol._last_rx_time > first_rx
+
+
 # --- OUTBOUND COMMAND TESTS (send_cmd) ---
 
 
@@ -636,3 +791,41 @@ async def test_patch_cmd_if_needed_hgi80_no_change_when_impersonating(
 
     assert patched_cmd is original_cmd  # no change — not the HGI ID
     assert patched_cmd.addr1 == "21:057310"
+
+
+async def test_patch_cmd_if_needed_dynamic_evofw3_from_transport(
+    protocol: DummyProtocol,
+) -> None:
+    """_patch_cmd_if_needed queries the transport for evofw3 dynamically.
+
+    In a PooledTransport with a serial HGI80 primary + MQTT callback
+    children, the cached ``_is_evofw3`` is False (set during
+    ``connection_made`` for the HGI80).  But the pool's
+    ``get_extra_info(SZ_IS_EVOFW3)`` returns True because of the
+    callback-driven children.  The patch should use the live value
+    from the transport, not the stale cached value (issue 1185).
+    """
+    from ramses_tx.const import SZ_IS_EVOFW3
+    from ramses_tx.dtos import CommandDTO as Command
+
+    # Simulate: cached _is_evofw3 is False (HGI80 primary), but the
+    # transport reports True (callback-driven MQTT child in the pool)
+    protocol._is_evofw3 = False
+    protocol._known_hgi = DeviceIdT("18:123456")
+    protocol._transport = MagicMock()
+    protocol._transport.get_extra_info = lambda name, default=None: (
+        True if name == SZ_IS_EVOFW3 else default
+    )
+
+    # Command with the real HGI ID as source — HGI80 patch would swap
+    # it to 18:000730 if it used the cached _is_evofw3=False.
+    original_cmd = Command.from_cli(
+        "RQ --- 18:123456 01:222222 --:------ 12B0 001 00"
+    )
+
+    patched_cmd = protocol._patch_cmd_if_needed(original_cmd)
+
+    # With dynamic evofw3=True from the transport, the HGI80 patch
+    # should NOT fire — the command is returned unchanged.
+    assert patched_cmd is original_cmd
+    assert patched_cmd.addr1 == "18:123456"

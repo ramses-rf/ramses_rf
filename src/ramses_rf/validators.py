@@ -153,6 +153,7 @@ def instantiate_devices(gateway: Gateway, msg: Message) -> bool:
                 and getattr(msg.src, "type", None) in ("18", DevType.HGI)
                 and msg.src.id != HGI_DEV_ADDR.id
                 and msg.src.id != hgi_id
+                and msg.src.id not in gateway.config.known_list
             ):
                 # Foreign HGI as source — skip device creation, continue
                 # processing (the dst device will be created below)

@@ -29,6 +29,7 @@ from ramses_tx.schemas import (
     SZ_ENFORCE_KNOWN_LIST,
     SZ_KNOWN_LIST,
 )
+from ramses_tx.transport.helpers import redact_url
 from ramses_tx.typing import PayloadT
 
 from .config import GatewayConfig as GatewayConfig, strip_traits
@@ -302,7 +303,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         if not self._engine.ser_name:
             return f"Gateway(input_file={self._engine._input_file})"
         return (
-            f"Gateway(port_name={self._engine.ser_name}, "
+            f"Gateway(port_name={redact_url(self._engine.ser_name)}, "
             f"port_config={self._engine._port_config})"
         )
 

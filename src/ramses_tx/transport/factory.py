@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,7 @@ from ..schemas import SCH_SERIAL_PORT_CONFIG
 from ..typing import PortConfigT, RamsesProtocolT, SerPortNameT
 from .base import TransportConfig
 from .file import FileTransport
+from .helpers import redact_url
 from .mqtt import MqttTransport
 from .pooled import PooledTransport, _ChildProtocolProxy
 from .port import PortTransport
@@ -101,7 +103,7 @@ async def transport_factory(
             "Input: packet_dict: %s, packet_log: %s, port_name: %s",
             packet_dict,
             packet_log,
-            port_name,
+            redact_url(port_name),
         )
         raise exc.TransportSourceInvalid(
             "Packet source must be exactly one of: packet_dict, packet_log, port_name"
@@ -181,7 +183,7 @@ async def transport_factory(
     except exc.TransportSerialError as err:
         transport_port.close()
         raise exc.TransportSourceInvalid(
-            f"Unable to open the serial port {port_name}: {err}"
+            f"Unable to open the serial port {redact_url(port_name)}: {err}"
         ) from err
     except Exception:
         transport_port.close()
@@ -200,6 +202,9 @@ async def pooled_transport_factory(
     extra: dict[str, object] | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     dedup_window: float = 0.5,
+    callback_port_names: list[str] | None = None,
+    per_child_config_overrides: list[dict[str, object]] | None = None,
+    accepted_hgis: set[str] | None = None,
 ) -> RamsesTransportT:
     """Create a :class:`PooledTransport` from multiple port names.
 
@@ -207,12 +212,29 @@ async def pooled_transport_factory(
     Zigbee) created with a :class:`_ChildProtocolProxy` that routes
     inbound packets through the pool's deduplication filter.
 
+    ``callback_port_names`` reserves additional callback-driven child
+    slots (transport stays ``None``).  The caller is responsible for
+    wiring a callback adapter (e.g. ``MqttCallbackPoolAdapter``) to
+    feed packets into these children.  This enables hybrid pools
+    where serial children are transport-driven and MQTT children are
+    callback-driven via the HA-native MQTT integration (Phase 2,
+    issue 1119 — no paho inside HA).
+
+    ``per_child_config_overrides`` allows each transport-driven child
+    to receive its own :class:`TransportConfig` derived from the shared
+    ``config`` via :func:`dataclasses.replace`.  This is required for
+    mixed USB pools where different device types need different
+    ``signature_policy``, ``startup_grace``, or ``configured_hgi_id``
+    values (Gap D, Phase 2).  If provided, must be the same length as
+    ``port_names``.
+
     :param protocol: The real protocol that receives deduplicated
         packets.
     :type protocol: RamsesProtocolT
     :param config: Transport configuration shared by all children.
     :type config: TransportConfig
-    :param port_names: List of port names (serial, MQTT URLs, etc.).
+    :param port_names: List of port names for transport-driven
+        children (serial, MQTT URLs, etc.).
     :type port_names: list[SerPortNameT]
     :param port_configs: Optional per-child port configurations for
         serial ports.  If provided, must be the same length as
@@ -225,17 +247,39 @@ async def pooled_transport_factory(
     :type loop: asyncio.AbstractEventLoop | None
     :param dedup_window: Deduplication window in seconds.
     :type dedup_window: float
-    :returns: A :class:`PooledTransport` wrapping all child transports.
+    :param callback_port_names: Optional list of port names for
+        callback-driven children (transport stays ``None``).  The
+        caller wires the callback adapter for these children.
+    :type callback_port_names: list[str] | None
+    :param per_child_config_overrides: Optional per-child config
+        overrides (Gap D).  Each dict is merged into the shared
+        ``config`` via :func:`dataclasses.replace`.  Must be the same
+        length as ``port_names`` if provided.
+    :type per_child_config_overrides: list[dict[str, object]] | None
+    :param accepted_hgis: Optional HGI IDs eligible for outbound routing.
+    :type accepted_hgis: set[str] | None
+    :returns: A :class:`PooledTransport` wrapping all child
+        transports.  Transport-driven children come first (indices
+        0..len(port_names)-1), callback-driven children follow
+        (indices len(port_names)..len(port_names)+len(callback_port_names)-1).
     :rtype: PooledTransport
-    :raises ValueError: If ``port_names`` is empty or ``port_configs``
-        length doesn't match.
+    :raises ValueError: If ``port_names`` is empty, ``port_configs``
+        length doesn't match, or ``per_child_config_overrides`` length
+        doesn't match.
     """
-    if not port_names:
+    if not port_names and not callback_port_names:
         raise ValueError(
-            "pooled_transport_factory requires at least one port_name"
+            "pooled_transport_factory requires at least one port_name "
+            "or callback_port_name"
         )
     if port_configs is not None and len(port_configs) != len(port_names):
         raise ValueError("port_configs must be the same length as port_names")
+    if per_child_config_overrides is not None and len(
+        per_child_config_overrides
+    ) != len(port_names):
+        raise ValueError(
+            "per_child_config_overrides must be the same length as port_names"
+        )
 
     # Apply regex rules to the Protocol before binding any Transport.
     if config.use_regex:
@@ -243,20 +287,38 @@ async def pooled_transport_factory(
 
     # Create the pool first so we can create child proxies.
     # Pre-allocate children with None transports; successful children
-    # are injected after creation.
-    num_children = len(port_names)
+    # are injected after creation.  Callback-driven children stay None.
+    all_port_names = [str(p) for p in port_names]
+    if callback_port_names:
+        all_port_names.extend(callback_port_names)
+    num_children = len(all_port_names)
     pool = PooledTransport(
         protocol,
         [None] * num_children,  # placeholders, replaced below
         config=config,
         loop=loop,
         dedup_window=dedup_window,
-        port_names=[str(p) for p in port_names],
+        port_names=all_port_names,
+        accepted_hgis=accepted_hgis,
     )
 
+    # Create transport-driven children (serial, MQTT paho, Zigbee).
     for i, pname in enumerate(port_names):
         proxy = _ChildProtocolProxy(pool, i)
         pconfig = port_configs[i] if port_configs else None
+
+        # Apply per-child config overrides (Gap D, Phase 2).
+        # Each override is merged into the shared config via
+        # dataclasses.replace, allowing per-child signature_policy,
+        # startup_grace, configured_hgi_id, etc.
+        child_config = config
+        if per_child_config_overrides is not None:
+            override = per_child_config_overrides[i]
+            if override:
+                child_config = dataclasses.replace(
+                    config,
+                    **override,  # type: ignore[arg-type]
+                )
 
         # Create the child transport via the standard factory, but
         # with the proxy protocol instead of the real one.
@@ -266,10 +328,10 @@ async def pooled_transport_factory(
         try:
             child = await _create_single_child(
                 proxy,
-                config=config,
+                config=child_config,
                 port_name=pname,
                 port_config=pconfig,
-                extra=extra,
+                extra=dict(extra) if extra is not None else None,
                 loop=loop,
             )
         except Exception as err:
@@ -277,13 +339,26 @@ async def pooled_transport_factory(
                 "PooledTransport: child %d (%s) failed to connect: %s — "
                 "continuing with remaining children",
                 i,
-                pname,
+                redact_url(pname),
                 err,
             )
             continue
 
         # Replace the placeholder with the real transport.
         pool._children[i].transport = child
+
+    # Callback-driven children (indices len(port_names)..) stay None.
+    # The caller wires the callback adapter (e.g. MqttCallbackPoolAdapter)
+    # to feed packets into these children via the pool's
+    # _on_child_packet() method.
+    if callback_port_names:
+        _LOGGER.info(
+            "PooledTransport: %d callback-driven children reserved "
+            "(indices %d..%d) for external callback adapter",
+            len(callback_port_names),
+            len(port_names),
+            num_children - 1,
+        )
 
     # Wait for at least one child to connect.
     await pool._wait_for_any_connection(
@@ -365,7 +440,7 @@ async def _create_single_child(
     except exc.TransportSerialError as err:
         transport_port.close()
         raise exc.TransportSourceInvalid(
-            f"Unable to open the serial port {port_name}: {err}"
+            f"Unable to open the serial port {redact_url(port_name)}: {err}"
         ) from err
     except Exception:
         transport_port.close()

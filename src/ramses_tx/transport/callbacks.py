@@ -33,6 +33,10 @@ Discovery (``MqttDiscoveryCallback``):
 
 - ``on_unknown_hgi`` — an unknown HGI was observed on the wildcard
   topic.  Does not create a ``PoolChild``.
+- ``on_mqtt_capable`` — a *configured* HGI was observed online via
+  LWT on the wildcard topic.  Used to update the HGI's ``_comment``
+  to include ``mqtt`` in its supported transports.  Does not create
+  a ``PoolChild`` (the HGI is already a pool member).
 """
 
 from __future__ import annotations
@@ -81,6 +85,27 @@ class MqttDiscoveryCallback(Protocol):
 
         :param hgi_id: The unknown HGI device ID.
         :param topic: The MQTT topic where it was observed.
+        """
+
+    def on_mqtt_capable(
+        self,
+        hgi_id: DeviceIdT,
+        *,
+        topic: str | None = None,
+    ) -> None:
+        """Report that a configured HGI is online via MQTT LWT.
+
+        Called when an LWT ``online`` message is received for an HGI
+        that is already in the configured pool.  The coordinator uses
+        this to update the HGI's ``_comment`` to include ``mqtt`` in
+        its supported transports (e.g. ``"Supports: usb, mqtt"``).
+
+        Unlike :meth:`on_unknown_hgi`, this does **not** add the HGI
+        to the schema as a discovery candidate — the HGI is already
+        a pool member.
+
+        :param hgi_id: The configured HGI device ID.
+        :param topic: The MQTT topic where the LWT was observed.
         """
 
 

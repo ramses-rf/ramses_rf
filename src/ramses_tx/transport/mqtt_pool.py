@@ -70,8 +70,16 @@ class MqttCallbackPoolAdapter:
         *,
         discovery_callback: MqttDiscoveryCallback | None = None,
         accepted_hgi_ids: set[str] | None = None,
+        callback_child_start_index: int = 0,
     ) -> None:
-        """Initialise the callback pool adapter."""
+        """Initialise the callback pool adapter.
+
+        :param callback_child_start_index: Index of the first
+            callback-driven child in the pool.  For MQTT-only pools
+            this is 0 (default).  For hybrid pools (serial + MQTT),
+            this is the number of transport-driven (serial) children
+            that come before the callback-driven children.
+        """
         self._pool = pool
         self._outbound = outbound
         self._discovery_callback = discovery_callback
@@ -82,11 +90,14 @@ class MqttCallbackPoolAdapter:
 
         # Pre-create children in the pool for each configured HGI.
         # The pool must have enough slots (transports list entries).
+        # For hybrid pools, callback-driven children start at
+        # callback_child_start_index (after transport-driven children).
         for i, hgi_id in enumerate(configured_hgi_ids):
-            if i >= len(pool._children):
+            child_idx = callback_child_start_index + i
+            if child_idx >= len(pool._children):
                 break
-            self._hgi_to_child[hgi_id] = i
-            child = pool._child_by_id(i)
+            self._hgi_to_child[hgi_id] = child_idx
+            child = pool._child_by_id(child_idx)
             child.hgi_id = DeviceIdT(hgi_id)
             child.callback_driven = True
             # Ownerless discovery candidates are receive-only.
@@ -96,8 +107,8 @@ class MqttCallbackPoolAdapter:
                 child.accepted = hgi_id in accepted_hgi_ids
             _LOGGER.debug(
                 "MqttCallbackPool: pre-created child %d for HGI %s "
-                "(accepted=%s)",
-                i,
+                "(accepted=%s, callback_driven=True)",
+                child_idx,
                 hgi_id,
                 child.accepted,
             )
@@ -141,6 +152,7 @@ class MqttCallbackPoolAdapter:
         child.availability = NodeAvailability.ONLINE
         child.send_ready = True
         child.last_pkt_time = dt_now()
+        child.consecutive_errors = 0
         if hgi_id is not None and child.hgi_id is None:
             child.hgi_id = hgi_id
 

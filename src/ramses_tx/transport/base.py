@@ -9,6 +9,7 @@ import logging
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt
+from enum import Enum, auto
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
@@ -26,6 +27,30 @@ _MAX_TRACKED_DURATION = 300
 _DBG_DISABLE_REGEX_WARNINGS = False
 
 _TxKeyT: TypeAlias = tuple[str, str, str, str, str, str]
+
+
+class SignaturePolicy(Enum):
+    r"""Startup signature probe policy for serial transports.
+
+    Controls when (and whether) the startup ``7FFF`` signature probe
+    is sent to discover the HGI device ID after port open.
+
+    - ``IMMEDIATE``: send probes immediately after open (default,
+      backward-compatible with existing single-USB behavior).
+    - ``DELAYED``: wait ``startup_grace`` seconds after open before
+      sending probes (for ESP32 USB devices that reset on open).
+    - ``SKIP``: never send probes; the child is receive-only until the
+      HGI ID is learned from inbound traffic or configured explicitly.
+    - ``ID_COMMAND``: send evofw3's ``!I\r`` serial command to
+      discover the HGI ID directly over serial (no RF loopback needed).
+      Works on all evofw3 hardware, including ATmega devices that
+      cannot echo the ``_PUZZ`` signature (Gap E, Phase 2).
+    """
+
+    IMMEDIATE = auto()
+    DELAYED = auto()
+    SKIP = auto()
+    ID_COMMAND = auto()
 
 
 @dataclass
@@ -50,6 +75,31 @@ class TransportConfig:
     :type timeout: float | None
     :param app_context: Optional application context.
     :type app_context: Any | None
+    :param signature_policy: Startup signature probe policy for serial
+        transports (Phase 2, issue 1119).  ``IMMEDIATE`` sends probes
+        right after port open (default, backward-compatible).
+        ``DELAYED`` waits ``startup_grace`` seconds before probing
+        (for ESP32 USB devices that reset on open).  ``SKIP`` never
+        probes — the child is receive-only until identity is learned.
+    :type signature_policy: SignaturePolicy
+    :param startup_grace: Grace period in seconds before sending
+        startup commands when ``signature_policy`` is ``DELAYED`` or
+        ``ID_COMMAND``.  Ignored for ``IMMEDIATE`` and ``SKIP``.  Default
+        3.0s based on the hardware feasibility gate (ESP32 cold boot ~1.9s).
+    :type startup_grace: float | None
+    :param enable_reconnect: Enable automatic reconnect with exponential
+        backoff when the serial port disconnects (Phase 2, issue 1119).
+        Default False preserves existing single-USB behavior.
+    :type enable_reconnect: bool
+    :param max_reconnect_attempts: Maximum number of reconnect attempts
+        before giving up.  Default 5.
+    :type max_reconnect_attempts: int
+    :param configured_hgi_id: Manually configured HGI device ID for
+        devices that cannot be queried via ``!I`` or ``_PUZZ`` (e.g.
+        HGI80), or as a fallback when identity discovery fails.  A
+        discovered identity takes precedence and is checked against
+        this value (Gap B, Phase 2).
+    :type configured_hgi_id: str | None
     """
 
     disable_sending: bool = False
@@ -61,6 +111,11 @@ class TransportConfig:
     use_regex: dict[str, dict[str, str]] = field(default_factory=dict)
     timeout: float | None = None
     app_context: Any | None = None
+    signature_policy: SignaturePolicy = SignaturePolicy.IMMEDIATE
+    startup_grace: float | None = None
+    enable_reconnect: bool = False
+    max_reconnect_attempts: int = 5
+    configured_hgi_id: str | None = None
 
 
 class _BaseTransport:
@@ -240,8 +295,28 @@ class _ReadTransport(_BaseTransport, TransportInterface):
         return False
 
     def _frame_read(self, dtm_str: str, frame: str) -> None:
-        """Make a Packet from the Frame and process it."""
+        """Make a Packet from the Frame and process it.
+
+        Filters evofw3 debug responses (lines starting with ``#``)
+        before the packet parser so they don't get logged as
+        ``PacketInvalid`` (Gap F, Phase 2).  These are valid evofw3
+        serial command responses (version, ID, config), not RAMSES
+        packets.
+
+        :param dtm_str: Timestamp string from the transport.
+        :type dtm_str: str
+        :param frame: Raw ASCII frame string from transport.
+        :type frame: str
+        """
         if not frame.strip():
+            return
+
+        # Gap F: filter evofw3 debug responses (lines starting with #).
+        # These are ``!V``, ``!I``, ``!C`` etc. command responses, not
+        # RAMSES packets.  Log at debug level instead of warning.
+        stripped = frame.strip()
+        if stripped.startswith("#"):
+            _LOGGER.debug("evofw3 debug response: %s", stripped)
             return
 
         is_echo = self._is_recent_tx(frame)
@@ -314,6 +389,9 @@ class _FullTransport(_ReadTransport):
             else _MAX_TRACKED_TRANSMITS
         )
         self._disable_sending: bool = config.disable_sending
+        self._signature_policy: SignaturePolicy = config.signature_policy
+        self._startup_grace: float = config.startup_grace or 3.0
+        self._configured_hgi_id: str | None = config.configured_hgi_id
 
     def _dt_now(self) -> dt:
         """Get a precise datetime, using the current dtm."""

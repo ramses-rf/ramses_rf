@@ -25,6 +25,7 @@ from ..const import (
     MAX_GAP_DURATION,
     MAX_NUM_REPEATS,
     SZ_ACTIVE_HGI,
+    SZ_IS_EVOFW3,
     Code,
     Priority,
 )
@@ -92,6 +93,13 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
 
         self._this_msg: PacketDTO | None = None
         self._prev_msg: PacketDTO | None = None
+
+        # Last time ANY valid packet was received from the transport,
+        # regardless of whether it passed the device_id filter.  Used by
+        # HgiGateway.is_active() to determine gateway health — the
+        # gateway is "active" if it is receiving RF traffic, even if the
+        # traffic is from devices not yet in the schema (issue 1185).
+        self._last_rx_time: dt | None = None
 
         self._is_evofw3: bool | None = None
 
@@ -318,10 +326,26 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         18:000730, as the HGI80 firmware requires the placeholder as
         source for its own transmissions.  Using the real ID causes a
         silent drop and WantEcho timeout (issue 835).
+
+        For PooledTransports, the evofw3 flag is queried dynamically
+        (not from the cached ``_is_evofw3``) so that callback-driven
+        children (e.g. ramses_esp via MQTT) are correctly treated as
+        evofw3-compatible even if they join the pool after
+        ``connection_made`` was called for the serial primary (issue 1185).
         """
+        # Query the transport for the current evofw3 status — this is
+        # dynamic for PooledTransports (children may join after
+        # connection_made).  Falls back to the cached value for
+        # non-pooled transports (or when no transport is bound).
+        is_evofw3 = self._is_evofw3
+        if self._transport:
+            live = self._transport.get_extra_info(SZ_IS_EVOFW3)
+            if live is not None:
+                is_evofw3 = live
+
         if (
             self.hgi_id
-            and self._is_evofw3  # Only patch if using evofw3 (not HGI80)
+            and is_evofw3  # Only patch if using evofw3 (not HGI80)
             and command.addr1 == HGI_DEV_ADDR.id
             and self.hgi_id != HGI_DEV_ADDR.id
         ):
@@ -340,7 +364,7 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         # silent drop and WantEcho timeout (issue 835, cc 864).
         if (
             self.hgi_id
-            and not self._is_evofw3  # HGI80
+            and not is_evofw3  # HGI80
             and command.addr1 == self.hgi_id
             and self.hgi_id != HGI_DEV_ADDR.id
         ):
@@ -502,6 +526,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         else:
             _LOGGER.debug("Recv'd: %s %s", packet.rssi, packet)
 
+        # Track last RX time for gateway health — before the device_id
+        # filter so that traffic from unknown devices still counts as
+        # gateway activity (issue 1185).
+        self._last_rx_time = packet.dtm
+
         self._packet_received(packet)
 
     def _packet_received(self, packet: Packet) -> None:
@@ -559,7 +588,13 @@ class _DeviceIdFilterMixin(_BaseProtocol):
         self.enforce_include = enforce_include_list
         self._exclude = list(exclude_list)
         self._include = list(include_list)
-        self._include += [ALL_DEV_ADDR.id, NON_DEV_ADDR.id]
+        # HGI_DEV_ADDR (18:000730) is the generic HGI broadcast address
+        # used by HGI80s that can't send with their real address.  When
+        # the HGI80 patch swaps the source to HGI_DEV_ADDR for TX, the
+        # echo comes back with src=HGI_DEV_ADDR.  Without this, the
+        # echo is filtered out by enforce_include, causing echo
+        # timeouts (issue 1185).
+        self._include += [ALL_DEV_ADDR.id, NON_DEV_ADDR.id, HGI_DEV_ADDR.id]
 
         self._active_hgi: DeviceIdT | None = None
         self._known_hgi = hgi_id
@@ -691,7 +726,12 @@ class _DeviceIdFilterMixin(_BaseProtocol):
             # responses to it (issue 822), and an INFO-level message is
             # logged so the user can decide whether to configure it.
             # HGI_DEV_ADDR (18:000730, the generic broadcast address) is
-            # always subject to the normal block/include checks below.
+            # always in the include list (added in __init__), so it
+            # passes the normal block/include checks below.  This is
+            # needed because HGI80s send with HGI_DEV_ADDR as the
+            # source (the HGI80 patch swaps the real HGI ID to
+            # HGI_DEV_ADDR for TX), and the echo comes back with
+            # src=HGI_DEV_ADDR (issue 1185).
             if dev_id[:2] == "18" and dev_id != HGI_DEV_ADDR.id:
                 if dev_id == self._active_hgi:
                     continue

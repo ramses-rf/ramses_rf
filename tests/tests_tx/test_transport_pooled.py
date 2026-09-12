@@ -4,7 +4,7 @@
 Covers:
 - Inbound deduplication (same packet from 2 children -> 1 upstream)
 - Inbound forwarding (distinct packets from different children)
-- Outbound routing (round-robin among connected children)
+- Outbound routing (stable-first among connected children)
 - Connection lifecycle (wait for any, disconnect handling)
 - get_extra_info aggregation (SZ_ACTIVE_HGI, pool_stats)
 - Close propagation to all children
@@ -18,9 +18,10 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from ramses_tx.const import I_, SZ_ACTIVE_HGI, Code
+from ramses_tx.const import I_, SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ramses_tx.transport.base import TransportConfig
 from ramses_tx.transport.pooled import (
+    ConnectionState,
     IngressFrame,
     NodeAvailability,
     PoolChild,
@@ -73,11 +74,20 @@ def _make_packet(
 def _make_mock_transport(
     hgi: str | None = None,
     connected: bool = True,
+    is_evofw3: bool = True,
 ) -> MagicMock:
-    """Create a mock child transport."""
+    """Create a mock child transport.
+
+    :param is_evofw3: If False, the transport reports SZ_IS_EVOFW3=False
+        (HGI80 serial device).  Default True (evofw3/MQTT).
+    """
     t = MagicMock()
     t.get_extra_info = lambda name, default=None: (
-        hgi if name == SZ_ACTIVE_HGI else default
+        hgi
+        if name == SZ_ACTIVE_HGI
+        else is_evofw3
+        if name == SZ_IS_EVOFW3
+        else default
     )
     t.write_frame = AsyncMock()
     t.send_frame = AsyncMock()
@@ -240,6 +250,30 @@ async def test_dedup_key_fallback_when_sequence_absent() -> None:
     assert proto.packet_received.call_count == 1
 
 
+async def test_recent_tx_match_is_consumed() -> None:
+    """One recorded transmission must classify only one matching echo."""
+    proto = _make_mock_protocol()
+    pool = PooledTransport(proto, [None], config=TransportConfig())
+    packet = _make_packet()
+    dto = packet._dto
+    key = (
+        dto.verb,
+        dto.code,
+        dto.addr1,
+        dto.addr2,
+        dto.addr3,
+        dto.raw_payload,
+    )
+    now = dt.now()
+    pool._recent_tx_queue.append((now, key))
+    pool._recent_tx_counts[key] = 1
+
+    assert pool._is_recent_tx(packet) is True
+    assert pool._is_recent_tx(packet) is False
+    assert not pool._recent_tx_queue
+    assert key not in pool._recent_tx_counts
+
+
 async def test_dedup_cache_is_dict_backed() -> None:
     """Dedup cache is a dict, not a deque."""
     proto = _make_mock_protocol()
@@ -291,8 +325,8 @@ async def test_outbound_routes_to_connected_child() -> None:
     t1.write_frame.assert_called_once()
 
 
-async def test_outbound_round_robin_among_connected() -> None:
-    """write_frame round-robins between connected children."""
+async def test_outbound_stable_first_among_connected() -> None:
+    """write_frame selects the first sendable child (stable-first)."""
     proto = _make_mock_protocol()
     t0 = _make_mock_transport(hgi="18:001111", connected=True)
     t1 = _make_mock_transport(hgi="18:002222", connected=True)
@@ -303,10 +337,53 @@ async def test_outbound_round_robin_among_connected() -> None:
     await pool.write_frame("frame1")
     await pool.write_frame("frame2")
 
-    # Both children should have been used (round-robin).
-    calls = [t0.write_frame.call_count, t1.write_frame.call_count]
-    assert sum(calls) == 2
-    assert all(c >= 0 for c in calls)
+    # Child 0 (first in config order) should get both calls.
+    assert t0.write_frame.call_count == 2
+    assert t1.write_frame.call_count == 0
+
+
+async def test_legacy_write_frame_routes_using_destination_address() -> None:
+    """RSSI-prefixed frames route using the resolved destination address."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+    pool._children[0].rssi_tracker.clear()
+    pool._children[1].rssi_tracker.clear()
+    now = dt.now()
+    pool._children[0].rssi_tracker.record("01:123456", "-90", now)
+    pool._children[1].rssi_tracker.record("01:123456", "-40", now)
+
+    await pool.write_frame(
+        "000  W --- 18:999999 01:123456 --:------ 0008 002 0000"
+    )
+
+    t0.write_frame.assert_not_called()
+    sent_frame = t1.write_frame.await_args.args[0]
+    assert sent_frame.split()[3] == "18:002222"
+    assert sent_frame.split()[4] == "01:123456"
+
+
+async def test_unaccepted_serial_child_is_receive_only() -> None:
+    """A known unaccepted serial HGI forwards RX but is excluded from TX."""
+    proto = _make_mock_protocol()
+    transport = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto,
+        [transport],
+        config=TransportConfig(),
+        accepted_hgis={"18:001111"},
+    )
+
+    _connect_child(pool, 0, transport)
+    pool._on_child_packet(0, _make_packet())
+    await asyncio.sleep(0.01)
+
+    assert pool._children[0].accepted is False
+    assert pool._children[0].is_sendable is False
+    proto.packet_received.assert_called_once()
 
 
 async def test_outbound_fails_when_no_child_connected() -> None:
@@ -527,6 +604,139 @@ def test_get_extra_info_unknown_key_returns_default(
     )
 
 
+# -- get_extra_info(SZ_IS_EVOFW3) — issue 1185 -----------------------------
+
+
+def test_get_extra_info_evofw3_all_serial_evofw3(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when all serial children
+    are evofw3."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=True)
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=True)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_all_serial_hgi80(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns False when all serial children
+    are HGI80 (not evofw3) and no callback-driven children exist."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=False)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    # No evofw3 children and no callback-driven children → returns default
+    assert pool.get_extra_info(SZ_IS_EVOFW3, default=False) is False
+
+
+def test_get_extra_info_evofw3_mixed_serial(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when at least one serial
+    child is evofw3 (even if others are HGI80)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    t1 = _make_mock_transport(hgi="18:002222", is_evofw3=True)  # evofw3
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+    _connect_child(pool, 1, t1)
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_callback_driven_returns_true(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True when any child is
+    callback-driven (MQTT), even if no serial child is evofw3.
+
+    This is the hybrid-pool case from issue 1185: HGI80 serial primary
+    + MQTT callback child.  The pool should report evofw3=True so the
+    protocol doesn't apply the HGI80 reverse-patch to MQTT TX.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+
+    # Add a callback-driven child (MQTT) — no transport instance.
+    pool._children.append(
+        PoolChild(
+            child_id=1,
+            port_name="mqtt://broker/18:002222",
+            callback_driven=True,
+        )
+    )
+    pool._children[1].connection_state = ConnectionState.CONNECTED
+    pool._children[1].hgi_id = DeviceIdT("18:002222")
+    pool._children[1].send_ready = True
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_callback_driven_even_if_disconnected(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns True for callback-driven
+    children even when they are not yet connected.
+
+    The first command may be sent before any MQTT child comes online
+    via LWT.  Without this, the protocol patches the HGI ID to
+    18:000730 (HGI80 mode), causing outbound packets to use the
+    sentinel instead of the real HGI ID.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=False)  # HGI80
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_child(pool, 0, t0)
+
+    # Add a disconnected callback-driven child (MQTT).
+    pool._children.append(
+        PoolChild(
+            child_id=1,
+            port_name="mqtt://broker/18:002222",
+            callback_driven=True,
+            # connection_state defaults to DISCONNECTED
+        )
+    )
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3) is True
+
+
+def test_get_extra_info_evofw3_empty_pool_returns_default(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """get_extra_info(SZ_IS_EVOFW3) returns the default for an empty or
+    all-disconnected pool with no callback-driven children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111", is_evofw3=True)
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    # Don't connect any child.
+
+    assert pool.get_extra_info(SZ_IS_EVOFW3, default=False) is False
+
+
 def test_repr_returns_diagnostic_string(
     event_loop: asyncio.AbstractEventLoop,
 ) -> None:
@@ -564,6 +774,18 @@ def test_close_closes_all_children(
     t0.close.assert_called_once()
     t1.close.assert_called_once()
     assert pool.is_closing is True
+
+
+async def test_close_notifies_protocol_for_callback_only_pool() -> None:
+    """Closing a connected callback-only pool unbinds the protocol."""
+    proto = _make_mock_protocol()
+    pool = PooledTransport(proto, [None], config=TransportConfig())
+    pool._protocol_connected = True
+
+    pool.close()
+    await asyncio.sleep(0)
+
+    proto.connection_lost.assert_called_once_with(None)
 
 
 def test_close_is_idempotent(
@@ -1031,3 +1253,353 @@ def test_empty_transport_list_does_not_raise(
         proto, [], config=TransportConfig(), loop=event_loop
     )
     assert len(pool._children) == 0
+
+
+# -- Phase 2: signature policy and serial child state --------------------
+
+
+def test_identity_unknown_child_is_not_sendable() -> None:
+    """A child with no HGI identity is not sendable (receive-only)."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.accepted = True
+    # No HGI identity learned yet.
+    assert child.hgi_id is None
+    assert not child.is_sendable
+    assert not child.send_ready
+
+
+def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
+    """A child becomes sendable after learning its HGI identity."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.availability = NodeAvailability.ONLINE
+    child.accepted = True
+    assert not child.is_sendable
+    child.learn_hgi(DeviceIdT("18:001234"))
+    assert child.hgi_id == DeviceIdT("18:001234")
+    assert child.send_ready
+    assert child.is_sendable
+
+
+async def test_serial_child_learns_hgi_from_18_src_packet(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Single serial child learns HGI ID from any 18:xxxxxx src packet.
+
+    With only one serial child in the pool, all 18: src packets must
+    come from the HGI physically connected to that port, so learning is
+    safe (issue 1185).
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)  # HGI unknown at connect time
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+
+    # Child connected but not sendable (no HGI ID yet)
+    assert not pool._children[0].is_sendable
+
+    # Feed a 3150 packet with src=18:149488 (not _PUZZ)
+    pkt = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(0, pkt)
+    await asyncio.sleep(0.01)
+
+    # Child should have learned its HGI ID and become sendable
+    assert pool._children[0].hgi_id == DeviceIdT("18:149488")
+    assert pool._children[0].send_ready
+    assert pool._children[0].is_sendable
+
+
+async def test_multi_serial_children_do_not_learn_hgi_from_rf(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Multiple serial children must NOT learn HGI from RF packets.
+
+    RF is a shared medium — every serial child receives packets from
+    every HGI in range.  Learning from RF would make all children
+    learn the same (wrong) HGI ID.  When there are multiple serial
+    children, HGI IDs must be provided explicitly (issue 1185).
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)
+    t1 = _make_mock_transport(hgi=None)
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+
+    # Feed a _PUZZ packet with src=18:149488 to child 0
+    pkt_puzz = _make_packet(src="18:149488", code=Code._PUZZ, payload="00")
+    pool._on_child_packet(0, pkt_puzz)
+    await asyncio.sleep(0.01)
+
+    # Feed a 3150 packet with src=18:149488 to child 1
+    pkt_3150 = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(1, pkt_3150)
+    await asyncio.sleep(0.01)
+
+    # Neither child should have learned — multi-serial pool
+    assert pool._children[0].hgi_id is None
+    assert pool._children[1].hgi_id is None
+    assert not pool._children[0].send_ready
+    assert not pool._children[1].send_ready
+
+
+async def test_callback_child_does_not_learn_hgi_from_18_src_packet(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Callback-driven (MQTT) child does NOT learn from 18: src packets.
+
+    Only _PUZZ packets trigger learning for callback-driven children,
+    because multiple HGIs share the same MQTT broker and any 18:
+    packet could be from a different HGI.
+    """
+    from ramses_tx.transport.pooled import ConnectionState, PoolChild
+
+    proto = _make_mock_protocol()
+    pool = PooledTransport(
+        proto, [None], config=TransportConfig(), loop=event_loop
+    )
+    # Make child 0 callback-driven with no HGI
+    pool._children[0] = PoolChild(
+        child_id=0, port_name="mqtt_ha://18:001234", transport=None
+    )
+    pool._children[0].callback_driven = True
+    pool._children[0].connection_state = ConnectionState.CONNECTED
+    pool._children[0].accepted = True
+
+    # Feed a 3150 packet with src=18:149488 (not _PUZZ)
+    pkt = _make_packet(src="18:149488", code=Code._3150, payload="00")
+    pool._on_child_packet(0, pkt)
+    await asyncio.sleep(0.01)
+
+    # Callback child should NOT have learned HGI from non-_PUZZ packet
+    assert pool._children[0].hgi_id is None
+
+
+async def test_write_failure_increments_child_error_counter(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A write failure in write_routed increments the child's errors."""
+    from ramses_tx.routing import RoutedCommand, WriteOutcome
+
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t0.write_frame = AsyncMock(side_effect=RuntimeError("port gone"))
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    routed = RoutedCommand(child_id="0", command=MagicMock())
+    outcome = await pool.write_routed(routed, "test frame")
+    assert outcome is WriteOutcome.AMBIGUOUS
+    assert pool._children[0].consecutive_errors == 1
+
+
+async def test_identity_unknown_child_not_selected_for_outbound(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A child with unknown identity is not selected for outbound routing."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi=None)  # no HGI identity
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), loop=event_loop
+    )
+    # Connect both children.
+    pool._on_child_connected(0, t0)
+    pool._on_child_connected(1, t1)
+    # Feed a packet to child 1 to make it online + send-ready.
+    pool._on_child_packet(1, _make_packet(rssi="050", payload="FFFF"))
+
+    # Child 0 has no HGI identity and should not be sendable.
+    assert not pool._children[0].is_sendable
+    # Child 1 should be sendable.
+    assert pool._children[1].is_sendable
+
+    # Select a child for outbound — should pick child 1, not 0.
+    child = pool._select_child("04:123456")
+    assert child is not None
+    assert child.child_id == 1
+
+
+def test_disconnected_child_resets_send_ready() -> None:
+    """A disconnected child loses send_ready and must re-validate identity."""
+    child = PoolChild(
+        child_id=0, port_name="/dev/ttyUSB0", transport=MagicMock()
+    )
+    child.connection_state = ConnectionState.CONNECTED
+    child.availability = NodeAvailability.ONLINE
+    child.accepted = True
+    child.learn_hgi(DeviceIdT("18:001234"))
+    assert child.is_sendable
+
+    child.mark_disconnected()
+    assert not child.is_sendable
+    # mypy narrows send_ready to Literal[False] after mark_disconnected()
+    # (which sets it to False), making this assert "unreachable" — but we
+    # want to verify the runtime value here.
+    assert not child.send_ready  # type: ignore[unreachable]
+    assert child.connection_state is ConnectionState.DISCONNECTED
+
+
+# -- Stale child fallback ----------------------------------------------------
+
+
+async def test_select_child_falls_back_to_stale_when_no_online() -> None:
+    """Stale children are tried as last resort when no online children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    # Let the child go stale (no packets for health_timeout)
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+    assert not pool._children[0].is_sendable
+
+    # But _select_child should still return it as a last resort
+    child = pool._select_child()
+    assert child is not None
+    assert child.child_id == 0
+
+
+async def test_select_child_returns_none_when_no_sendable() -> None:
+    """Returns None when no children are sendable AND none are stale."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(proto, [t0], config=TransportConfig())
+    # Don't connect — child is not connected, not online, not sendable
+    child = pool._select_child()
+    assert child is None
+
+
+async def test_select_child_prefers_online_over_stale() -> None:
+    """Online children are preferred over stale children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), health_timeout=60.0
+    )
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+
+    # Manually mark child 0 as stale (simulate no packets for timeout)
+    pool._children[0].mark_stale()
+    assert pool._children[0].availability is NodeAvailability.STALE
+    assert pool._children[1].availability is NodeAvailability.ONLINE
+
+    # Online child should be selected
+    child = pool._select_child()
+    assert child is not None
+    assert child.child_id == 1
+
+
+# -- TX success marks child online -------------------------------------------
+
+
+async def test_write_routed_marks_child_online_on_success() -> None:
+    """A successful TX marks the child online (even without echo)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    # Let the child go stale
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Successful TX should mark the child online
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
+
+
+async def test_write_routed_marks_child_online_on_send_frame() -> None:
+    """send_frame path also marks the child online on success."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    # Remove write_frame so send_frame is used
+    del t0.write_frame
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
+
+
+async def test_write_frame_legacy_marks_child_online() -> None:
+    """Legacy write_frame path also marks the child online on success."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Use the legacy write_frame path directly
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
+
+
+async def test_write_routed_callback_driven_marks_child_online() -> None:
+    """A successful callback-driven publish marks the child online."""
+    from ramses_tx.routing import RoutedCommand, WriteOutcome
+
+    proto = _make_mock_protocol()
+    pool = PooledTransport(
+        proto, [None], config=TransportConfig(), health_timeout=0.1
+    )
+    # Make child 0 callback-driven with a known HGI
+    pool._children[0].callback_driven = True
+    pool._children[0].hgi_id = DeviceIdT("18:001111")
+    pool._children[0].connection_state = ConnectionState.CONNECTED
+    pool._children[0].accepted = True
+    pool._children[0].send_ready = True
+    pool._children[0].mark_online()  # Start online
+
+    # Set up a mock outbound publisher
+    publisher = MagicMock()
+    publisher.publish_frame = AsyncMock()
+    pool.set_outbound_publisher(publisher)
+
+    # Let the child go stale
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Successful publish should mark the child online
+    routed = RoutedCommand(child_id="0", command=MagicMock())
+    outcome = await pool.write_routed(
+        routed, "I --- 01:123456 18:000730 --:------ 30C9 001 00"
+    )
+    assert outcome is WriteOutcome.SUBMITTED
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE

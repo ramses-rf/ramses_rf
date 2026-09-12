@@ -6,10 +6,11 @@ single coherent :class:`TransportInterface` that the protocol layer
 sees as one transport.  Inbound packets from any child are
 deduplicated within a sliding time window and forwarded upstream.
 Outbound frames are routed to the child transport with the best
-rolling-average RSSI, falling back to round-robin when no RSSI data
-is available yet.  Unhealthy children are detected via a configurable
-health timeout and excluded from outbound selection until they
-recover.
+rolling-average RSSI, falling back to stable-first selection (first
+sendable child in config order) when no RSSI data is available yet.
+Unhealthy children are detected via a configurable health timeout.
+Online children are preferred; connected stale children are retried only
+as a last resort and recover after a successful transmission or RX.
 
 This is Roadmap Item 9, PR 1 (issue 1119).
 
@@ -28,14 +29,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt, timedelta as td
 from enum import Enum, auto
 from typing import Any, TypeAlias
 
 from .. import exceptions as exc
-from ..address import HGI_DEV_ADDR
+from ..address import HGI_DEV_ADDR, Address, packet_addrs
 from ..const import SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ..helpers import dt_now
 from ..interfaces import ProtocolInterface, TransportInterface
@@ -154,14 +157,20 @@ class PoolChild:
     def is_sendable(self) -> bool:
         """Return True if this child can be selected for outbound.
 
-        A child is sendable when it is connected, accepted, and
-        send-ready (has identity or has received at least one packet).
+        A child is sendable when it is connected, online (packets
+        flowing or recently connected), accepted, and send-ready
+        (has identity or has received at least one packet).
+        Stale children (connected but no packets within
+        ``health_timeout``) are excluded from routing but remain in
+        the pool — they become sendable again when a packet arrives
+        and ``mark_online()`` is called (issue 1119).
         Callback-driven children (PR 4A) do not require a transport
         instance — outbound frames go through the pool's outbound
         publisher.
         """
         return (
             self.is_connected
+            and self.is_online
             and self.accepted
             and self.send_ready
             and (self.transport is not None or self.callback_driven)
@@ -170,9 +179,13 @@ class PoolChild:
     def mark_connected(self, transport_obj: Any) -> None:
         """Mark the child as connected and capture transport metadata.
 
+        A freshly connected child is considered ONLINE (healthy) until
+        the health timeout marks it stale (issue 1119).
+
         :param transport_obj: The connected transport object.
         """
         self.connection_state = ConnectionState.CONNECTED
+        self.availability = NodeAvailability.ONLINE
         self.transport_obj = transport_obj
         # Read HGI identity from the transport if available.
         hgi = transport_obj.get_extra_info(SZ_ACTIVE_HGI)
@@ -181,6 +194,12 @@ class PoolChild:
         # A connected child with known HGI is send-ready.
         if self.hgi_id is not None:
             self.send_ready = True
+        # Reset the last-packet time so the health timeout starts
+        # counting from connection time.
+        self.last_pkt_time = dt_now()
+        # Reset error counter so a reconnected child starts with a
+        # clean slate (issue 1119).
+        self.consecutive_errors = 0
 
     def mark_disconnected(self) -> None:
         """Mark the child as disconnected and reset state."""
@@ -344,9 +363,9 @@ class PooledTransport(TransportInterface):
     Outbound frames are routed to the connected child with the best
     rolling-average RSSI (5-sample window with TTL expiry).  When no
     RSSI data is available for any child, selection falls back to
-    round-robin.  Unhealthy children (no packets for
-    ``health_timeout`` seconds, or exceeding
-    ``max_consecutive_errors``) are excluded from selection.
+    stable-first (first sendable child in config order).  Connected
+    stale children are retried only when no online child is available;
+    disconnected or error-exhausted children remain excluded.
 
     Children are immutable after construction — runtime
     ``add_child()``/``remove_child()`` are deferred until a
@@ -370,9 +389,9 @@ class PooledTransport(TransportInterface):
     :param max_consecutive_errors: Number of consecutive errors before
         a child is marked offline.
     :type max_consecutive_errors: int
-    :param accepted_hgis: Optional set of HGI IDs that are allowed.
-        When set, packets from children whose HGI is not in this set
-        are dropped.  Construction-only — no runtime mutation.
+    :param accepted_hgis: Optional set of HGI IDs eligible for outbound
+        routing.  Other identified children remain receive-only.
+        Construction-only — no runtime mutation.
     :type accepted_hgis: set[str] | None
     :param port_names: Optional list of port names for diagnostics.
     :type port_names: list[str] | None
@@ -446,6 +465,16 @@ class PooledTransport(TransportInterface):
         # transport instance publish frames through this callback.
         self._outbound_publisher: MqttPoolOutbound | None = None
 
+        # Recent TX recording for echo detection (issue 1185).
+        # Callback-driven (MQTT) children bypass _FullTransport.write_frame,
+        # so _log_tx_packet is never called and the pool's RX path can't
+        # recognise echoes of our own TX.  Record TX keys here and mark
+        # matching inbound packets as echoes before forwarding.
+        self._recent_tx_queue: deque[tuple[dt, tuple[str, ...]]] = deque(
+            maxlen=20
+        )
+        self._recent_tx_counts: dict[tuple[str, ...], int] = {}
+
     # -- Child access ----------------------------------------------------
 
     @property
@@ -456,6 +485,11 @@ class PooledTransport(TransportInterface):
             for c in self._children
             if c.transport is not None or c.callback_driven
         ]
+
+    @property
+    def _serial_child_count(self) -> int:
+        """Count of non-callback (serial) children in the pool."""
+        return sum(1 for c in self._children if not c.callback_driven)
 
     @property
     def _connected_children(self) -> list[PoolChild]:
@@ -506,6 +540,103 @@ class PooledTransport(TransportInterface):
         """
         self._outbound_publisher = publisher
 
+    # -- TX echo recording (issue 1185) ---------------------------------
+
+    def _record_tx(self, frame: str) -> None:
+        """Record an outbound frame for echo detection.
+
+        Callback-driven (MQTT) children bypass
+        :meth:`_FullTransport.write_frame`, so
+        :meth:`_FullTransport._log_tx_packet` is never called and the
+        pool's RX path cannot recognise echoes of our own TX.  Record
+        a content key here so :meth:`_on_child_packet` can mark
+        matching inbound packets as echoes before forwarding.
+
+        :param frame: The serialized RAMSES frame string.
+        """
+        frame_clean = frame.rstrip()
+        if not frame_clean:
+            return
+        if not frame_clean[:3].isdigit():
+            frame_clean = f"000 {frame_clean}"
+        try:
+            now = dt_now()
+            packet = Packet(now, frame_clean, is_tx=True)
+            dto = packet.to_dto()
+            tx_key = (
+                dto.verb,
+                dto.code,
+                dto.addr1,
+                dto.addr2,
+                dto.addr3,
+                dto.raw_payload,
+            )
+            self._recent_tx_queue.append((now, tx_key))
+            self._recent_tx_counts[tx_key] = (
+                self._recent_tx_counts.get(tx_key, 0) + 1
+            )
+        except Exception as err:  # pragma: no cover - defensive
+            _LOGGER.debug("PooledTransport: failed to record TX: %s", err)
+
+    def _is_recent_tx(self, packet: Packet) -> bool:
+        """Check if a received packet matches a recent TX (echo).
+
+        Prunes entries older than 3.0 seconds, then does an O(1)
+        dict lookup.  HGI80 echoes arrive with the real HGI ID as
+        addr1, but the TX frame used the placeholder 18:000730 —
+        both variants are checked (issue 835).
+
+        :param packet: The inbound packet to check.
+        :returns: True if the packet is an echo of a recent TX.
+        """
+        now = dt_now()
+        while (
+            self._recent_tx_queue
+            and (now - self._recent_tx_queue[0][0]).total_seconds() > 3.0
+        ):
+            _, old_key = self._recent_tx_queue.popleft()
+            if old_key in self._recent_tx_counts:
+                if self._recent_tx_counts[old_key] <= 1:
+                    del self._recent_tx_counts[old_key]
+                else:
+                    self._recent_tx_counts[old_key] -= 1
+
+        try:
+            dto = packet._dto
+        except AttributeError:
+            return False
+
+        # Always check both the received addr1 and the HGI placeholder.
+        # TX may have been recorded with either the real HGI ID (evofw3)
+        # or the placeholder 18:000730 (HGI80), and the echo may arrive
+        # with either — so check both variants unconditionally.
+        addr1_variants = (
+            (dto.addr1, HGI_DEV_ADDR.id)
+            if dto.addr1 != HGI_DEV_ADDR.id
+            else (HGI_DEV_ADDR.id, dto.addr1)
+        )
+        for addr1 in addr1_variants:
+            rx_key = (
+                dto.verb,
+                dto.code,
+                addr1,
+                dto.addr2,
+                dto.addr3,
+                dto.raw_payload,
+            )
+            if rx_key not in self._recent_tx_counts:
+                continue
+            if self._recent_tx_counts[rx_key] <= 1:
+                del self._recent_tx_counts[rx_key]
+            else:
+                self._recent_tx_counts[rx_key] -= 1
+            for idx, (_, queued_key) in enumerate(self._recent_tx_queue):
+                if queued_key == rx_key:
+                    del self._recent_tx_queue[idx]
+                    break
+            return True
+        return False
+
     # -- TransportInterface ---------------------------------------------
 
     def close(self) -> None:
@@ -521,6 +652,12 @@ class PooledTransport(TransportInterface):
             except Exception as err:  # pragma: no cover - defensive
                 _LOGGER.debug(
                     "Error closing child %d: %s", child.child_id, err
+                )
+        if self._protocol_connected and not self._loop.is_closed():
+            self._protocol_connected = False
+            with contextlib.suppress(RuntimeError):
+                self._loop.call_soon_threadsafe(
+                    self._protocol.connection_lost, None
                 )
 
     def get_extra_info(self, name: str, default: Any = None) -> Any:
@@ -550,10 +687,13 @@ class PooledTransport(TransportInterface):
                     if val:
                         return True
             # Callback-driven children (e.g. ramses_esp via MQTT)
-            # are treated as evofw3-compatible.
-            if any(
-                c.is_connected and c.callback_driven for c in self._children
-            ):
+            # are treated as evofw3-compatible.  Check ALL children
+            # (not just connected) because the first command may be
+            # sent before any child comes online via LWT.  Without
+            # this, the protocol patches the HGI ID to 18:000730
+            # (HGI80 mode), causing outbound packets to use the
+            # sentinel instead of the real HGI ID.
+            if any(c.callback_driven for c in self._children):
                 return True
             return default
         if name == "pool_stats":
@@ -584,6 +724,37 @@ class PooledTransport(TransportInterface):
             }
         return default
 
+    def get_pool_child_status(self) -> list[dict[str, object]]:
+        """Return per-child status for monitoring (issue 1119).
+
+        Each dict contains: ``child_id``, ``port_name``,
+        ``hgi_id``, ``connected``, ``availability``, ``accepted``,
+        ``send_ready``, ``callback_driven``, ``pkts_received``,
+        ``consecutive_errors``, ``last_pkt_time``.
+
+        :returns: List of per-child status dicts.
+        """
+        return [
+            {
+                "child_id": str(c.child_id),
+                "port_name": c.port_name,
+                "hgi_id": str(c.hgi_id) if c.hgi_id else None,
+                "connected": c.is_connected,
+                "availability": c.availability.name,
+                "accepted": c.accepted,
+                "send_ready": c.send_ready,
+                "callback_driven": c.callback_driven,
+                "pkts_received": c.pkts_received,
+                "consecutive_errors": c.consecutive_errors,
+                "last_pkt_time": (
+                    c.last_pkt_time.isoformat()
+                    if c.last_pkt_time is not None
+                    else None
+                ),
+            }
+            for c in self._children
+        ]
+
     async def send_frame(self, frame: str) -> None:
         """Send a frame via a selected child transport."""
         await self.write_frame(frame)
@@ -605,9 +776,20 @@ class PooledTransport(TransportInterface):
         """
         cmd = request.command
 
-        # Extract target device from the command's positional addresses.
-        # addr2 is the destination in standard RAMSES frames.
-        target_device = cmd.addr2 if cmd.addr2 != "--:------" else None
+        # Extract target device from the command's positional addresses
+        # using the authoritative ``packet_addrs()`` helper, which
+        # resolves src/dst correctly for all verb/address layouts
+        # (issue 1119).
+        target_device: str | None = None
+        try:
+            _src, dst, *_ = packet_addrs(
+                f"{cmd.addr1} {cmd.addr2} {cmd.addr3}"
+            )
+            if dst.id != "--:------":
+                target_device = dst.id
+        except Exception:
+            # Fall back to addr2 if address parsing fails (defensive).
+            target_device = cmd.addr2 if cmd.addr2 != "--:------" else None
 
         child = self._select_child(target_device)
         if child is None:
@@ -619,13 +801,42 @@ class PooledTransport(TransportInterface):
         final_cmd = cmd
         if request.source_policy is SourcePolicy.GATEWAY:
             child_hgi = child.hgi_id
-            if (
+
+            # Determine if the selected child is evofw3 or HGI80.
+            # Callback-driven children (MQTT) are evofw3-compatible.
+            # Serial children check their transport's SZ_IS_EVOFW3 flag.
+            child_is_evofw3: bool = True
+            if child.transport_obj is not None:
+                child_is_evofw3 = bool(
+                    child.transport_obj.get_extra_info(SZ_IS_EVOFW3, False)
+                )
+            # callback_driven children are evofw3-compatible (default True)
+
+            if not child_is_evofw3:
+                # HGI80: the firmware requires 18:000730 as the source
+                # for frames it transmits.  Swap any real HGI ID to the
+                # placeholder.  This overrides the protocol's evofw3
+                # patch (which may have set addr1 to the active HGI ID
+                # from a different child in the pool — issue 1185).
+                if cmd.addr1[:2] == "18" and cmd.addr1 != HGI_DEV_ADDR.id:
+                    final_cmd = dataclasses.replace(cmd, addr1=HGI_DEV_ADDR.id)
+                    _LOGGER.debug(
+                        "PooledTransport.prepare_command: patched "
+                        "source %s -> %s for child %d (HGI80)",
+                        cmd.addr1,
+                        HGI_DEV_ADDR.id,
+                        child.child_id,
+                    )
+            elif (
                 child_hgi
                 and cmd.addr1[:2] == "18"
-                and cmd.addr1 != HGI_DEV_ADDR.id
                 and cmd.addr1 != str(child_hgi)
             ):
                 # evofw3: patch source to the selected child's HGI ID.
+                # This handles both:
+                # - cmd.addr1 == HGI_DEV_ADDR (protocol's evofw3 patch
+                #   may have set it to a different child's HGI ID)
+                # - cmd.addr1 == another child's HGI ID
                 final_cmd = dataclasses.replace(cmd, addr1=str(child_hgi))
                 _LOGGER.debug(
                     "PooledTransport.prepare_command: patched source "
@@ -634,8 +845,7 @@ class PooledTransport(TransportInterface):
                     child_hgi,
                     child.child_id,
                 )
-            # HGI80: leave 18:000730 placeholder as-is — the firmware
-            # substitutes its own ID during transmission.
+            # HGI80 with no known ID and addr1==18:000730: leave as-is
         # SourcePolicy.PRESERVE: never modify the source.
 
         _LOGGER.debug(
@@ -676,16 +886,31 @@ class PooledTransport(TransportInterface):
         # Callback-driven children (PR 4A): publish through the
         # outbound publisher instead of a per-child transport.
         if child.callback_driven and child.transport is None:
-            if not child.is_sendable:
+            # Allow stale children (connected but no recent packets) —
+            # prepare_command's _select_child may have selected them as
+            # a last resort.  A successful publish marks them online.
+            can_send = child.is_sendable or (
+                child.is_connected
+                and child.availability is NodeAvailability.STALE
+                and child.accepted
+                and child.send_ready
+            )
+            if not can_send:
                 return WriteOutcome.NOT_SUBMITTED
             if self._outbound_publisher is None or child.hgi_id is None:
                 return WriteOutcome.NOT_SUBMITTED
+            # Record TX for echo detection — callback-driven children
+            # bypass _FullTransport.write_frame so _log_tx_packet is
+            # never called (issue 1185).
+            self._record_tx(frame)
             try:
                 await self._outbound_publisher.publish_frame(
                     str(child.hgi_id), frame
                 )
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
 
         if child.transport is None:
@@ -695,21 +920,29 @@ class PooledTransport(TransportInterface):
         if write is None:
             try:
                 await child.transport.send_frame(frame)
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
 
         try:
             await write(frame, disable_tx_limits=disable_tx_limits)
+            # Mark the child online — a successful TX proves the link
+            # is alive even if the HGI doesn't echo (e.g. HGI80).
+            child.mark_online()
             return WriteOutcome.SUBMITTED
         except TypeError:
             # Child's write_frame doesn't accept disable_tx_limits.
             try:
                 await write(frame)
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
+                self._record_write_error(child)
                 return WriteOutcome.AMBIGUOUS
         except Exception:
+            self._record_write_error(child)
             return WriteOutcome.AMBIGUOUS
 
     async def write_frame(
@@ -733,8 +966,17 @@ class PooledTransport(TransportInterface):
         # Parse the frame to extract target device for child selection.
         target_device: str | None = None
         parts = frame.split()
-        if len(parts) >= 4:
-            target_device = parts[3]
+        address_index: int | None = None
+        for idx in range(len(parts) - 2):
+            if all(Address.is_valid(part) for part in parts[idx : idx + 3]):
+                address_index = idx
+                break
+        if address_index is not None:
+            _src, dst, *_ = packet_addrs(
+                " ".join(parts[address_index : address_index + 3])
+            )
+            if dst.id != "--:------":
+                target_device = dst.id
 
         child = self._select_child(target_device)
         if child is None:
@@ -745,23 +987,52 @@ class PooledTransport(TransportInterface):
         # Fallback source re-patching on the serialized frame.
         # The preferred path (prepare_command) does this on the DTO
         # before serialization.
-        src_addr = parts[2] if len(parts) >= 4 else None
+        src_addr = parts[address_index] if address_index is not None else None
         child_hgi = child.hgi_id
+
+        # Determine if the selected child is evofw3 or HGI80 (same
+        # logic as prepare_command — see issue 1185).
+        child_is_evofw3 = True
+        if child.transport_obj is not None:
+            child_is_evofw3 = bool(
+                child.transport_obj.get_extra_info(SZ_IS_EVOFW3, False)
+            )
+
         if (
-            child_hgi
+            not child_is_evofw3
             and src_addr
             and src_addr[:2] == "18"
             and src_addr != HGI_DEV_ADDR.id
-            and src_addr != str(child_hgi)
         ):
-            parts[2] = str(child_hgi)
+            # HGI80: swap any real HGI ID to 18:000730 placeholder.
+            assert address_index is not None
+            parts[address_index] = HGI_DEV_ADDR.id
             leading = ""
             if frame and frame[0].isspace():
                 leading = frame[0]
             frame = leading + " ".join(parts)
             _LOGGER.debug(
                 "PooledTransport.write_frame: re-patched source %s -> %s "
-                "for child %d (legacy path)",
+                "for child %d (HGI80, legacy path)",
+                src_addr,
+                HGI_DEV_ADDR.id,
+                child.child_id,
+            )
+        elif (
+            child_hgi
+            and src_addr
+            and src_addr[:2] == "18"
+            and src_addr != str(child_hgi)
+        ):
+            assert address_index is not None
+            parts[address_index] = str(child_hgi)
+            leading = ""
+            if frame and frame[0].isspace():
+                leading = frame[0]
+            frame = leading + " ".join(parts)
+            _LOGGER.debug(
+                "PooledTransport.write_frame: re-patched source %s -> %s "
+                "for child %d (evofw3, legacy path)",
                 src_addr,
                 child_hgi,
                 child.child_id,
@@ -775,6 +1046,7 @@ class PooledTransport(TransportInterface):
                 await write(frame, disable_tx_limits=disable_tx_limits)
             except TypeError:
                 await write(frame)
+        child.mark_online()
 
     # -- Internal: inbound dedup + forward -------------------------------
 
@@ -799,24 +1071,34 @@ class PooledTransport(TransportInterface):
             boundary.  When provided, overrides the child record's HGI.
         """
         child = self._child_by_id(child_id)
-        child.pkts_received += 1
 
         if self._closing:
             return
 
-        # Learn the child's HGI ID from the puzzle response (7FFF)
-        # or any packet whose src is a known HGI.
-        if child.hgi_id is None:
+        child.pkts_received += 1
+
+        # Learn the child's HGI ID from the puzzle response (7FFF).
+        #
+        # NOTE: this is only safe when there is a single non-callback
+        # (serial) child in the pool.  RF is a shared medium, so in a
+        # multi-HGI pool every serial child receives packets from every
+        # HGI, and learning from RF packets would make all children
+        # learn the same (wrong) HGI ID.  When there are multiple serial
+        # children, HGI IDs must be provided explicitly (e.g. via
+        # per-child config) or discovered via a serial-level command
+        # (!I), not inferred from RF packets (issue 1185).
+        if child.hgi_id is None and self._serial_child_count <= 1:
             src_id = packet._dto.addr1
             if src_id and packet._dto.code == Code._PUZZ:
                 child.learn_hgi(DeviceIdT(src_id))
+            elif (
+                src_id
+                and not child.callback_driven
+                and str(src_id).startswith("18:")
+            ):
+                child.learn_hgi(DeviceIdT(src_id))
 
-        # HGI filtering: if an accepted set is configured, drop packets
-        # from children whose HGI is not accepted.
-        hgi = child.hgi_id
-        if self._accepted_hgis is not None and hgi is not None:
-            if str(hgi) not in self._accepted_hgis:
-                return
+        self._refresh_child_acceptance(child)
 
         # Carry ingress provenance onto the Packet envelope (PR 1 item 7).
         # Explicit callback value takes precedence, then the child record.
@@ -825,6 +1107,34 @@ class PooledTransport(TransportInterface):
             packet._ingress_hgi_id = str(resolved_ingress)
 
         # Update health tracking — any packet proves the child is alive.
+        # For callback-driven children, a packet also proves the MQTT
+        # connection is established.  If the LWT online message was missed
+        # (e.g. arrived before the adapter was created, or the HGI doesn't
+        # publish LWT), the child may never have been marked connected.
+        # Without this, is_sendable remains False and TX fails even though
+        # RX works (issue 1185).
+        if child.callback_driven and not child.is_connected:
+            child.connection_state = ConnectionState.CONNECTED
+            _LOGGER.info(
+                "PooledTransport: callback child %d marked connected "
+                "from inbound packet (HGI=%s)",
+                child.child_id,
+                child.hgi_id,
+            )
+            # Notify the real protocol if this is the first connection.
+            if not self._protocol_connected:
+                self._protocol_connected = True
+                with contextlib.suppress(RuntimeError):
+                    self._loop.call_soon_threadsafe(
+                        functools.partial(
+                            self._protocol.connection_made,
+                            self,
+                            ramses=True,
+                        )
+                    )
+            # Resolve the connection future if waiting.
+            if self._conn_fut is not None and not self._conn_fut.done():
+                self._conn_fut.set_result(self)
         child.mark_online()
 
         # Record RSSI in the child's tracker, EXCLUDING loopback
@@ -842,36 +1152,51 @@ class PooledTransport(TransportInterface):
             if src_id not in active_hgi_ids:
                 child.rssi_tracker.record(src_id, packet._dto.rssi, dt_now())
 
-        # Dict-backed dedup with sequence-aware key.
-        key = self._dedup_key(packet)
-        now = dt_now()
-
-        # Purge stale entries from the dedup cache.
-        cutoff = now - self._dedup_window
-        # Collect stale keys (can't modify dict during iteration).
-        stale_keys = [k for k, t in self._dedup_cache.items() if t < cutoff]
-        for k in stale_keys:
-            del self._dedup_cache[k]
-
-        # Check for duplicate — O(1) dict lookup.
-        if key in self._dedup_cache:
-            self._pkts_deduped += 1
+        # Echo detection (issue 1185): callback-driven (MQTT) children
+        # bypass _FullTransport._frame_read, so the transport-level
+        # _is_recent_tx check never runs.  Check here and mark the
+        # packet as an echo so the protocol's WantEcho FSM can resolve
+        # — and skip dedup for echoes so they are forwarded upstream.
+        if self._is_recent_tx(packet):
+            packet._is_echo = True
             _LOGGER.debug(
-                "PooledTransport: deduped packet from child %d: %s",
+                "PooledTransport: echo detected from child %d: %s",
                 child_id,
                 packet,
             )
-            return
+        else:
+            # Dict-backed dedup with sequence-aware key.
+            key = self._dedup_key(packet)
+            now = dt_now()
 
-        # Not a duplicate — record and forward.
-        self._dedup_cache[key] = now
-        # Enforce max cache size.
-        if len(self._dedup_cache) > _MAX_DEDUP_KEYS:
-            # Evict oldest entry (linear scan, but rare).
-            oldest_key = min(
-                self._dedup_cache, key=lambda k: self._dedup_cache[k]
-            )
-            del self._dedup_cache[oldest_key]
+            # Purge stale entries from the dedup cache.
+            cutoff = now - self._dedup_window
+            # Collect stale keys (can't modify dict during iteration).
+            stale_keys = [
+                k for k, t in self._dedup_cache.items() if t < cutoff
+            ]
+            for k in stale_keys:
+                del self._dedup_cache[k]
+
+            # Check for duplicate — O(1) dict lookup.
+            if key in self._dedup_cache:
+                self._pkts_deduped += 1
+                _LOGGER.debug(
+                    "PooledTransport: deduped packet from child %d: %s",
+                    child_id,
+                    packet,
+                )
+                return
+
+            # Not a duplicate — record and forward.
+            self._dedup_cache[key] = now
+            # Enforce max cache size.
+            if len(self._dedup_cache) > _MAX_DEDUP_KEYS:
+                # Evict oldest entry (linear scan, but rare).
+                oldest_key = min(
+                    self._dedup_cache, key=lambda k: self._dedup_cache[k]
+                )
+                del self._dedup_cache[oldest_key]
 
         self._pkts_forwarded += 1
 
@@ -934,10 +1259,19 @@ class PooledTransport(TransportInterface):
 
     # -- Internal: connection lifecycle ---------------------------------
 
+    def _refresh_child_acceptance(self, child: PoolChild) -> None:
+        """Update outbound eligibility after a child's identity changes."""
+        child.accepted = (
+            self._accepted_hgis is None
+            or child.hgi_id is None
+            or str(child.hgi_id) in self._accepted_hgis
+        )
+
     def _on_child_connected(self, child_id: int, transport_obj: Any) -> None:
         """Mark a child as connected and capture its HGI ID."""
         child = self._child_by_id(child_id)
         child.mark_connected(transport_obj)
+        self._refresh_child_acceptance(child)
 
         _LOGGER.info(
             "PooledTransport: child %d connected (HGI=%s), %d/%d connected",
@@ -948,13 +1282,43 @@ class PooledTransport(TransportInterface):
         )
 
         # Notify the real protocol that the transport is connected.
+        # Use call_soon_threadsafe for thread safety — the child's
+        # connection_made may be invoked from a serial callback thread.
         if not self._protocol_connected:
             self._protocol_connected = True
-            self._protocol.connection_made(self, ramses=True)
+            with contextlib.suppress(RuntimeError):
+                self._loop.call_soon_threadsafe(
+                    functools.partial(
+                        self._protocol.connection_made, self, ramses=True
+                    )
+                )
 
         # Resolve the connection future if waiting.
         if self._conn_fut is not None and not self._conn_fut.done():
             self._conn_fut.set_result(self)
+
+    def _record_write_error(self, child: PoolChild) -> None:
+        """Record a write failure and mark offline if threshold exceeded.
+
+        Unlike disconnection errors, write failures don't change the
+        connection state — the serial link may still be open but
+        writes are failing (e.g. USB cable degraded, firmware hung).
+        The child is marked OFFLINE after ``max_consecutive_errors``
+        consecutive write failures so it's excluded from routing
+        (issue 1119).
+
+        :param child: The child whose write failed.
+        """
+        child.record_error()
+        if child.consecutive_errors >= self._max_consecutive_errors:
+            if child.availability is not NodeAvailability.OFFLINE:
+                child.availability = NodeAvailability.OFFLINE
+                _LOGGER.warning(
+                    "PooledTransport: child %d marked offline "
+                    "(%d consecutive write errors)",
+                    child.child_id,
+                    child.consecutive_errors,
+                )
 
     def _on_child_disconnected(
         self, child_id: int, error: Exception | None
@@ -1022,14 +1386,37 @@ class PooledTransport(TransportInterface):
 
         Uses per-device RSSI when ``target_device`` is provided and
         per-device samples exist.  Falls back to aggregate RSSI, then
-        round-robin among connected, sendable children when no RSSI
-        data is available.  Returns ``None`` if no child is sendable.
+        stable-first selection (first candidate in config order) when
+        no RSSI data is available.  Connected stale children are
+        candidates only when no online child is sendable.  Returns
+        ``None`` if no online or stale child is eligible.
         """
         # Check health timeouts before selecting.
         self._check_health()
 
         # Only consider sendable children.
         candidates = [c for c in self._children if c.is_sendable]
+        if not candidates:
+            # Last resort: try stale children (connected but no recent
+            # packets).  A stale child can still physically send — the
+            # stale flag is for routing quality, not connectivity.
+            # If the TX succeeds, the echo marks the child online again
+            # (issue 1185).
+            candidates = [
+                c
+                for c in self._children
+                if c.is_connected
+                and c.availability is NodeAvailability.STALE
+                and c.accepted
+                and c.send_ready
+                and (c.transport is not None or c.callback_driven)
+            ]
+            if candidates:
+                _LOGGER.debug(
+                    "PooledTransport: no online children, falling back "
+                    "to stale children %s",
+                    [c.child_id for c in candidates],
+                )
         if not candidates:
             return None
 
@@ -1053,14 +1440,11 @@ class PooledTransport(TransportInterface):
         ):
             rssi_values = {c.child_id: self._best_rssi(c) for c in candidates}
 
-        # If no child has RSSI data, fall back to round-robin.
+        # If no child has RSSI data, use stable-first selection: the
+        # first sendable child in stable config order (issue 1119).
+        # This ensures deterministic, repeatable routing during
+        # cold-start before RSSI evidence accumulates.
         if all(v == float(_RSSI_UNKNOWN) for v in rssi_values.values()):
-            n = len(self._children)
-            for _ in range(n):
-                self._rr_index = (self._rr_index + 1) % n
-                child = self._child_by_id(self._rr_index)
-                if child in candidates:
-                    return child
             return candidates[0]
 
         # Select the child with the best (highest) average RSSI.
@@ -1081,9 +1465,9 @@ class PooledTransport(TransportInterface):
         """Check all children for health timeout and mark stale.
 
         A connected child that has not received any packets within
-        ``health_timeout`` is marked stale.  Stale children are not
-        re-enabled as a last resort — offline is a definitive state
-        that requires explicit reconnection.
+        ``health_timeout`` is marked stale.  Selection may retry stale
+        children as a last resort; offline is a definitive state that
+        requires explicit reconnection.
         """
         now = dt_now()
 
