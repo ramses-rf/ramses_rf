@@ -1567,3 +1567,39 @@ async def test_write_frame_legacy_marks_child_online() -> None:
     await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
     availability: NodeAvailability = pool._children[0].availability
     assert availability is NodeAvailability.ONLINE
+
+
+async def test_write_routed_callback_driven_marks_child_online() -> None:
+    """A successful callback-driven publish marks the child online."""
+    from ramses_tx.routing import RoutedCommand, WriteOutcome
+
+    proto = _make_mock_protocol()
+    pool = PooledTransport(
+        proto, [None], config=TransportConfig(), health_timeout=0.1
+    )
+    # Make child 0 callback-driven with a known HGI
+    pool._children[0].callback_driven = True
+    pool._children[0].hgi_id = DeviceIdT("18:001111")
+    pool._children[0].connection_state = ConnectionState.CONNECTED
+    pool._children[0].accepted = True
+    pool._children[0].send_ready = True
+    pool._children[0].mark_online()  # Start online
+
+    # Set up a mock outbound publisher
+    publisher = MagicMock()
+    publisher.publish_frame = AsyncMock()
+    pool.set_outbound_publisher(publisher)
+
+    # Let the child go stale
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Successful publish should mark the child online
+    routed = RoutedCommand(child_id="0", command=MagicMock())
+    outcome = await pool.write_routed(
+        routed, "I --- 01:123456 18:000730 --:------ 30C9 001 00"
+    )
+    assert outcome is WriteOutcome.SUBMITTED
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE

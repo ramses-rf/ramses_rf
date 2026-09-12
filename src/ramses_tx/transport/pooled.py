@@ -885,7 +885,16 @@ class PooledTransport(TransportInterface):
         # Callback-driven children (PR 4A): publish through the
         # outbound publisher instead of a per-child transport.
         if child.callback_driven and child.transport is None:
-            if not child.is_sendable:
+            # Allow stale children (connected but no recent packets) —
+            # prepare_command's _select_child may have selected them as
+            # a last resort.  A successful publish marks them online.
+            can_send = child.is_sendable or (
+                child.is_connected
+                and child.availability is NodeAvailability.STALE
+                and child.accepted
+                and child.send_ready
+            )
+            if not can_send:
                 return WriteOutcome.NOT_SUBMITTED
             if self._outbound_publisher is None or child.hgi_id is None:
                 return WriteOutcome.NOT_SUBMITTED
@@ -897,6 +906,7 @@ class PooledTransport(TransportInterface):
                 await self._outbound_publisher.publish_frame(
                     str(child.hgi_id), frame
                 )
+                child.mark_online()
                 return WriteOutcome.SUBMITTED
             except Exception:
                 self._record_write_error(child)
