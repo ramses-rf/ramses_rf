@@ -1449,3 +1449,118 @@ def test_disconnected_child_resets_send_ready() -> None:
     # want to verify the runtime value here.
     assert not child.send_ready  # type: ignore[unreachable]
     assert child.connection_state is ConnectionState.DISCONNECTED
+
+
+# -- Stale child fallback ----------------------------------------------------
+
+
+async def test_select_child_falls_back_to_stale_when_no_online() -> None:
+    """Stale children are tried as last resort when no online children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    # Let the child go stale (no packets for health_timeout)
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+    assert not pool._children[0].is_sendable
+
+    # But _select_child should still return it as a last resort
+    child = pool._select_child()
+    assert child is not None
+    assert child.child_id == 0
+
+
+async def test_select_child_returns_none_when_no_sendable() -> None:
+    """Returns None when no children are sendable AND none are stale."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(proto, [t0], config=TransportConfig())
+    # Don't connect — child is not connected, not online, not sendable
+    child = pool._select_child()
+    assert child is None
+
+
+async def test_select_child_prefers_online_over_stale() -> None:
+    """Online children are preferred over stale children."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto, [t0, t1], config=TransportConfig(), health_timeout=60.0
+    )
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+
+    # Manually mark child 0 as stale (simulate no packets for timeout)
+    pool._children[0].mark_stale()
+    assert pool._children[0].availability is NodeAvailability.STALE
+    assert pool._children[1].availability is NodeAvailability.ONLINE
+
+    # Online child should be selected
+    child = pool._select_child()
+    assert child is not None
+    assert child.child_id == 1
+
+
+# -- TX success marks child online -------------------------------------------
+
+
+async def test_write_routed_marks_child_online_on_success() -> None:
+    """A successful TX marks the child online (even without echo)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    # Let the child go stale
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Successful TX should mark the child online
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    assert pool._children[0].availability is NodeAvailability.ONLINE
+
+
+async def test_write_routed_marks_child_online_on_send_frame() -> None:
+    """send_frame path also marks the child online on success."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    # Remove write_frame so send_frame is used
+    del t0.write_frame
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    assert pool._children[0].availability is NodeAvailability.ONLINE
+
+
+async def test_write_frame_legacy_marks_child_online() -> None:
+    """Legacy write_frame path also marks the child online on success."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), health_timeout=0.1
+    )
+    _connect_and_ready(pool, 0, t0)
+
+    await asyncio.sleep(0.15)
+    pool._check_health()
+    assert pool._children[0].availability is NodeAvailability.STALE
+
+    # Use the legacy write_frame path directly
+    await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
+    assert pool._children[0].availability is NodeAvailability.ONLINE
