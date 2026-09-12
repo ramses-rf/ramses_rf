@@ -585,6 +585,90 @@ async def test_packet_received_hgi80_echo_no_raw_handlers(
     assert "Packet excluded by device_id filter" in caplog.text
 
 
+# --- _last_rx_time TESTS (gateway health, issue 1185) ---
+
+
+async def test_last_rx_time_set_on_received(protocol: DummyProtocol) -> None:
+    """packet_received sets _last_rx_time for every received packet.
+
+    This is the core guarantee for gateway health: the protocol tracks
+    the last time ANY packet was received, regardless of whether it
+    passed the device_id filter (issue 1185).
+    """
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    assert protocol._last_rx_time is None
+
+    before = dt.now()
+    pkt = Packet(
+        dt.now(),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt)
+
+    assert protocol._last_rx_time is not None
+    assert protocol._last_rx_time >= before
+
+
+async def test_last_rx_time_set_even_when_filtered(
+    protocol: DummyProtocol,
+) -> None:
+    """_last_rx_time is set even when the packet is filtered out.
+
+    The gateway health check must see activity even if all recent
+    packets are from unknown devices that get dropped by the
+    device_id filter.
+    """
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    # Exclude the source device so the packet gets filtered
+    protocol._exclude = [DeviceIdT("01:999999")]
+
+    assert protocol._last_rx_time is None
+
+    before = dt.now()
+    pkt = Packet(
+        dt.now(),
+        "000  I --- 01:999999 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt)
+
+    # _this_msg should NOT be set (packet was filtered)
+    assert protocol._this_msg is None
+    # But _last_rx_time SHOULD be set (packet was received)
+    assert protocol._last_rx_time is not None
+    assert protocol._last_rx_time >= before
+
+
+async def test_last_rx_time_updated_on_each_packet(
+    protocol: DummyProtocol,
+) -> None:
+    """_last_rx_time is updated on every packet, not just the first."""
+    from datetime import datetime as dt
+
+    from ramses_tx.packet import Packet
+
+    pkt1 = Packet(
+        dt(2026, 1, 1, 12, 0, 0),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt1)
+    first_rx = protocol._last_rx_time
+    assert first_rx == dt(2026, 1, 1, 12, 0, 0)
+
+    pkt2 = Packet(
+        dt(2026, 1, 1, 12, 0, 5),
+        "000  I --- 01:123456 18:000730 --:------ 30C9 001 00",
+    )
+    protocol.packet_received(pkt2)
+    assert protocol._last_rx_time == dt(2026, 1, 1, 12, 0, 5)
+    assert protocol._last_rx_time > first_rx
+
+
 # --- OUTBOUND COMMAND TESTS (send_cmd) ---
 
 
