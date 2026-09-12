@@ -779,17 +779,26 @@ class HgiGateway(Device):  # HGI (18:)
     async def is_active(self) -> bool:
         """Return True if the gateway has received messages recently.
 
+        Uses the protocol's ``_last_rx_time`` which is updated for every
+        received packet, regardless of whether it passed the device_id
+        filter.  This ensures the gateway is considered active when it is
+        receiving RF traffic, even if the traffic is from devices not
+        yet in the schema (issue 1185).
+
         :return: The active operational status of the gateway interface.
         :rtype: bool
         """
-        # Ensure that this message is safely extracted
         protocol = getattr(self._gateway._engine, "_protocol", None)
-        last_msg = getattr(protocol, "_this_msg", None)
+        dtm: dt | None = getattr(protocol, "_last_rx_time", None)
 
-        if not last_msg or not hasattr(last_msg, "timestamp"):
-            return False
+        if dtm is None:
+            # Fall back to _this_msg for backward compatibility with
+            # older protocol instances that don't have _last_rx_time.
+            last_msg = getattr(protocol, "_this_msg", None)
+            if not last_msg or not hasattr(last_msg, "timestamp"):
+                return False
+            dtm = last_msg.timestamp
 
-        dtm: dt = last_msg.timestamp
         now = (
             dt.now(UTC).astimezone(dtm.tzinfo)
             if dtm.tzinfo is not None

@@ -94,6 +94,13 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
         self._this_msg: PacketDTO | None = None
         self._prev_msg: PacketDTO | None = None
 
+        # Last time ANY valid packet was received from the transport,
+        # regardless of whether it passed the device_id filter.  Used by
+        # HgiGateway.is_active() to determine gateway health — the
+        # gateway is "active" if it is receiving RF traffic, even if the
+        # traffic is from devices not yet in the schema (issue 1185).
+        self._last_rx_time: dt | None = None
+
         self._is_evofw3: bool | None = None
 
         self._active_hgi: DeviceIdT | None = None
@@ -518,6 +525,11 @@ class _BaseProtocol(ProtocolInterface, asyncio.Protocol):
             _LOGGER.info("Recv'd: %s %s", packet.rssi, packet)
         else:
             _LOGGER.debug("Recv'd: %s %s", packet.rssi, packet)
+
+        # Track last RX time for gateway health — before the device_id
+        # filter so that traffic from unknown devices still counts as
+        # gateway activity (issue 1185).
+        self._last_rx_time = packet.dtm
 
         self._packet_received(packet)
 

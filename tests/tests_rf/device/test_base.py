@@ -35,6 +35,7 @@ def mock_gateway() -> MagicMock:
     gwy._engine = MagicMock()
     gwy._engine._protocol = MagicMock()
     gwy._engine._protocol._this_msg = None
+    gwy._engine._protocol._last_rx_time = None
     gwy._this_msg = None
     return gwy
 
@@ -152,7 +153,27 @@ class TestHgiGateway:
         :type hgi_gateway: HgiGateway
         """
         hgi_gateway._gateway._engine._protocol._this_msg = None
+        hgi_gateway._gateway._engine._protocol._last_rx_time = None
         assert not await hgi_gateway.is_active()
+
+    @pytest.mark.asyncio
+    async def test_is_active_rx_but_filtered(
+        self, hgi_gateway: HgiGateway
+    ) -> None:
+        """Test is_active returns True when packets were received but
+        filtered out by the device_id filter.
+
+        This is the key scenario for gateway health: the transport is
+        receiving RF traffic, but none of the packets passed the device_id
+        filter (e.g. all from unknown devices).  The gateway should still
+        be considered active (issue 1185).
+
+        :param hgi_gateway: The gateway fixture.
+        :type hgi_gateway: HgiGateway
+        """
+        hgi_gateway._gateway._engine._protocol._this_msg = None
+        hgi_gateway._gateway._engine._protocol._last_rx_time = dt.now(UTC)
+        assert await hgi_gateway.is_active()
 
     @pytest.mark.asyncio
     async def test_is_active_recent_msg(self, hgi_gateway: HgiGateway) -> None:
