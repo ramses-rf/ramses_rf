@@ -1526,7 +1526,8 @@ async def test_write_routed_marks_child_online_on_success() -> None:
 
     # Successful TX should mark the child online
     await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
-    assert pool._children[0].availability is NodeAvailability.ONLINE
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
 
 
 async def test_write_routed_marks_child_online_on_send_frame() -> None:
@@ -1545,7 +1546,8 @@ async def test_write_routed_marks_child_online_on_send_frame() -> None:
     assert pool._children[0].availability is NodeAvailability.STALE
 
     await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
-    assert pool._children[0].availability is NodeAvailability.ONLINE
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
 
 
 async def test_write_frame_legacy_marks_child_online() -> None:
@@ -1563,4 +1565,5 @@ async def test_write_frame_legacy_marks_child_online() -> None:
 
     # Use the legacy write_frame path directly
     await pool.write_frame("I --- 01:123456 18:000730 --:------ 30C9 001 00")
-    assert pool._children[0].availability is NodeAvailability.ONLINE
+    availability: NodeAvailability = pool._children[0].availability
+    assert availability is NodeAvailability.ONLINE
