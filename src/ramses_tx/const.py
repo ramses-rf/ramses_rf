@@ -336,6 +336,15 @@ DEVICE_ID_REGEX = SimpleNamespace(
     SEN=re.compile(r"^(01|03|04|12|22|34):[0-9]{6}$"),
 )
 
+# HGI device class prefix — all HGI/gateway device IDs start with "18:".
+# Centralised here so downstream packages (ramses_cc) don't hardcode the
+# prefix (separation of concerns / CQRS).
+HGI_PREFIX: Final = "18:"
+
+# HGI device ID pattern without anchors, for embedding in larger regexes
+# (e.g. URL parsing).  Use DEVICE_ID_REGEX.HGI for full-match validation.
+HGI_ID_PATTERN: Final = r"18:[0-9]{6}"
+
 # Domains
 F6: Final = "F6"
 F7: Final = "F7"

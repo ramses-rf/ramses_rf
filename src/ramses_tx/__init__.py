@@ -19,10 +19,13 @@ from .address import (
     Address,
 )
 from .const import (
+    DEVICE_ID_REGEX,
     F9,
     FA,
     FC,
     FF,
+    HGI_ID_PATTERN,
+    HGI_PREFIX,
     SZ_ACTIVE_GATEWAY,
     SZ_ACTIVE_HGI,
     SZ_REPEAT_COUNT,
@@ -83,6 +86,10 @@ __all__ = [
     "FA",
     "FC",
     "FF",
+    "HGI_PREFIX",
+    "HGI_ID_PATTERN",
+    #
+    "DEVICE_ID_REGEX",
     #
     "DeviceIdT",
     "IndexT",
