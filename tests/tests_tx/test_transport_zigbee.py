@@ -10,8 +10,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from ramses_tx import exceptions as exc
+from ramses_tx.address import HGI_DEV_ADDR
 from ramses_tx.transport import TransportConfig
 from ramses_tx.transport.zigbee import ZigbeeTransport
+from ramses_tx.transport.zigbee.transport import _hgi_id_from_ieee
 
 # ---------------------------------------------------------------------------
 # Valid test URL  (zigbee://ieee/cluster/attr/endpoint/write_cluster/write_attr/write_endpoint)
@@ -44,6 +46,7 @@ def _mock_create_task() -> MagicMock:
 def _make_transport(
     url: str = _VALID_URL,
     app_context: Any = "DEFAULT_MOCK",
+    configured_hgi_id: str | None = None,
 ) -> ZigbeeTransport:
     """Create a ZigbeeTransport with *_async_init* suppressed.
 
@@ -71,7 +74,9 @@ def _make_transport(
     transport = ZigbeeTransport(
         url,
         mock_protocol,
-        config=TransportConfig(app_context=app_context),
+        config=TransportConfig(
+            app_context=app_context, configured_hgi_id=configured_hgi_id
+        ),
         loop=mock_loop,
     )
     # Re-install the coro-closing mock so that any subsequent create_task calls
@@ -1442,6 +1447,75 @@ class TestExceptionPropagation(unittest.TestCase):
 
         with self.assertRaises(CustomUnhandledError):
             self.t.attribute_updated(self.t._attr_id, "1/2|part1")
+
+
+# ---------------------------------------------------------------------------
+# 27. HGI identity derivation from the IEEE address
+# ---------------------------------------------------------------------------
+
+
+class TestHgiIdFromIeee(unittest.TestCase):
+    """Tests for ``_hgi_id_from_ieee`` (ramses_esp MAC-derived identity)."""
+
+    def test_elecram_c6_ieee_derives_hgi_id(self) -> None:
+        # Verified on real hardware: base MAC 10:bd:a3:a7:e0:dc -> 18:254172.
+        self.assertEqual(
+            _hgi_id_from_ieee("10:bd:a3:ff:fe:a7:e0:dc"), "18:254172"
+        )
+
+    def test_second_known_device_vector(self) -> None:
+        # Base MAC cc:ba:97:09:fc:bc belongs to a real gateway with HGI
+        # 18:130236; its EUI-64 expansion inserts ff:fe in the middle.
+        self.assertEqual(
+            _hgi_id_from_ieee("cc:ba:97:ff:fe:09:fc:bc"), "18:130236"
+        )
+
+    def test_result_is_masked_to_18_bits(self) -> None:
+        # 0x0a47f0 & 0x3ffff = 0x047f0 = 149488 (18:149488 on real HW).
+        self.assertEqual(
+            _hgi_id_from_ieee("cc:ba:97:ff:fe:0a:47:f0"), "18:149488"
+        )
+
+    def test_non_fffe_eui64_returns_none(self) -> None:
+        # _IEEE (00:11:22:33:44:55:66:77) is not a MAC+ff:fe expansion.
+        self.assertIsNone(_hgi_id_from_ieee(_IEEE))
+
+    def test_wrong_part_count_returns_none(self) -> None:
+        self.assertIsNone(_hgi_id_from_ieee("10:bd:a3:a7:e0:dc"))
+
+    def test_non_hex_octet_returns_none(self) -> None:
+        self.assertIsNone(_hgi_id_from_ieee("zz:bd:a3:ff:fe:a7:e0:dc"))
+
+
+class TestResolveHgiId(unittest.TestCase):
+    """Tests for ``ZigbeeTransport._resolve_hgi_id`` precedence."""
+
+    _C6_URL = (
+        "zigbee://10:bd:a3:ff:fe:a7:e0:dc/0xFC00/0x0000/1/0xFC00/0x0001/1"
+    )
+
+    def test_configured_hgi_id_wins_over_derivation(self) -> None:
+        t = _make_transport(url=self._C6_URL, configured_hgi_id="18:099999")
+        self.assertEqual(t._resolve_hgi_id(), "18:099999")
+
+    def test_derived_from_ieee_when_not_configured(self) -> None:
+        t = _make_transport(url=self._C6_URL)
+        self.assertEqual(t._resolve_hgi_id(), "18:254172")
+
+    def test_non_derivable_ieee_falls_back_to_sentinel(self) -> None:
+        t = _make_transport()  # _IEEE is not a MAC+ff:fe expansion
+        self.assertEqual(t._resolve_hgi_id(), HGI_DEV_ADDR.id)
+        self.assertEqual(t._resolve_hgi_id(), "18:000730")
+
+    def test_resolved_id_is_never_the_ieee(self) -> None:
+        # Regression: the IEEE must never be used as the RAMSES HGI ID —
+        # it caused device_id filter exceptions and bad src patching.
+        for url in (self._C6_URL, _VALID_URL):
+            t = _make_transport(url=url)
+            hgi_id = t._resolve_hgi_id()
+            self.assertNotEqual(hgi_id, t._ieee)
+            self.assertTrue(hgi_id.startswith("18:"))
+            self.assertNotIn("ff:fe", hgi_id)
 
 
 if __name__ == "__main__":

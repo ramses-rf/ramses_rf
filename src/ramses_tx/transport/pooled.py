@@ -286,6 +286,7 @@ class _ChildProtocolProxy(ProtocolInterface):
         self._child_id = child_id
         self._connected: bool = False
         self._conn_event: asyncio.Event = asyncio.Event()
+        self._conn_error: Exception | None = None
 
     # -- ProtocolInterface ----------------------------------------------
 
@@ -294,13 +295,18 @@ class _ChildProtocolProxy(ProtocolInterface):
     ) -> None:
         """Forward connection_made to the pool for tracking."""
         self._connected = True
+        self._conn_error = None
         self._conn_event.set()
         self._pool._on_child_connected(self._child_id, transport)
 
     def connection_lost(self, error: Exception | None) -> None:
         """Forward connection_lost to the pool for tracking."""
         self._connected = False
-        self._conn_event.clear()
+        self._conn_error = error
+        # Wake waiters so a failed child surfaces its error immediately
+        # instead of stalling pool creation for the full timeout
+        # (e.g. a Zigbee child that cannot reach ZHA).
+        self._conn_event.set()
         self._pool._on_child_disconnected(self._child_id, error)
 
     def packet_received(
@@ -344,6 +350,11 @@ class _ChildProtocolProxy(ProtocolInterface):
                 f"Child transport {self._child_id} did not connect "
                 f"within {timeout}s"
             ) from err
+        if not self._connected:
+            raise exc.TransportError(
+                f"Child transport {self._child_id} failed to connect: "
+                f"{self._conn_error}"
+            ) from self._conn_error
         # Return the pool — callers just need a TransportInterface.
         return self._pool
 

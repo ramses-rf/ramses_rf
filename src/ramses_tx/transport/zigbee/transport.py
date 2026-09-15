@@ -23,6 +23,35 @@ from .framing import ZigbeeFramingHandler
 _LOGGER = logging.getLogger(__name__)
 
 
+def _hgi_id_from_ieee(ieee: str) -> str | None:
+    """Derive the ramses_esp gateway ID from a Zigbee IEEE address.
+
+    ramses_esp derives its gateway ID from the last three bytes of the
+    base MAC address::
+
+        DevId = (mac[3]<<16 | mac[4]<<8 | mac[5]) & 0x3FFFF
+
+    The device's IEEE (EUI-64) address is the 48-bit base MAC expanded
+    by inserting ``ff:fe`` in the middle, so ``mac[3:6] == ieee[5:8]``
+    and the derivation is reversible.
+
+    :param ieee: The IEEE address, e.g. ``10:bd:a3:ff:fe:a7:e0:dc``.
+    :returns: The HGI device ID (e.g. ``18:254172``), or None if the
+        IEEE is not a standard EUI-64 expansion of the base MAC.
+    """
+    parts = ieee.split(":")
+    if len(parts) != 8:
+        return None
+    try:
+        octets = [int(p, 16) for p in parts]
+    except ValueError:
+        return None
+    if octets[3] != 0xFF or octets[4] != 0xFE:
+        return None  # not a MAC-with-ff:fe EUI-64 — can't derive safely
+    dev_id = ((octets[5] << 16) | (octets[6] << 8) | octets[7]) & 0x3FFFF
+    return f"18:{dev_id:06d}"
+
+
 class _ZigbeeTransportAbstractor:
     """Do the bare minimum to abstract a transport from its underlying Zigbee class."""
 
@@ -350,6 +379,30 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
 
     async def _wait_for_device_ready(self, device: Any, ieee: Any) -> None:
         await self._connection_mgr.wait_for_device_ready(device, ieee)
+
+    def _resolve_hgi_id(self) -> str:
+        """Resolve the RAMSES HGI device ID for this gateway.
+
+        The IEEE address is NOT a RAMSES HGI ID and must never be used
+        as one — it would cause device_id filter exceptions and
+        incorrect outbound packet patching. Precedence:
+
+        1. ``configured_hgi_id`` (explicit override) wins.
+        2. Derive from the IEEE: ramses_esp derives its gateway ID from
+           the last three bytes of the base MAC, and the IEEE address is
+           the base MAC expanded to EUI-64 via an ``ff:fe`` insertion —
+           so the derivation is reversible (see ``_hgi_id_from_ieee``).
+        3. Fall back to the unknown-HGI sentinel (``18:000730``); the
+           child is then receive-only until RF traffic reveals the real
+           ID.
+        """
+        from ...address import HGI_DEV_ADDR
+
+        return (
+            self._configured_hgi_id
+            or _hgi_id_from_ieee(self._ieee)
+            or HGI_DEV_ADDR.id
+        )
 
     def _get_cluster(
         self,
@@ -734,13 +787,16 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
             self._attach_clusters(device)
             await self._bind_and_configure()
 
-            self._extra[SZ_ACTIVE_HGI] = self._ieee
-            self._make_connection(gateway_id=DeviceIdT(str(self._ieee)))
+            hgi_id = self._resolve_hgi_id()
+            self._extra[SZ_ACTIVE_HGI] = hgi_id
+            self._make_connection(gateway_id=DeviceIdT(hgi_id))
             _LOGGER.info(
-                "Zigbee transport ready: ieee=%s cluster=0x%04x attr=0x%04x",
+                "Zigbee transport ready: ieee=%s cluster=0x%04x attr=0x%04x "
+                "(hgi_id=%s)",
                 self._ieee,
                 self._cluster_id,
                 self._attr_id,
+                hgi_id,
             )
         except asyncio.CancelledError:
             raise

@@ -48,6 +48,10 @@
   ]
 
 #
+[project.optional-dependencies]
+zigbee = ["zigpy>=2.0.0"]           # ZigbeeTransport (Phase 3) — provided by ZHA inside HA
+
+#
 [project.urls]
   "Homepage" = "https://github.com/ramses-rf/ramses_rf"
   "Bug Tracker" = "https://github.com/ramses-rf/ramses_rf/issues"

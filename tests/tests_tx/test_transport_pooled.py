@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
+from ramses_tx import exceptions as exc
 from ramses_tx.const import I_, SZ_ACTIVE_HGI, SZ_IS_EVOFW3, Code
 from ramses_tx.transport.base import TransportConfig
 from ramses_tx.transport.pooled import (
@@ -384,6 +385,56 @@ async def test_unaccepted_serial_child_is_receive_only() -> None:
     assert pool._children[0].accepted is False
     assert pool._children[0].is_sendable is False
     proto.packet_received.assert_called_once()
+
+
+async def test_sentinel_hgi_zigbee_child_is_receive_only() -> None:
+    """A child reporting the unknown-HGI sentinel is never selected for TX.
+
+    Zigbee transports fall back to ``18:000730`` when the real HGI ID
+    cannot be derived or configured. Unless that sentinel is itself in
+    ``accepted_hgis`` (HGI80 placeholder setups), the child must remain
+    receive-only and must not be chosen by ``_select_child``.
+    """
+    proto = _make_mock_protocol()
+    zigbee_child = _make_mock_transport(hgi="18:000730")
+    mqtt_child = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto,
+        [zigbee_child, mqtt_child],
+        config=TransportConfig(),
+        accepted_hgis={"18:001111"},
+    )
+
+    _connect_and_ready(pool, 0, zigbee_child)
+    _connect_and_ready(pool, 1, mqtt_child)
+    await asyncio.sleep(0.01)
+
+    assert pool._children[0].accepted is False
+    assert pool._children[0].is_sendable is False
+    assert pool._select_child() is pool._children[1]
+
+
+async def test_child_connection_lost_fails_wait_promptly() -> None:
+    """A child that fails to connect surfaces the error, not a timeout.
+
+    Regression: ``wait_for_connection_made`` previously only woke on
+    ``connection_made`` — a child whose transport fails during init
+    (e.g. a zigbee:// child with no ZHA) stalled pool construction for
+    the full per-child timeout.  ``connection_lost`` must now wake the
+    waiter with the real error.
+    """
+    proto = _make_mock_protocol()
+    pool = PooledTransport(proto, [None], config=TransportConfig())
+    proxy = _ChildProtocolProxy(pool, 0)
+
+    # Simulate a child transport failing during async init.
+    proxy.connection_lost(exc.TransportZigbeeError("no ZHA gateway"))
+
+    start = dt.now()
+    with pytest.raises(exc.TransportError, match="failed to connect"):
+        await proxy.wait_for_connection_made(timeout=60.0)
+    # Must fail fast — not after the 60s timeout.
+    assert (dt.now() - start).total_seconds() < 5.0
 
 
 async def test_outbound_fails_when_no_child_connected() -> None:
