@@ -8,6 +8,7 @@ from ramses_rf.const import SZ_REL_HUMIDITY
 from ramses_rf.models import HvacState
 from ramses_rf.models.hvac_schemas import _22F1_MODE_MAX, _22F1_MODE_VASCO
 from ramses_rf.strategies.base import HvacStrategyBase
+from ramses_rf.strategies.vasco import _VASCO_BOOST_COMMANDS
 from ramses_tx.const import Code
 
 
@@ -23,6 +24,12 @@ class ClimaRadStrategy(HvacStrategyBase):
         k: v
         for k, v in HvacStrategyBase._DUTCH_ALIASES.items()
         if v in _22F1_MODE_VASCO.values()
+    }
+    _builtin_commands: dict[str, dict[str, str]] = dict(_VASCO_BOOST_COMMANDS)
+    _boost_aliases = {
+        k: v
+        for k, v in HvacStrategyBase._DUTCH_BOOST_ALIASES.items()
+        if v in _VASCO_BOOST_COMMANDS
     }
 
     def apply_quirk(

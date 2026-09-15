@@ -489,3 +489,87 @@ class TestQuirkDispatch:
         result = apply_hvac_quirks(payload, None, Code._12A0)
 
         assert result["supply_temp"] == 18.5
+
+
+# ---------------------------------------------------------------------------
+# Builtin boost_timer commands (issue 1113)
+# ---------------------------------------------------------------------------
+
+
+class TestBuiltinBoostCommands:
+    """Builtin boost_timer commands per vendor strategy."""
+
+    def test_orcon_has_boost_timer_commands(self) -> None:
+        cmds = OrconStrategy().builtin_commands
+        boost = {
+            k: v for k, v in cmds.items() if v.get("type") == "boost_timer"
+        }
+        assert len(boost) == 9
+        assert "low_15" in boost
+        assert "medium_30" in boost
+        assert "high_60" in boost
+        # All use 22F3
+        for cmd in boost.values():
+            assert cmd["code"] == Code._22F3
+            assert cmd["verb"] == "I"
+
+    def test_orcon_boost_aliases(self) -> None:
+        strategy = OrconStrategy()
+        assert strategy._boost_aliases == {
+            "laag_15": "low_15",
+            "laag_30": "low_30",
+            "laag_60": "low_60",
+            "middel_15": "medium_15",
+            "middel_30": "medium_30",
+            "middel_60": "medium_60",
+            "hoog_15": "high_15",
+            "hoog_30": "high_30",
+            "hoog_60": "high_60",
+        }
+
+    def test_itho_has_simple_boost_commands(self) -> None:
+        cmds = IthoStrategy().builtin_commands
+        boost = {
+            k: v for k, v in cmds.items() if v.get("type") == "boost_timer"
+        }
+        assert len(boost) == 3
+        assert "boost_10" in boost
+        assert "boost_20" in boost
+        assert "boost_30" in boost
+        # Itho uses 3-byte payload (no speed selection)
+        for cmd in boost.values():
+            assert cmd["code"] == Code._22F3
+            assert len(cmd["payload"]) == 6  # 3 bytes
+
+    def test_itho_has_no_boost_aliases(self) -> None:
+        strategy = IthoStrategy()
+        assert strategy._boost_aliases == {}
+
+    def test_vasco_has_boost_timer_commands(self) -> None:
+        cmds = VascoStrategy().builtin_commands
+        boost = {
+            k: v for k, v in cmds.items() if v.get("type") == "boost_timer"
+        }
+        assert len(boost) == 9
+        assert "low_15" in boost
+        assert "high_60" in boost
+
+    def test_climarad_shares_vasco_boost_commands(self) -> None:
+        v_cmds = VascoStrategy().builtin_commands
+        c_cmds = ClimaRadStrategy().builtin_commands
+        assert v_cmds == c_cmds
+
+    def test_nuaire_has_no_boost_commands(self) -> None:
+        cmds = NuaireStrategy().builtin_commands
+        assert len(cmds) == 0
+
+    def test_orcon_boost_payload_matches_user_config(self) -> None:
+        """Verify Orcon boost payloads match the user's config from
+        issue 500 (the reference payloads for this feature).
+        """
+        cmds = OrconStrategy().builtin_commands
+        assert cmds["high_15"]["payload"] == "00120F03040404"
+        assert cmds["high_30"]["payload"] == "00121E03040404"
+        assert cmds["high_60"]["payload"] == "00123C03040404"
+        assert cmds["low_15"]["payload"] == "00120F01040404"
+        assert cmds["medium_30"]["payload"] == "00121E02040404"

@@ -31,6 +31,32 @@ class IthoStrategy(HvacStrategyBase):
         if v in _22F1_MODE_ITHO.values()
     }
 
+    # 22F3 timed boost commands (3-byte Itho format).
+    # Payload: 00 00 <mins>
+    # Itho boost has no speed selection — it boosts to the
+    # device's max speed for the given duration.
+    _builtin_commands: dict[str, dict[str, str]] = {
+        "boost_10": {
+            "verb": "I",
+            "code": Code._22F3,
+            "payload": "00000A",
+            "type": "boost_timer",
+        },
+        "boost_20": {
+            "verb": "I",
+            "code": Code._22F3,
+            "payload": "000014",
+            "type": "boost_timer",
+        },
+        "boost_30": {
+            "verb": "I",
+            "code": Code._22F3,
+            "payload": "00001E",
+            "type": "boost_timer",
+        },
+    }
+    # "boost" is the same in Dutch — no aliases needed
+
     def apply_quirk(
         self,
         payload: dict[str, Any],

@@ -353,6 +353,29 @@ class HvacStrategyBase:
     #: - ``"other"``       — anything not in the standard code map
     _builtin_commands: dict[str, dict[str, str]] = {}
 
+    #: Dutch aliases for boost_timer commands (alias → canonical
+    #: name).  Subclasses build their own from this source, picking
+    #: only entries whose canonical name exists in their
+    #: ``_builtin_commands``.  Consumers use these to expose
+    #: localised preset names in the UI (e.g. ``laag_15`` for
+    #: ``low_15``).
+    _DUTCH_BOOST_ALIASES: dict[str, str] = {
+        "laag_15": "low_15",
+        "laag_30": "low_30",
+        "laag_60": "low_60",
+        "middel_15": "medium_15",
+        "middel_30": "medium_30",
+        "middel_60": "medium_60",
+        "hoog_15": "high_15",
+        "hoog_30": "high_30",
+        "hoog_60": "high_60",
+    }
+
+    #: Boost timer aliases (alias → canonical name).  Subclasses
+    #: override with their own dict, containing only canonical names
+    #: that exist in their ``_builtin_commands``.
+    _boost_aliases: dict[str, str] = {}
+
     @property
     def builtin_commands(self) -> dict[str, dict[str, str]]:
         """Vendor-specific commands hardcoded in the strategy.
