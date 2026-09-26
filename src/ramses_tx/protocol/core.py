@@ -337,7 +337,11 @@ class PortProtocol(_DeviceIdFilterMixin):
         self._is_active = True
         self._resume_event.set()
 
-        if self._tx_worker_task is None or self._tx_worker_task.done():
+        if (
+            self._tx_worker_task is None
+            or self._tx_worker_task.done()
+            or self._tx_worker_task.cancelling()
+        ):
             self._tx_worker_task = self._loop.create_task(
                 self._tx_worker(), name="PortProtocol._tx_worker()"
             )
@@ -752,7 +756,9 @@ class PortProtocol(_DeviceIdFilterMixin):
         # active (e.g. a swallowed cancellation), recreate it so queued
         # commands cannot stall forever (issue 1241).
         if self._is_active and (
-            self._tx_worker_task is None or self._tx_worker_task.done()
+            self._tx_worker_task is None
+            or self._tx_worker_task.done()
+            or self._tx_worker_task.cancelling()
         ):
             self._tx_worker_task = self._loop.create_task(
                 self._tx_worker(), name="PortProtocol._tx_worker()"

@@ -101,6 +101,39 @@ async def test_port_protocol_connection_made(
 
 
 @pytest.mark.asyncio
+async def test_port_protocol_fast_reconnect_replaces_cancelling_worker(
+    port_protocol: PortProtocol, sample_cmd: CommandDTO
+) -> None:
+    """A reconnect must replace a cancellation-requested tx worker."""
+    first_transport = _make_mock_transport()
+    second_transport = _make_mock_transport()
+
+    # Arrange: reconnect before the old worker handles cancellation.
+    port_protocol.connection_made(first_transport, ramses=True)
+    old_worker = port_protocol._tx_worker_task
+    port_protocol.connection_lost(None)
+    port_protocol.connection_made(second_transport, ramses=True)
+
+    # Act: queue a command immediately after the reconnect.
+    send_task = asyncio.create_task(port_protocol.send_cmd(sample_cmd))
+    await asyncio.sleep(0.01)
+
+    # Assert: a replacement worker transmits and resolves the command.
+    assert old_worker is not None
+    assert port_protocol._tx_worker_task is not old_worker
+    assert second_transport.write_routed.called
+
+    echo_pkt = MagicMock(spec=Packet)
+    echo_pkt._is_echo = True
+    echo_pkt._hdr = sample_cmd.tx_header
+    echo_pkt._hdr_ = sample_cmd.tx_header
+    port_protocol._packet_received(echo_pkt)
+
+    assert await send_task == echo_pkt
+    port_protocol.connection_lost(None)
+
+
+@pytest.mark.asyncio
 async def test_port_protocol_send_cmd_success(
     port_protocol: PortProtocol, sample_cmd: CommandDTO
 ) -> None:
