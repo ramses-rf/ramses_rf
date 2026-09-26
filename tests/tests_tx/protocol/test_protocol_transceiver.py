@@ -191,6 +191,79 @@ async def test_port_protocol_connection_lost_cancels_queue(
 
 
 @pytest.mark.asyncio
+async def test_port_protocol_tx_worker_survives_caller_cancellation(
+    port_protocol: PortProtocol, sample_cmd: CommandDTO
+) -> None:
+    """A cancelled caller future must not kill the tx worker (issue 1241).
+
+    When the caller of ``send_cmd()`` is cancelled mid-flight (e.g. by an
+    upstream ``asyncio.wait_for`` timeout), the queue item's future is
+    cancelled.  The worker's ``wait_for(shield(fut))`` then raises
+    ``CancelledError`` — that must abort only the item, not the worker.
+    """
+    mock_transport = _make_mock_transport()
+
+    port_protocol.connection_made(mock_transport, ramses=True)
+
+    # Arrange: dequeue a command and leave the worker awaiting its echo.
+    send_task = asyncio.create_task(port_protocol.send_cmd(sample_cmd))
+    await asyncio.sleep(0.01)
+    assert mock_transport.write_routed.called
+
+    # Act: cancel the caller — the shared future is cancelled while the
+    # worker is shielding it.
+    send_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await send_task
+    await asyncio.sleep(0.01)
+
+    # Assert: the worker is alive and still drains the queue.
+    assert port_protocol._tx_worker_task is not None
+    assert not port_protocol._tx_worker_task.done()
+
+    send_task2 = asyncio.create_task(port_protocol.send_cmd(sample_cmd))
+    await asyncio.sleep(0.01)
+    assert mock_transport.write_routed.call_count == 2
+
+    echo_pkt = MagicMock(spec=Packet)
+    echo_pkt._is_echo = True
+    echo_pkt._hdr = sample_cmd.tx_header
+    echo_pkt._hdr_ = sample_cmd.tx_header
+    port_protocol._packet_received(echo_pkt)
+
+    assert await send_task2 == echo_pkt
+    port_protocol.connection_lost(None)
+
+
+@pytest.mark.asyncio
+async def test_port_protocol_tx_worker_restarted_by_send_cmd(
+    port_protocol: PortProtocol, sample_cmd: CommandDTO
+) -> None:
+    """send_cmd() recreates a dead tx worker while active (issue 1241)."""
+    mock_transport = _make_mock_transport()
+
+    port_protocol.connection_made(mock_transport, ramses=True)
+    port_protocol._tx_worker_task.cancel()
+    await asyncio.sleep(0.01)
+    assert port_protocol._tx_worker_task.done()
+
+    send_task = asyncio.create_task(port_protocol.send_cmd(sample_cmd))
+    await asyncio.sleep(0.01)
+
+    assert not port_protocol._tx_worker_task.done()
+    assert mock_transport.write_routed.called
+
+    echo_pkt = MagicMock(spec=Packet)
+    echo_pkt._is_echo = True
+    echo_pkt._hdr = sample_cmd.tx_header
+    echo_pkt._hdr_ = sample_cmd.tx_header
+    port_protocol._packet_received(echo_pkt)
+
+    assert await send_task == echo_pkt
+    port_protocol.connection_lost(None)
+
+
+@pytest.mark.asyncio
 async def test_port_protocol_pause_and_resume_writing(
     port_protocol: PortProtocol, sample_cmd: CommandDTO
 ) -> None:
