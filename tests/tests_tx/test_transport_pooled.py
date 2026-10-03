@@ -421,6 +421,51 @@ async def test_sentinel_hgi_zigbee_child_is_receive_only() -> None:
     assert pool._select_child() is pool._children[1]
 
 
+async def test_set_accepted_hgis_updates_routing_live() -> None:
+    """set_accepted_hgis changes outbound eligibility without reload.
+
+    Regression for issue 1261: accepting a newly-discovered HGI must
+    take effect immediately, and ``None`` must restore accept-all.
+    """
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(
+        proto,
+        [t0, t1],
+        config=TransportConfig(),
+        accepted_hgis={"18:001111"},
+    )
+
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+    await asyncio.sleep(0.01)
+
+    assert pool._children[0].is_sendable is True
+    assert pool._children[1].is_sendable is False
+    assert pool._select_child() is pool._children[0]
+
+    # Accept the second HGI — it becomes sendable immediately.
+    pool.set_accepted_hgis({"18:001111", "18:002222"})
+    assert pool._children[1].accepted is True
+    assert pool._children[1].is_sendable is True
+
+    # Restrict to the second HGI — the first is excluded.
+    pool.set_accepted_hgis({"18:002222"})
+    assert pool._children[0].is_sendable is False
+    assert pool._children[1].is_sendable is True
+
+    # An accepted HGI with no child is tolerated (no error).
+    pool.set_accepted_hgis({"18:009999"})
+    assert pool._children[0].is_sendable is False
+    assert pool._children[1].is_sendable is False
+
+    # None restores backward-compatible accept-all.
+    pool.set_accepted_hgis(None)
+    assert pool._children[0].is_sendable is True
+    assert pool._children[1].is_sendable is True
+
+
 async def test_child_connection_lost_fails_wait_promptly() -> None:
     """A child that fails to connect surfaces the error, not a timeout.
 
@@ -1196,17 +1241,6 @@ def test_no_remove_child_method(
         proto, [None], config=TransportConfig(), loop=event_loop
     )
     assert not hasattr(pool, "remove_child")
-
-
-def test_no_set_accepted_hgis_method(
-    event_loop: asyncio.AbstractEventLoop,
-) -> None:
-    """PooledTransport does not expose runtime set_accepted_hgis()."""
-    proto = _make_mock_protocol()
-    pool = PooledTransport(
-        proto, [None], config=TransportConfig(), loop=event_loop
-    )
-    assert not hasattr(pool, "set_accepted_hgis")
 
 
 # -- PR 1: Health monitoring (no last-resort re-enable) --------------------

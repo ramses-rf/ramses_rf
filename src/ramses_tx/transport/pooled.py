@@ -19,9 +19,10 @@ PR 1 rework: replaces parallel mutable arrays with an encapsulated
 (``ingress_hgi_id`` separate from RAMSES ``addr1``), loopback
 exclusion from route RSSI, a dict-backed O(1) dedup cache with
 sequence-aware keys, and RSSI TTL expiry.  Runtime
-``add_child()``/``remove_child()``/``set_accepted_hgis()`` are
-removed — construction and config-entry reload build immutable child
-registries for the first release.
+``add_child()``/``remove_child()`` remain deferred until a
+concurrency-safe synchronization model is designed (issue 1119);
+``set_accepted_hgis()`` is safe to call at runtime since the
+accepted set is only consulted at send time (issue 1261).
 """
 
 from __future__ import annotations
@@ -573,6 +574,30 @@ class PooledTransport(TransportInterface):
             :class:`~ramses_tx.transport.callbacks.MqttPoolOutbound`.
         """
         self._outbound_publisher = publisher
+
+    def set_accepted_hgis(self, accepted_hgis: set[str] | None) -> None:
+        """Update the accepted-HGI set at runtime.
+
+        Replaces the outbound-routing whitelist and re-evaluates each
+        child's ``accepted`` flag.  Takes effect immediately: the set is
+        only consulted at send time via ``is_sendable``.  HGIs without a
+        pool child are tolerated — they simply match nothing until a
+        child learns that identity.
+
+        :param accepted_hgis: HGI IDs eligible for outbound routing, or
+            ``None`` to accept every child (backward-compatible default).
+        """
+        self._accepted_hgis = (
+            frozenset(accepted_hgis) if accepted_hgis is not None else None
+        )
+        for child in self._children:
+            self._refresh_child_acceptance(child)
+        _LOGGER.info(
+            "PooledTransport: accepted_hgis updated to %s",
+            sorted(self._accepted_hgis)
+            if self._accepted_hgis is not None
+            else "all",
+        )
 
     # -- TX echo recording (issue 1185) ---------------------------------
 
