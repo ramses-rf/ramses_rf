@@ -19,9 +19,11 @@ PR 1 rework: replaces parallel mutable arrays with an encapsulated
 (``ingress_hgi_id`` separate from RAMSES ``addr1``), loopback
 exclusion from route RSSI, a dict-backed O(1) dedup cache with
 sequence-aware keys, and RSSI TTL expiry.  Runtime
-``add_child()``/``remove_child()``/``set_accepted_hgis()`` are
-removed — construction and config-entry reload build immutable child
-registries for the first release.
+``remove_child()`` tombstones a child in place (``child_id`` is the
+list index) so existing proxy bindings stay stable, and
+``move_hgi()`` reassigns an HGI identity between children
+(issue 1261).  Generic runtime ``add_child()`` and
+``set_accepted_hgis()`` are separate changes.
 """
 
 from __future__ import annotations
@@ -142,6 +144,7 @@ class PoolChild:
     consecutive_errors: int = 0
     pkts_received: int = 0
     send_ready: bool = False
+    removed: bool = False
 
     @property
     def is_connected(self) -> bool:
@@ -384,9 +387,11 @@ class PooledTransport(TransportInterface):
     stale children are retried only when no online child is available;
     disconnected or error-exhausted children remain excluded.
 
-    Children are immutable after construction — runtime
-    ``add_child()``/``remove_child()`` are deferred until a
-    concurrency-safe synchronization model is designed (issue 1119).
+    Children are tombstoned rather than removed from ``_children`` —
+    ``child_id`` is the list index, so popping would shift live proxy
+    bindings (issue 1119).  :meth:`remove_child` marks the child
+    ``removed`` and all routing/status/stats views skip it via
+    ``_live_children`` (issue 1261).
 
     :param protocol: The real protocol that receives deduplicated
         packets.
@@ -512,23 +517,33 @@ class PooledTransport(TransportInterface):
         return tuple(self._children)
 
     @property
+    def _live_children(self) -> list[PoolChild]:
+        """Return children that have not been removed (issue 1261).
+
+        Removed children stay in ``_children`` (tombstoned) so their
+        ``child_id`` indices and proxy bindings remain stable; all
+        routing, status and stats views go through this filter.
+        """
+        return [c for c in self._children if not c.removed]
+
+    @property
     def _active_children(self) -> list[PoolChild]:
         """Return children with a transport or callback-driven."""
         return [
             c
-            for c in self._children
+            for c in self._live_children
             if c.transport is not None or c.callback_driven
         ]
 
     @property
     def _serial_child_count(self) -> int:
         """Count of non-callback (serial) children in the pool."""
-        return sum(1 for c in self._children if not c.callback_driven)
+        return sum(1 for c in self._live_children if not c.callback_driven)
 
     @property
     def _connected_children(self) -> list[PoolChild]:
         """Return connected children."""
-        return [c for c in self._children if c.is_connected]
+        return [c for c in self._live_children if c.is_connected]
 
     @property
     def _active_hgi_ids(self) -> list[DeviceIdT]:
@@ -538,7 +553,7 @@ class PooledTransport(TransportInterface):
         """
         return [
             c.hgi_id
-            for c in self._children
+            for c in self._live_children
             if c.is_connected and c.hgi_id is not None
         ]
 
@@ -557,7 +572,7 @@ class PooledTransport(TransportInterface):
         :param hgi_id: The HGI device ID to look up.
         :returns: The matching PoolChild, or ``None`` if not found.
         """
-        for child in self._children:
+        for child in self._live_children:
             if child.hgi_id is not None and str(child.hgi_id) == hgi_id:
                 return child
         return None
@@ -573,6 +588,75 @@ class PooledTransport(TransportInterface):
             :class:`~ramses_tx.transport.callbacks.MqttPoolOutbound`.
         """
         self._outbound_publisher = publisher
+
+    def remove_child(self, child_id: int) -> bool:
+        """Tombstone a child: exclude it from routing, status, stats.
+
+        The registry slot is kept (``child_id`` is the list index) so
+        existing proxy bindings and in-flight ``RoutedCommand``s stay
+        stable — the child is flagged ``removed`` and skipped by every
+        consumer via ``_live_children`` (issue 1261).  Late packets and
+        reconnects from a tombstoned child are dropped by the
+        ``_on_child_*`` guards.
+
+        :param child_id: The stable child ID to remove.
+        :returns: ``True`` if the child was removed, ``False`` if it
+            was already removed or the ID is out of range.
+        """
+        try:
+            child = self._children[child_id]
+        except IndexError:
+            return False
+        if child.removed:
+            return False
+        child.removed = True
+        if child.transport is not None:
+            with contextlib.suppress(Exception):
+                child.transport.close()
+            child.transport = None
+        child.mark_disconnected()
+        _LOGGER.info(
+            "PooledTransport: removed child %d (HGI=%s), %d live children",
+            child_id,
+            child.hgi_id,
+            len(self._live_children),
+        )
+        return True
+
+    def move_hgi(self, src_child_id: int, dst_child_id: int) -> bool:
+        """Reassign an HGI identity from one child to another.
+
+        For a ``_preferred_type`` switch (same HGI reachable via a
+        different transport): transfers ``hgi_id``, ``accepted`` and
+        the ``rssi_tracker`` (preserving route quality) to the
+        destination child and clears the source's identity.  The
+        source child itself is left live; callers wanting it gone
+        should also call :meth:`remove_child` (issue 1261).
+
+        :param src_child_id: The child currently owning the HGI.
+        :param dst_child_id: The child to receive the HGI.
+        :returns: ``True`` on success, ``False`` if either ID is
+            invalid, tombstoned, or the source has no HGI.
+        """
+        try:
+            src = self._children[src_child_id]
+            dst = self._children[dst_child_id]
+        except IndexError:
+            return False
+        if src.removed or dst.removed or src.hgi_id is None:
+            return False
+        dst.hgi_id = src.hgi_id
+        src.hgi_id = None
+        dst.accepted = src.accepted
+        dst.rssi_tracker = src.rssi_tracker
+        self._refresh_child_acceptance(src)
+        _LOGGER.info(
+            "PooledTransport: moved HGI %s from child %d to child %d",
+            dst.hgi_id,
+            src_child_id,
+            dst_child_id,
+        )
+        return True
 
     # -- TX echo recording (issue 1185) ---------------------------------
 
@@ -677,7 +761,7 @@ class PooledTransport(TransportInterface):
         if self._closing:
             return
         self._closing = True
-        for child in self._children:
+        for child in self._live_children:
             if child.transport is None:
                 continue
             try:
@@ -702,26 +786,28 @@ class PooledTransport(TransportInterface):
         ``SZ_IS_EVOFW3``.
         """
         if name == "pool_rssi_trackers":
-            return [c.rssi_tracker for c in self._children if c.is_connected]
+            return [
+                c.rssi_tracker for c in self._live_children if c.is_connected
+            ]
         if name == SZ_ACTIVE_HGI:
-            for c in self._children:
+            for c in self._live_children:
                 if c.is_connected and c.hgi_id is not None:
                     return c.hgi_id
             return default
         if name == "pool_hgi_ids":
             return [
                 str(c.hgi_id)
-                for c in self._children
+                for c in self._live_children
                 if c.is_connected and c.hgi_id is not None
             ]
         if name == "pool_rssi_by_hgi":
             return {
                 str(c.hgi_id): c.rssi_tracker
-                for c in self._children
+                for c in self._live_children
                 if c.is_connected and c.hgi_id is not None
             }
         if name == SZ_IS_EVOFW3:
-            for c in self._children:
+            for c in self._live_children:
                 if c.is_connected and c.transport_obj is not None:
                     val = c.transport_obj.get_extra_info(SZ_IS_EVOFW3, False)
                     if val:
@@ -733,28 +819,33 @@ class PooledTransport(TransportInterface):
             # this, the protocol patches the HGI ID to 18:000730
             # (HGI80 mode), causing outbound packets to use the
             # sentinel instead of the real HGI ID.
-            if any(c.callback_driven for c in self._children):
+            if any(c.callback_driven for c in self._live_children):
                 return True
             return default
         if name == "pool_stats":
             return {
-                "children": len(self._children),
-                "connected": sum(1 for c in self._children if c.is_connected),
-                "healthy": sum(
-                    1 for c in self._children if c.is_connected and c.is_online
+                "children": len(self._live_children),
+                "connected": sum(
+                    1 for c in self._live_children if c.is_connected
                 ),
-                "received": [c.pkts_received for c in self._children],
+                "healthy": sum(
+                    1
+                    for c in self._live_children
+                    if c.is_connected and c.is_online
+                ),
+                "received": [c.pkts_received for c in self._live_children],
                 "deduped": self._pkts_deduped,
                 "forwarded": self._pkts_forwarded,
                 "avg_rssi": [
-                    round(self._best_rssi(c), 1) for c in self._children
+                    round(self._best_rssi(c), 1) for c in self._live_children
                 ],
-                "child_health": [c.is_online for c in self._children],
+                "child_health": [c.is_online for c in self._live_children],
                 "consecutive_errors": [
-                    c.consecutive_errors for c in self._children
+                    c.consecutive_errors for c in self._live_children
                 ],
                 "child_hgi": [
-                    str(c.hgi_id) if c.hgi_id else None for c in self._children
+                    str(c.hgi_id) if c.hgi_id else None
+                    for c in self._live_children
                 ],
                 "accepted_hgis": (
                     sorted(self._accepted_hgis)
@@ -792,7 +883,7 @@ class PooledTransport(TransportInterface):
                     else None
                 ),
             }
-            for c in self._children
+            for c in self._live_children
         ]
 
     async def send_frame(self, frame: str) -> None:
@@ -921,6 +1012,8 @@ class PooledTransport(TransportInterface):
         try:
             child = self._child_by_id(int(routed.child_id))
         except (IndexError, ValueError):
+            return WriteOutcome.NOT_SUBMITTED
+        if child.removed:
             return WriteOutcome.NOT_SUBMITTED
 
         # Callback-driven children (PR 4A): publish through the
@@ -1127,7 +1220,7 @@ class PooledTransport(TransportInterface):
         """
         child = self._child_by_id(child_id)
 
-        if self._closing:
+        if self._closing or child.removed:
             return
 
         child.pkts_received += 1
@@ -1201,7 +1294,7 @@ class PooledTransport(TransportInterface):
         if src_id:
             active_hgi_ids = {
                 str(c.hgi_id)
-                for c in self._children
+                for c in self._live_children
                 if c.is_connected and c.hgi_id is not None
             }
             if src_id not in active_hgi_ids:
@@ -1327,6 +1420,12 @@ class PooledTransport(TransportInterface):
     def _on_child_connected(self, child_id: int, transport_obj: Any) -> None:
         """Mark a child as connected and capture its HGI ID."""
         child = self._child_by_id(child_id)
+        if child.removed:
+            # A tombstoned child's transport reconnecting must not
+            # rejoin the pool — close it and drop the event.
+            with contextlib.suppress(Exception):
+                transport_obj.close()
+            return
         child.mark_connected(transport_obj)
         self._refresh_child_acceptance(child)
 
@@ -1335,7 +1434,7 @@ class PooledTransport(TransportInterface):
             child_id,
             child.hgi_id,
             len(self._connected_children),
-            len(self._children),
+            len(self._live_children),
         )
 
         # Notify the real protocol that the transport is connected.
@@ -1386,6 +1485,8 @@ class PooledTransport(TransportInterface):
         threshold, the child is marked offline.
         """
         child = self._child_by_id(child_id)
+        if child.removed:
+            return
         child.mark_disconnected()
         child.record_error()
 
@@ -1404,7 +1505,7 @@ class PooledTransport(TransportInterface):
             child_id,
             error,
             len(self._connected_children),
-            len(self._children),
+            len(self._live_children),
         )
 
         # If no children are connected, notify the real protocol.
@@ -1452,7 +1553,7 @@ class PooledTransport(TransportInterface):
         self._check_health()
 
         # Only consider sendable children.
-        candidates = [c for c in self._children if c.is_sendable]
+        candidates = [c for c in self._live_children if c.is_sendable]
         if not candidates:
             # Last resort: try stale children (connected but no recent
             # packets).  A stale child can still physically send — the
@@ -1461,7 +1562,7 @@ class PooledTransport(TransportInterface):
             # (issue 1185).
             candidates = [
                 c
-                for c in self._children
+                for c in self._live_children
                 if c.is_connected
                 and c.availability is NodeAvailability.STALE
                 and c.accepted
@@ -1528,7 +1629,7 @@ class PooledTransport(TransportInterface):
         """
         now = dt_now()
 
-        for child in self._children:
+        for child in self._live_children:
             if child.transport is None and not child.callback_driven:
                 continue
             if not child.is_connected:

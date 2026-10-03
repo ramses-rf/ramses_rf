@@ -421,6 +421,123 @@ async def test_sentinel_hgi_zigbee_child_is_receive_only() -> None:
     assert pool._select_child() is pool._children[1]
 
 
+# -- Runtime removal + HGI reassignment (issue 1261) ------------------------
+
+
+async def test_remove_child_tombstones_not_shifts() -> None:
+    """remove_child keeps sibling child_ids stable (no index shift)."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+    await asyncio.sleep(0.01)
+
+    assert pool.remove_child(0) is True
+    # Sibling's index/id and routing are unaffected.
+    assert pool._child_by_id(1).child_id == 1
+    assert pool._children[1].removed is False
+    assert pool._select_child() is pool._children[1]
+    # Tombstone is excluded from live views but still addressable.
+    assert pool._children[0].removed is True
+    assert pool._child_by_id(0).removed is True
+    assert len(pool._live_children) == 1
+    assert pool.remove_child(0) is False  # idempotent
+    assert pool.remove_child(9) is False  # out of range
+
+
+async def test_removed_child_drops_packets_and_writes() -> None:
+    """A tombstoned child forwards nothing and rejects TX."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    t1 = _make_mock_transport(hgi="18:002222")
+    pool = PooledTransport(proto, [t0, t1], config=TransportConfig())
+    _connect_and_ready(pool, 0, t0)
+    _connect_and_ready(pool, 1, t1)
+
+    pool.remove_child(0)
+
+    # Inbound packet on the removed child is dropped.
+    pool._on_child_packet(0, _make_packet(rssi="050"))
+    proto.packet_received.assert_not_called()
+
+    # In-flight routed command to the removed child is refused.
+    from ramses_tx.routing import RoutedCommand
+
+    routed = RoutedCommand(child_id="0", command=MagicMock())
+    outcome = await pool.write_routed(routed, "frame")
+    assert outcome.name == "NOT_SUBMITTED"
+    t0.write_frame.assert_not_called()
+    t0.close.assert_called_once()  # transport was closed on removal
+
+
+def test_removed_child_reconnect_is_rejected(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A reconnecting tombstoned child is closed, not rejoined."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+    pool.remove_child(0)
+    t0.close.reset_mock()
+
+    reconnect = _make_mock_transport(hgi="18:001111")
+    pool._on_child_connected(0, reconnect)
+    reconnect.close.assert_called_once()
+    assert pool._connected_children == []
+
+
+def test_move_hgi_transfers_identity_and_rssi(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """move_hgi carries hgi_id, accepted and rssi_tracker to dst."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto,
+        [t0, None],
+        config=TransportConfig(),
+        accepted_hgis={"18:001111"},
+        loop=event_loop,
+    )
+    pool._on_child_connected(0, t0)
+    src = pool._child_by_id(0)
+    src.rssi_tracker.record("04:111111", "050", dt.now())
+
+    dst = pool._child_by_id(1)
+    dst.callback_driven = True
+    assert pool.move_hgi(0, 1) is True
+
+    assert src.hgi_id is None
+    assert dst.hgi_id == DeviceIdT("18:001111")
+    assert dst.accepted is True
+    assert dst.rssi_tracker is src.rssi_tracker
+    # Source falls back to the accepted-set rule with no HGI.
+    assert src.accepted is True
+
+
+def test_move_hgi_rejects_invalid_args(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """move_hgi refuses bad ids, tombstones and identity-less src."""
+    proto = _make_mock_protocol()
+    t0 = _make_mock_transport(hgi="18:001111")
+    pool = PooledTransport(
+        proto, [t0, None], config=TransportConfig(), loop=event_loop
+    )
+    pool._on_child_connected(0, t0)
+
+    assert pool.move_hgi(9, 1) is False  # src out of range
+    assert pool.move_hgi(0, 9) is False  # dst out of range
+    assert pool.move_hgi(1, 0) is False  # src has no hgi_id
+    pool.remove_child(0)
+    assert pool.move_hgi(0, 1) is False  # src tombstoned
+
+
 async def test_child_connection_lost_fails_wait_promptly() -> None:
     """A child that fails to connect surfaces the error, not a timeout.
 
@@ -1185,17 +1302,6 @@ def test_no_add_child_method(
         proto, [None], config=TransportConfig(), loop=event_loop
     )
     assert not hasattr(pool, "add_child")
-
-
-def test_no_remove_child_method(
-    event_loop: asyncio.AbstractEventLoop,
-) -> None:
-    """PooledTransport does not expose runtime remove_child()."""
-    proto = _make_mock_protocol()
-    pool = PooledTransport(
-        proto, [None], config=TransportConfig(), loop=event_loop
-    )
-    assert not hasattr(pool, "remove_child")
 
 
 def test_no_set_accepted_hgis_method(

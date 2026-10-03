@@ -124,6 +124,28 @@ class MqttCallbackPoolAdapter:
             return None
         return self._pool._child_by_id(idx)
 
+    def remove_child(self, child_id: str) -> bool:
+        """Remove the pool child for a configured HGI at runtime.
+
+        Tombstones the pool child and drops the HGI mapping so
+        subsequent ``on_child_*`` callbacks for it warn and no-op
+        (issue 1261).
+
+        :param child_id: The configured logical child ID (HGI ID).
+        :returns: ``True`` if a child was removed, ``False`` if the
+            HGI was not registered.
+        """
+        idx = self._hgi_to_child.pop(child_id, None)
+        if idx is None:
+            return False
+        removed = self._pool.remove_child(idx)
+        _LOGGER.info(
+            "MqttCallbackPool: removed child %d for HGI %s",
+            idx,
+            child_id,
+        )
+        return removed
+
     # -- Inbound callback contract ---------------------------------------
 
     def on_child_online(
