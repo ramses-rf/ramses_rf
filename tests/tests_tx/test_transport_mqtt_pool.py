@@ -719,3 +719,82 @@ def test_no_accepted_hgi_ids_means_all_accepted(
     )
     assert pool._child_by_id(0).accepted is True
     assert pool._child_by_id(1).accepted is True
+
+
+# -- Runtime child registration (issue 1261) -------------------------------
+
+
+def test_add_child_registers_runtime_callback_child(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """adapter.add_child appends a callback-driven PoolChild."""
+    pool, adapter, _ = _make_callback_pool(event_loop=event_loop)
+    assert len(pool._children) == 2
+
+    idx = adapter.add_child("18:003333")
+
+    assert idx == 2
+    assert len(pool._children) == 3
+    child = pool._child_by_id(idx)
+    assert child.callback_driven is True
+    assert child.transport is None
+    assert str(child.hgi_id) == "18:003333"
+    assert child.port_name == "mqtt_ha://18:003333"
+    # Registered in the adapter's HGI map — callbacks resolve it.
+    assert adapter._lookup("18:003333") is child
+
+
+def test_add_child_idempotent(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Re-adding an existing HGI returns the same child, no dup."""
+    pool, adapter, _ = _make_callback_pool(event_loop=event_loop)
+    idx = adapter.add_child("18:003333")
+    assert adapter.add_child("18:003333") == idx
+    assert adapter.add_child("18:001111") == 0  # configured child
+    assert len(pool._children) == 3
+
+
+def test_add_child_respects_pool_accepted_hgis(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """Runtime children honour the pool's _accepted_hgis set."""
+    proto = _make_mock_protocol()
+    pool = PooledTransport(
+        proto,
+        [None],
+        config=TransportConfig(),
+        loop=event_loop,
+        accepted_hgis={"18:001111"},
+    )
+    adapter = MqttCallbackPoolAdapter(pool, ["18:001111"], _FakeOutbound())
+
+    # HGI in the accepted set → accepted.
+    idx_ok = adapter.add_child("18:001111")
+    assert idx_ok == 0  # already registered, no new child
+
+    idx_new = adapter.add_child("18:002222")
+    assert pool._child_by_id(idx_new).accepted is False
+
+    # Explicit override wins over the pool's accepted set.
+    idx_ovr = adapter.add_child("18:003333", accepted=True)
+    assert pool._child_by_id(idx_ovr).accepted is True
+
+
+async def test_runtime_child_can_transmit_once_online(
+    event_loop: asyncio.AbstractEventLoop,
+) -> None:
+    """A runtime-added child publishes via the outbound publisher."""
+    pool, adapter, outbound = _make_callback_pool(event_loop=event_loop)
+    idx = adapter.add_child("18:003333", accepted=True)
+    adapter.on_child_online("18:003333")
+
+    child = pool._child_by_id(idx)
+    assert child.is_sendable is True
+
+    from ramses_tx.routing import RoutedCommand
+
+    routed = RoutedCommand(child_id=str(idx), command=MagicMock())
+    outcome = await pool.write_routed(routed, "frame")
+    assert outcome.name == "SUBMITTED"
+    assert outbound.published == [("18:003333", "frame")]

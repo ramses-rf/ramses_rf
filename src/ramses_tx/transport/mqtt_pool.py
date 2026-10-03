@@ -124,6 +124,36 @@ class MqttCallbackPoolAdapter:
             return None
         return self._pool._child_by_id(idx)
 
+    def add_child(self, hgi_id: str, *, accepted: bool | None = None) -> int:
+        """Register a callback-driven child for an HGI at runtime.
+
+        Appends a new ``PoolChild`` via
+        :meth:`PooledTransport.add_callback_child` and maps the HGI
+        so subsequent ``on_child_*`` callbacks resolve it.  Use for
+        HGIs discovered (and accepted) after pool construction
+        (issue 1261).
+
+        :param hgi_id: The HGI device ID to add.
+        :param accepted: Explicit acceptance override.  ``None``
+            defers to the pool's ``_accepted_hgis`` rule.
+        :returns: The new child's stable pool ID, or the existing
+            ID if the HGI was already registered.
+        """
+        if hgi_id in self._hgi_to_child:
+            return self._hgi_to_child[hgi_id]
+        child_idx = self._pool.add_callback_child(hgi_id)
+        self._hgi_to_child[hgi_id] = child_idx
+        if accepted is not None:
+            self._pool._child_by_id(child_idx).accepted = accepted
+        _LOGGER.info(
+            "MqttCallbackPool: added child %d for HGI %s at runtime "
+            "(accepted=%s)",
+            child_idx,
+            hgi_id,
+            self._pool._child_by_id(child_idx).accepted,
+        )
+        return child_idx
+
     # -- Inbound callback contract ---------------------------------------
 
     def on_child_online(

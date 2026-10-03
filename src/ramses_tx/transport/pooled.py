@@ -19,9 +19,10 @@ PR 1 rework: replaces parallel mutable arrays with an encapsulated
 (``ingress_hgi_id`` separate from RAMSES ``addr1``), loopback
 exclusion from route RSSI, a dict-backed O(1) dedup cache with
 sequence-aware keys, and RSSI TTL expiry.  Runtime
-``add_child()``/``remove_child()``/``set_accepted_hgis()`` are
-removed — construction and config-entry reload build immutable child
-registries for the first release.
+``set_accepted_hgis()``/``remove_child()`` remain deferred until a
+concurrency-safe synchronization model is designed (issue 1119);
+``add_callback_child()`` supports append-only runtime add of
+callback-driven children (issue 1261).
 """
 
 from __future__ import annotations
@@ -384,9 +385,11 @@ class PooledTransport(TransportInterface):
     stale children are retried only when no online child is available;
     disconnected or error-exhausted children remain excluded.
 
-    Children are immutable after construction — runtime
-    ``add_child()``/``remove_child()`` are deferred until a
+    Transport-driven children are immutable after construction —
+    generic ``add_child()``/``remove_child()`` are deferred until a
     concurrency-safe synchronization model is designed (issue 1119).
+    Append-only ``add_callback_child()`` is supported for
+    callback-driven children (issue 1261).
 
     :param protocol: The real protocol that receives deduplicated
         packets.
@@ -573,6 +576,42 @@ class PooledTransport(TransportInterface):
             :class:`~ramses_tx.transport.callbacks.MqttPoolOutbound`.
         """
         self._outbound_publisher = publisher
+
+    def add_callback_child(
+        self, hgi_id: str, port_name: str | None = None
+    ) -> int:
+        """Append a callback-driven child for an HGI at runtime.
+
+        Safe at runtime because the append is atomic and the new
+        ``child_id`` equals the new list index — existing proxy
+        bindings and in-flight ``RoutedCommand``s are unaffected.
+        Only callback-driven children (``transport=None``) are
+        supported; transport-driven children are still construction-
+        only (issue 1119).
+
+        :param hgi_id: The HGI device ID the child represents.
+        :param port_name: Optional port name; defaults to
+            ``mqtt_ha://<hgi_id>``.
+        :returns: The new child's stable ID.
+        """
+        child_id = len(self._children)
+        child = PoolChild(
+            child_id=child_id,
+            port_name=port_name or f"mqtt_ha://{hgi_id}",
+            transport=None,
+            hgi_id=DeviceIdT(hgi_id),
+            callback_driven=True,
+        )
+        self._children.append(child)
+        self._refresh_child_acceptance(child)
+        _LOGGER.info(
+            "PooledTransport: added callback child %d for HGI %s "
+            "(accepted=%s)",
+            child_id,
+            hgi_id,
+            child.accepted,
+        )
+        return child_id
 
     # -- TX echo recording (issue 1185) ---------------------------------
 
