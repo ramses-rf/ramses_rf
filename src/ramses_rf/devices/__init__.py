@@ -14,7 +14,7 @@ from .dev_filter import DeviceFilter
 from .dev_registry import DeviceRegistry
 
 from .dev_base import (  # noqa: F401, isort: skip, pylint: disable=unused-import
-    BASE_CLASS_BY_SLUG as _BASE_CLASS_BY_SLUG,
+    BASE_CLASS_BY_SLUG,
     BatteryState,
     Device,
     Fakeable,
@@ -75,6 +75,7 @@ __all__ = [
     "UfhCircuit",
     "UfhController",
     "class_dev_heat",
+    "CLASS_BY_SLUG",
     # .hvac
     "HvacCarbonDioxideSensor",
     "HvacDisplayRemote",
@@ -125,7 +126,7 @@ _HVAC_CLASS_BY_SLUG = {
 
 # Aliases for DevType slugs that have no dedicated device class.  The
 # discovery scan engine labels devices with these slugs (e.g. 34: → RND),
-# but _CLASS_BY_SLUG only contains slugs that have a _SLUG attribute on a
+# but CLASS_BY_SLUG only contains slugs that have a _SLUG attribute on a
 # Device subclass.  Without these aliases, ramses_cc logs a warning every
 # 5 minutes for schema entries with these slugs (issue 854).
 _SLUG_ALIASES: dict[str, type[Device]] = {
@@ -136,12 +137,13 @@ _SLUG_ALIASES: dict[str, type[Device]] = {
     DevType.TR0: _HEAT_CLASS_BY_SLUG[DevType.TRV],  # 00: radiator valve
 }
 
-_CLASS_BY_SLUG = (
-    _BASE_CLASS_BY_SLUG
+CLASS_BY_SLUG = (
+    BASE_CLASS_BY_SLUG
     | _HEAT_CLASS_BY_SLUG
     | _HVAC_CLASS_BY_SLUG
     | _SLUG_ALIASES
 )
+_CLASS_BY_SLUG = CLASS_BY_SLUG  # compat: private name used by ramses_cc
 
 HEAT_DEV_CLASS_BY_SLUG = {
     k: v for k, v in _HEAT_CLASS_BY_SLUG.items() if k is not DevType.HEA
@@ -177,8 +179,8 @@ def best_dev_role(
         slug = traits.device_class
 
     # a specified device class always takes precedence (even if it is wrong)...
-    if slug and slug in _CLASS_BY_SLUG:
-        cls = _CLASS_BY_SLUG[slug]
+    if slug and slug in CLASS_BY_SLUG:
+        cls = CLASS_BY_SLUG[slug]
         _LOGGER.debug(
             "Using an explicitly-defined class for: %r (%s)",
             device_address,
