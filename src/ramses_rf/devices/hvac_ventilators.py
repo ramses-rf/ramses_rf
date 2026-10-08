@@ -97,11 +97,6 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
                  not available
         :rtype: int | None
         """
-        # Mark that we support 10D0 Filter Remaining
-        if not self._supports_10d0 and self.hvac_state.filter_remaining_days:
-            self._supports_10d0 = True
-            _LOGGER.debug("Device %s supports 10D0 Filter Change", self.id)
-
         return self.hvac_state.filter_remaining_days
 
     async def filter_remaining_percent(self) -> float | None:
@@ -111,11 +106,6 @@ class FilterChange(DeviceHvac):  # FAN: 10D0
                  not available
         :rtype: float | None
         """
-        # Mark that we support 10D0 Filter Remaining
-        if not self._supports_10d0 and self.hvac_state.filter_remaining_days:
-            self._supports_10d0 = True
-            _LOGGER.debug("Device %s supports 10D0 Filter Change", self.id)
-
         return self.hvac_state.filter_remaining_percent
 
     @property
@@ -194,7 +184,6 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
     def _init_fan_state(self) -> None:
         """Initialize FAN-specific instance attributes (idempotent)."""
-        self.__dict__.setdefault("_supports_10d0", False)
         self.__dict__.setdefault("_supports_2411", False)
         self.__dict__.setdefault("_params_2411", {})
         self.__dict__.setdefault("_initialized_callback", None)

@@ -96,6 +96,7 @@ class TestHvacVentilator:
         :param hvac_ventilator: The HvacVentilator fixture.
         :type hvac_ventilator: HvacVentilator
         """
+        assert hvac_ventilator._supports_10d0 is False
         assert hvac_ventilator._supports_2411 is False
         assert hvac_ventilator._initialized_callback is None
         assert hvac_ventilator._param_update_callback is None

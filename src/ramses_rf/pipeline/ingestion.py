@@ -898,6 +898,20 @@ class StateProjector:
                 continue
             updates[field_name] = field_val
 
+        # Flag filter_remaining support on device
+        if (
+            msg.code == Code._10D0
+            and not target._supports_10d0
+            and (
+                payload[SZ_REMAINING_DAYS] is not None
+                or payload[SZ_REMAINING_PERCENT] is not None
+            )
+        ):
+            target._supports_10d0 = True
+            _LOGGER.debug(
+                "Device %s confirmed 10D0 Filter Change support", target.id
+            )
+
         # Handle non-standard names passed by the semantic parsers
         if SZ_REMAINING_DAYS in payload:
             updates[SZ_FILTER_REMAINING_DAYS] = payload[SZ_REMAINING_DAYS]
