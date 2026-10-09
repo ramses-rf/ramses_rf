@@ -61,6 +61,7 @@ from .const import (
     SZ_REMAINING_PERCENT,
     SZ_REQUEST_REASON,
     SZ_REQUEST_SPEED,
+    SZ_SENSOR,
     SZ_SETPOINT,
     SZ_SPEED_CAPABILITIES,
     SZ_SUPPLY_FAN_SPEED,
@@ -71,6 +72,7 @@ from .const import (
     SZ_UFH_INDEX,
     SZ_UNTIL,
     SZ_ZONE_INDEX,
+    SZ_ZONES,
     DevType,
 )
 from .devices.dev_base import DeviceBase
@@ -358,7 +360,54 @@ def _resolve_logical_targets(
             ):
                 targets.append(parent)
 
+        # A zone may declare a controller-class device (e.g. a CTL used as
+        # a room thermostat) as its sensor, but Zone._update_schema refuses
+        # the binding, so the _parent lookup above misses.  Fall back to
+        # the sensor id declared in the configured schema.
+        for zone in _zones_by_declared_sensor(gateway, registry, msg.src.id):
+            if zone not in targets:
+                targets.append(zone)
+
     return targets
+
+
+def _zones_by_declared_sensor(
+    gateway: Gateway, registry: Any, src_id: str
+) -> list[Any]:
+    """Return zones that declare ``src_id`` as their sensor in the schema.
+
+    Zone bindings for controller-class devices (CTL/UFC/HGI) are refused by
+    ``Zone._update_schema``, so the declared sensor id survives only in the
+    configured schema.  Used by ``_resolve_logical_targets`` to route
+    sensor-sourced 30C9 packets to the zone even when no ``_parent`` link
+    exists.
+
+    :param gateway: Gateway instance holding the configured schema.
+    :type gateway: Gateway
+    :param registry: Device registry for TCS/zone resolution.
+    :param src_id: The source device id of the inbound message.
+    :return: Zones whose schema entry declares ``src_id`` as their sensor.
+    """
+    zones: list[Any] = []
+    schema = getattr(getattr(gateway, "config", None), "schema", None) or {}
+    for tcs_id, traits in schema.items():
+        zones_schema = (
+            traits.get(SZ_ZONES) if isinstance(traits, dict) else None
+        )
+        if not isinstance(zones_schema, dict):
+            continue
+        for zone_idx, zone_schema in zones_schema.items():
+            if not (
+                isinstance(zone_schema, dict)
+                and str(zone_schema.get(SZ_SENSOR)) == str(src_id)
+            ):
+                continue
+            tcs_dev = registry.device_by_id.get(tcs_id) if registry else None
+            tcs = getattr(tcs_dev, "tcs", None) or tcs_dev
+            zone = getattr(tcs, "zone_by_index", {}).get(str(zone_idx))
+            if zone is not None:
+                zones.append(zone)
+    return zones
 
 
 def _update_system_state(target: Any, p: dict[str, Any], msg: Message) -> None:
