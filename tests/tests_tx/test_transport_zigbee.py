@@ -1575,8 +1575,14 @@ def _transport_with_device(
 
     zha_data = MagicMock()
     zha_data.gateway_proxy.gateway = MagicMock()
-    # resolve_device() looks up by IEEE string when zigpy is absent.
-    zha_data.gateway_proxy.gateway.devices = {t._ieee: device}
+    # Match resolve_device() whether or not the optional zigpy package exists.
+    try:
+        from zigpy.types import EUI64
+
+        registry_ieee = EUI64.convert(t._ieee)
+    except ImportError:
+        registry_ieee = t._ieee
+    zha_data.gateway_proxy.gateway.devices = {registry_ieee: device}
     zha_data.gateway_proxy.gateway.application_controller = None
     t._hass = MagicMock()
     t._hass.data = {"zha": zha_data}

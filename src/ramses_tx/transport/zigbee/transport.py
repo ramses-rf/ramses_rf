@@ -8,6 +8,7 @@ import contextlib
 import functools
 import logging
 import re
+import secrets
 from collections.abc import Callable
 from typing import Any, Final
 from urllib.parse import parse_qs, urlparse
@@ -80,6 +81,11 @@ class _ZigbeeTransportAbstractor:
 class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
     """Send/receive packets to/from ESP32 Zigbee device."""
 
+    _NATIVE_CHUNK_LEN: Final[int] = 30
+    _NATIVE_CMD: Final[int] = 0x02
+    _NATIVE_MODE_CMD: Final[int] = 0x03
+    _APS_TIMEOUT: Final[float] = 35.0
+
     _DEVICE_READY_TIMEOUT: Final[float] = 60.0
     _MAX_CHAR_STRING_LEN: Final[int] = 63
     _CHUNK_BODY_LEN: Final[int] = 32
@@ -142,6 +148,16 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         self._write_endpoint_id = int(float(path_parts[5]))
 
         query = parse_qs(self._zigbee_url.query)
+        ack_mode = query.get("ack", ["legacy"])[0]
+        if ack_mode not in ("legacy", "aps"):
+            raise exc.TransportSourceInvalid(
+                "Zigbee ack mode must be legacy or aps"
+            )
+        self._aps_ack = ack_mode == "aps"
+        self._write_lock = asyncio.Lock()
+        self._native_message_id = secrets.randbits(32)
+        self._native_rx: dict[str, Any] | None = None
+        self._native_completed: int | None = None
         command_str = query.get("cmd", ["0x00"])[0] or "0x00"
         self._use_command_mode = True
         self._cmd_id = int(
@@ -162,8 +178,9 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         self._availability_unsub: Callable[[], None] | None = None
 
         self._framing = ZigbeeFramingHandler(
-            max_char_len=max_char_len,
+            max_char_len=36 if self._aps_ack else max_char_len,
             chunk_body_len=chunk_body_len,
+            chunk_timeout=35.0 if self._aps_ack else self._CHUNK_TIMEOUT,
         )
         self._connection_mgr = ZigbeeConnectionManager(
             hass=self._hass,
@@ -316,6 +333,9 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
 
         sequence_number, total, body = parsed
         key = str(self._ieee)
+        if self._aps_ack and sequence_number == 1:
+            # A new message replaces an incomplete predecessor of equal size.
+            self._chunk_buffers.pop(key, None)
         chunk_buffer = self._chunk_buffers.get(key)
 
         if not chunk_buffer or chunk_buffer.get("total") != total:
@@ -334,6 +354,8 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
             parts[sequence_number - 1] = body
             chunk_buffer["received"] += 1
             try:
+                if self._aps_ack:
+                    return self._deliver_chunk(key, total)
                 ack = f"ACK {sequence_number}/{total}"
                 _LOGGER.info("Scheduling application ACK (part): %s", ack)
                 target_cluster = getattr(self, "_cluster", None)
@@ -356,6 +378,11 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
                     "Failed to schedule application ACK: %s", err
                 )
 
+        return self._deliver_chunk(key, total)
+
+    def _deliver_chunk(self, key: str, total: int) -> bool:
+        chunk_buffer = self._chunk_buffers[key]
+        parts = chunk_buffer["parts"]
         if chunk_buffer["received"] < total:
             return True
 
@@ -581,6 +608,100 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         if hasattr(self._cluster, "add_listener"):
             self._cluster.add_listener(self)
 
+    async def _native_request(
+        self, cluster: Any, command: int, *args: Any
+    ) -> None:
+        if command not in getattr(cluster, "client_commands", {}):
+            raise exc.TransportZigbeeError(
+                "The ELECRAM ZHA quirk lacks native APS commands; update the quirk"
+            )
+        try:
+            await asyncio.wait_for(
+                cluster.client_command(
+                    command,
+                    *args,
+                    expect_reply=False,
+                    ask_for_ack=True,
+                    disable_default_response=True,
+                ),
+                timeout=self._APS_TIMEOUT,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as err:
+            raise exc.TransportZigbeeError(
+                "APS Zigbee delivery failed"
+            ) from err
+
+    async def _enable_native_mode(self) -> None:
+        cluster = self._get_active_write_cluster()
+        if cluster is None:
+            raise exc.TransportZigbeeError("Zigbee write cluster not ready")
+        await self._native_request(cluster, self._NATIVE_MODE_CMD, True)
+
+    def _receive_native_chunk(self, args: Any) -> None:
+        try:
+            # zigpy command schemas are iterable in their declared field order.
+            message_id, sequence, total, body = args
+            message_id, sequence, total = (
+                int(message_id),
+                int(sequence),
+                int(total),
+            )
+            if (
+                not isinstance(body, str)
+                or not body
+                or not body.isascii()
+                or "\x00" in body
+            ):
+                raise ValueError("invalid ASCII chunk")
+            if (
+                not 1 <= sequence <= total <= 9
+                or len(body) > self._NATIVE_CHUNK_LEN
+            ):
+                raise ValueError("invalid chunk bounds")
+        except (TypeError, ValueError):
+            _LOGGER.warning("Ignoring malformed native Zigbee chunk")
+            return
+
+        if message_id == self._native_completed:
+            return  # Duplicate final delivery must not produce a second RF echo.
+        state = self._native_rx
+        if (
+            state
+            and (dt_now() - state["timestamp"]).total_seconds()
+            > self._APS_TIMEOUT
+        ):
+            self._native_rx = state = None
+        if sequence == 1 and (not state or state["id"] != message_id):
+            state = self._native_rx = {
+                "id": message_id,
+                "total": total,
+                "next": 1,
+                "text": "",
+                "timestamp": dt_now(),
+            }
+        if not state or state["id"] != message_id:
+            return  # Late chunks cannot join the next message.
+        if sequence < state["next"]:
+            return  # APS/application duplicate, already accepted.
+        if total != state["total"] or sequence != state["next"]:
+            _LOGGER.warning(
+                "Dropping incomplete native Zigbee message %08x", message_id
+            )
+            self._native_rx = None
+            return
+        if len(state["text"]) + len(body) > 255:
+            self._native_rx = None
+            return
+        state["text"] += body
+        state["next"] += 1
+        state["timestamp"] = dt_now()
+        if sequence == total:
+            self._native_completed = message_id
+            self._native_rx = None
+            self._frame_read(dt_now().isoformat(), _normalise(state["text"]))
+
     async def _send_command(
         self,
         chunk: str,
@@ -591,6 +712,17 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         cluster = self._get_active_write_cluster()
         if not cluster:
             raise exc.TransportZigbeeError("Zigbee write cluster not ready")
+
+        if self._aps_ack:
+            await self._native_request(
+                cluster,
+                self._NATIVE_CMD,
+                self._native_message_id,
+                sequence_number,
+                total,
+                chunk,
+            )
+            return
 
         _LOGGER.debug("Zigbee TX %s/%s: %s", sequence_number, total, chunk)
         last_err: Exception | None = None
@@ -792,6 +924,8 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
             await self._wait_for_device_ready(device, ieee)
             self._attach_clusters(device)
             await self._bind_and_configure()
+            if self._aps_ack:
+                await self._enable_native_mode()
 
             hgi_id = self._resolve_hgi_id()
             self._extra[SZ_ACTIVE_HGI] = hgi_id
@@ -968,6 +1102,8 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         try:
             self._attach_clusters(device)
             await self._bind_and_configure()
+            if self._aps_ack:
+                await self._enable_native_mode()
         except asyncio.CancelledError:
             raise
         except Exception as err:
@@ -1024,7 +1160,7 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
 
         try:
             m = re.match(r"^(\d{1,3})/(\d{1,3})\|", payload)
-            if m:
+            if m and not self._aps_ack:
                 ack = f"ACK {int(m.group(1))}/{int(m.group(2))}"
                 self._track_task(
                     self._loop.create_task(
@@ -1052,6 +1188,10 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         **_kwargs: Any,
     ) -> None:
         """Handle incoming ZCL command on the bound cluster."""
+        if command_id == self._NATIVE_CMD:
+            if self._aps_ack:
+                self._receive_native_chunk(args)
+            return
         payload = self._decode_command_payload(args)
         if not payload or (
             isinstance(payload, str) and payload.startswith("ACK ")
@@ -1077,7 +1217,7 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
 
         try:
             m = re.match(r"^(\d{1,3})/(\d{1,3})\|", payload)
-            if m:
+            if m and not self._aps_ack:
                 ack = f"ACK {int(m.group(1))}/{int(m.group(2))}"
                 self._track_task(
                     self._loop.create_task(
@@ -1106,31 +1246,52 @@ class ZigbeeTransport(_FullTransport, _ZigbeeTransportAbstractor):
         if not payload:
             return
 
-        chunks = self._chunk_payload(payload)
-        for sequence_number, total, chunk in chunks:
-            try:
-                if self._use_command_mode:
-                    await self._send_command(chunk, sequence_number, total)
-                else:
-                    await self._send_chunk(chunk, sequence_number, total)
-                if sequence_number < total:
-                    await asyncio.sleep(0.025)
-            except asyncio.CancelledError:
-                raise
-            except (
-                KeyError,
-                ValueError,
-                TypeError,
-                AttributeError,
-                RuntimeError,
-                exc.RamsesException,
-            ) as err:
-                _LOGGER.exception(
-                    "Zigbee chunk %s/%s failed: %s - continuing",
-                    sequence_number,
-                    total,
-                    err,
-                )
+        async with self._write_lock:
+            if self._aps_ack:
+                if not payload.isascii() or len(payload) > 255:
+                    raise exc.TransportZigbeeError(
+                        "Native Zigbee frames must be ASCII and at most 255 bytes"
+                    )
+                self._native_message_id = (
+                    self._native_message_id + 1
+                ) & 0xFFFFFFFF
+                bodies = [
+                    payload[i : i + self._NATIVE_CHUNK_LEN]
+                    for i in range(0, len(payload), self._NATIVE_CHUNK_LEN)
+                ]
+                chunks = [
+                    (i + 1, len(bodies), body) for i, body in enumerate(bodies)
+                ]
+            else:
+                chunks = self._chunk_payload(payload)
+            for sequence_number, total, chunk in chunks:
+                try:
+                    if self._use_command_mode:
+                        await self._send_command(chunk, sequence_number, total)
+                    else:
+                        await self._send_chunk(chunk, sequence_number, total)
+                    if sequence_number < total:
+                        await asyncio.sleep(0.025)
+                except asyncio.CancelledError:
+                    raise
+                except (
+                    KeyError,
+                    ValueError,
+                    TypeError,
+                    AttributeError,
+                    RuntimeError,
+                    exc.RamsesException,
+                ) as err:
+                    if self._aps_ack:
+                        raise exc.TransportZigbeeError(
+                            f"Aborting Zigbee frame at chunk {sequence_number}/{total}"
+                        ) from err
+                    _LOGGER.exception(
+                        "Zigbee chunk %s/%s failed: %s - continuing",
+                        sequence_number,
+                        total,
+                        err,
+                    )
 
     def close(self) -> None:
         """Close transport cleanly, unbinding clusters and cancelling tasks."""

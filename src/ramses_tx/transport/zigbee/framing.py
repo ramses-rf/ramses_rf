@@ -25,6 +25,7 @@ class ZigbeeFramingHandler:
         *,
         max_char_len: int = 63,
         chunk_body_len: int = 32,
+        chunk_timeout: float = _CHUNK_TIMEOUT,
     ) -> None:
         """Initialise the Zigbee framing handler.
 
@@ -32,9 +33,12 @@ class ZigbeeFramingHandler:
         :type max_char_len: int
         :param chunk_body_len: Maximum body length before adding chunk headers.
         :type chunk_body_len: int
+        :param chunk_timeout: Maximum gap between incoming chunks, in seconds.
+        :type chunk_timeout: float
         """
         self._max_char_len = max_char_len
         self._chunk_body_len = chunk_body_len
+        self._chunk_timeout = chunk_timeout
         self._chunk_buffers: dict[str, dict[str, Any]] = {}
 
     def cleanup_chunk_buffers(self) -> None:
@@ -44,7 +48,7 @@ class ZigbeeFramingHandler:
             key
             for key, chunk_buffer in self._chunk_buffers.items()
             if (now - chunk_buffer["timestamp"]).total_seconds()
-            > self._CHUNK_TIMEOUT
+            > self._chunk_timeout
         ]
         for key in stale_keys:
             _LOGGER.warning(
