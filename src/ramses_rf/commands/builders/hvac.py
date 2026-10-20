@@ -11,6 +11,7 @@ from ramses_rf.models.hvac_schemas import (
     _22F1_MODE_MAX,
     _22F1_SCHEMES,
     _2411_PARAMS_SCHEMA,
+    FanParamInfo,
 )
 from ramses_rf.protocol.ramses import _31DA_FAN_INFO
 from ramses_rf.strategies import HvacStrategy, VentilationControlStrategy
@@ -359,7 +360,12 @@ def build_set_fan_param(intent: Command) -> CommandDTO:
             "Must be a 2-digit hexadecimal value (00-FF)"
         ) from err
 
-    if (param_schema := _2411_PARAMS_SCHEMA.get(param_id_stripped)) is None:
+    param_schema = _2411_PARAMS_SCHEMA.get(param_id_stripped)
+    # A device-reported definition (from a retained RP/2411) always wins:
+    # the static table can disagree with this model (issue 1332)
+    if isinstance(reported := intent.get("fan_param_schema"), FanParamInfo):
+        param_schema = reported
+    if param_schema is None:
         raise ValueError(
             f"Unknown parameter ID: '{param_id_stripped}'. "
             "This parameter is not defined in the device schema"
