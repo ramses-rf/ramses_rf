@@ -25,6 +25,7 @@ from ramses_tx.const import (  # noqa: F401, isort: skip, pylint: disable=unused
     Verb,
 )
 
+from ramses_rf.models.hvac_schemas import _2411_PARAMS_SCHEMA as _FAN_PARAMS
 from ramses_rf.typing import PayloadT, SchemaT
 
 from ..enums import DevType
@@ -957,169 +958,20 @@ _22F1_SCHEMES: dict[str, dict[str, str]] = {
     "vasco": _22F1_MODE_VASCO,
 }
 
+# Legacy dict-shaped view over the canonical FanParamInfo table in
+# models/hvac_schemas.py — kept for payload decode + downstream consumers
+# (ramses_cc entity metadata). Do not add entries here.
 # unclear if true for only Orcon/*all* models
 _2411_PARAMS_SCHEMA: dict[str, SchemaT] = {
-    "01": {  # all?
-        SZ_DESCRIPTION: "Support",
-        SZ_MIN_VALUE: 0xFF,  # None?
-        SZ_MAX_VALUE: 0xFF,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "20",
-        SZ_DATA_UNIT: "",
-    },
-    "31": {  # slot 09 (FANs produced after 2021)
-        SZ_DESCRIPTION: "Time to change filter (days)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 1800,
-        SZ_PRECISION: 30,
-        SZ_DATA_TYPE: "10",
-        SZ_DATA_UNIT: "days",
-    },
-    "3D": {  # slot 00
-        SZ_DESCRIPTION: "Away mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 0.4,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "3E": {  # slot 01
-        SZ_DESCRIPTION: "Away mode Exhaust fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 0.4,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "90",
-        SZ_DATA_UNIT: "%",
-    },
-    "3F": {  # slot 02
-        SZ_DESCRIPTION: "Low mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 0.8,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "40": {  # slot 03
-        SZ_DESCRIPTION: "Low mode Exhaust fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 0.8,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "41": {  # slot 04
-        SZ_DESCRIPTION: "Medium mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.1,  # Orcon FAN responds with 0.0, but I guess this should be the same as for "42"
-        SZ_MAX_VALUE: 1.0,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "42": {  # slot 05
-        SZ_DESCRIPTION: "Medium mode Exhaust fan rate (%)",
-        SZ_MIN_VALUE: 0.1,
-        SZ_MAX_VALUE: 1.0,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "43": {  # slot 06
-        SZ_DESCRIPTION: "High mode Supply fan rate (%)",
-        SZ_MIN_VALUE: 0.1,
-        SZ_MAX_VALUE: 1.0,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "44": {  # slot 07
-        SZ_DESCRIPTION: "High mode Exhaust fan rate (%)",
-        SZ_MIN_VALUE: 0.1,
-        SZ_MAX_VALUE: 1.0,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    "4B": {  # slot 09 (FANs produced before 2021) Also check code 22F7
-        SZ_DESCRIPTION: "(Test) Bypass Valve (0=auto, 1=open, 2=closed)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 2,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "00",
-        SZ_DATA_UNIT: "",
-    },
-    "4E": {  # slot 0A
-        SZ_DESCRIPTION: "Moisture scenario position (0=medium, 1=high)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 1,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "00",
-        SZ_DATA_UNIT: "",
-    },
-    "52": {  # slot 0B
-        SZ_DESCRIPTION: "Sensor sensitivity (%)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 25.0,
-        SZ_PRECISION: 0.1,
-        SZ_DATA_TYPE: "01",
-        SZ_DATA_UNIT: "%",
-    },
-    "54": {  # slot 0C
-        SZ_DESCRIPTION: "Moisture sensor overrun time (mins)",
-        SZ_MIN_VALUE: 15,
-        SZ_MAX_VALUE: 60,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "00",
-        SZ_DATA_UNIT: "min",
-    },
-    "75": {  # slot 0D
-        SZ_DESCRIPTION: "Comfort temperature (°C)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 30.0,
-        SZ_PRECISION: 0.01,
-        SZ_DATA_TYPE: "92",
-        SZ_DATA_UNIT: "°C",
-    },
-    "95": {  # slot 08
-        SZ_DESCRIPTION: "Boost mode Supply/exhaust fan rate (%)",
-        SZ_MIN_VALUE: 0.0,
-        SZ_MAX_VALUE: 1.0,
-        SZ_PRECISION: 0.005,
-        SZ_DATA_TYPE: "0F",
-        SZ_DATA_UNIT: "%",
-    },
-    # ClimaRad Ventura-specific parameters (issue 740)
-    "07": {
-        SZ_DESCRIPTION: "Base ventilation enable",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 1,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "00",
-        SZ_DATA_UNIT: "",
-    },
-    "4C": {
-        SZ_DESCRIPTION: "Unknown parameter 4C (ClimaRad Ventura)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 0xFFFFFFFF,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "10",
-        SZ_DATA_UNIT: "",
-    },
-    "88": {
-        SZ_DESCRIPTION: "Timer configuration (ClimaRad Ventura)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 0xFFFFFFFF,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "10",
-        SZ_DATA_UNIT: "",
-    },
-    "DA": {
-        SZ_DESCRIPTION: "Unknown parameter DA (ClimaRad Ventura)",
-        SZ_MIN_VALUE: 0,
-        SZ_MAX_VALUE: 0xFFFFFFFF,
-        SZ_PRECISION: 1,
-        SZ_DATA_TYPE: "10",
-        SZ_DATA_UNIT: "",
-    },
+    param_id: {
+        SZ_DESCRIPTION: info.description,
+        SZ_MIN_VALUE: info.min_value,
+        SZ_MAX_VALUE: info.max_value,
+        SZ_PRECISION: info.precision,
+        SZ_DATA_TYPE: info.data_type,
+        SZ_DATA_UNIT: info.data_unit,
+    }
+    for param_id, info in _FAN_PARAMS.items()
 }
 
 # ventilation speed description
