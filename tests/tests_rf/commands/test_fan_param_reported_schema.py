@@ -53,7 +53,9 @@ def _rp_packet(
     )
 
 
-def _gateway(*packets: Packet, raw_payloads: list[str] = ()) -> MagicMock:
+def _gateway(
+    *packets: Packet, raw_payloads: tuple[str, ...] = ()
+) -> MagicMock:
     gateway = MagicMock()
     gateway.message_store = MessageStore(maintain=False)
     gateway.device_registry.device_by_id = {}
@@ -91,7 +93,7 @@ def _intent(param_id: str, value: float) -> Command:
 
 async def _sent_payload(gateway: MagicMock, intent: Command) -> str:
     await CommandDispatcher(gateway).send(intent)
-    return gateway._async_send_dto.call_args.args[0].payload
+    return str(gateway._async_send_dto.call_args.args[0].payload)
 
 
 @pytest.mark.parametrize("value", [0, 0.5, 1, 1.5, 2, 10, 25])
@@ -136,11 +138,11 @@ async def test_newest_reported_definition_wins() -> None:
 async def test_fallback_when_no_matching_definition() -> None:
     """No RP for the param, a malformed RP, or a foreign fan -> static schema."""
     for packets, raw in (
-        ([], []),
+        ((), ()),
         # a short/N-A reply (not a full definition): must not clamp writes
-        ([], ["0000520000"]),
-        ([_rp_packet(OTHER_FAN, 0x52, 0x01, 1.0, 0, 25.0, 0.1)], []),
-        ([_rp_packet(FAN, 0x31, 0x01, 30, 0, 1800, 30)], []),  # other param
+        ((), ("0000520000",)),
+        ((_rp_packet(OTHER_FAN, 0x52, 0x01, 1.0, 0, 25.0, 0.1),), ()),
+        ((_rp_packet(FAN, 0x31, 0x01, 30, 0, 1800, 30),), ()),  # other param
     ):
         gateway = _gateway(*packets, raw_payloads=raw)
         intent = _intent("52", 60)
