@@ -45,7 +45,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt, timedelta as td
 from enum import Enum, auto
-from typing import Any, TypeAlias, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from .. import exceptions as exc
 from ..address import HGI_DEV_ADDR, Address, packet_addrs
@@ -90,7 +90,7 @@ _DEFAULT_MAX_CONSECUTIVE_ERRORS: int = 5
 #: captured fixtures: 50/50 paired packets had identical sequence).
 #: When sequence is absent, the fallback base key is
 #: (verb, code, src, dst, addr3, "", raw_payload).
-_DedupKeyT: TypeAlias = tuple[str, str, str, str, str, str, str]
+type _DedupKeyT = tuple[str, str, str, str, str, str, str]
 
 #: TTL in seconds for recent-TX bookkeeping: after this window an
 #: inbound copy is no longer associated with a recorded transmission.
@@ -99,7 +99,7 @@ _RECENT_TX_TTL: float = 3.0
 #: Reply-budget key: (reply_src, code).  An inbound RP/I packet whose
 #: source and code match an outstanding RQ/W transmission counts as a
 #: solicited reply (ramses-rf/ramses_cc#1336).
-_ReplyKeyT: TypeAlias = tuple[str, str]
+type _ReplyKeyT = tuple[str, str]
 
 _CountKeyT = TypeVar("_CountKeyT")
 

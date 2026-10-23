@@ -414,7 +414,7 @@ class DeviceRegistry:
             tcs = getattr(ufc, "tcs", None)
             if not tcs and event.metadata.get("tcs_id"):
                 tcs_dev = self.device_by_id.get(
-                    DeviceIdT(str(event.metadata["tcs_id"]))
+                    cast(DeviceIdT, (str(event.metadata["tcs_id"])))
                 )
                 tcs = getattr(tcs_dev, "tcs", None)
 
@@ -502,7 +502,7 @@ class DeviceRegistry:
                     # Construct and dispatch a synthetic BIND event!
                     bind_event = TopologyChangedEvent(
                         action=TopologyAction.BIND_DEVICE,
-                        device_id=DeviceIdT(matched_orphan),
+                        device_id=cast(DeviceIdT, matched_orphan),
                         causation="Correlated via Passive Telemetry Matching",
                         metadata={
                             "tcs_id": event.device_id,
@@ -592,7 +592,7 @@ class DeviceRegistry:
         :rtype: Device
         :raises DeviceNotFoundError: If device ID is blocked or unknown.
         """
-        device_id = DeviceIdT(device_id)
+        device_id = cast(DeviceIdT, device_id)
 
         try:
             self._device_filter.check_filter_lists(device_id)

@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from ramses_rf.config import SZ_CLASS
 from ramses_rf.typing import SchemaT
@@ -98,7 +98,9 @@ async def update_topology_schema_state(
                         ctl_id = str(candidate_device)
                         if ctl_dev := (
                             registry.device_by_id.get(ctl_id)
-                            or registry.device_by_id.get(DeviceIdT(ctl_id))
+                            or registry.device_by_id.get(
+                                cast(DeviceIdT, ctl_id)
+                            )
                         ):
                             tcs = getattr(ctl_dev, "tcs", None)
                         break
@@ -106,13 +108,17 @@ async def update_topology_schema_state(
             if tcs is None and hasattr(msg.src, "id"):
                 if src_dev := (
                     registry.device_by_id.get(str(msg.src.id))
-                    or registry.device_by_id.get(DeviceIdT(str(msg.src.id)))
+                    or registry.device_by_id.get(
+                        cast(DeviceIdT, str(msg.src.id))
+                    )
                 ):
                     tcs = getattr(src_dev, "tcs", None)
             if tcs is None and hasattr(msg.dst, "id"):
                 if dst_dev := (
                     registry.device_by_id.get(str(msg.dst.id))
-                    or registry.device_by_id.get(DeviceIdT(str(msg.dst.id)))
+                    or registry.device_by_id.get(
+                        cast(DeviceIdT, str(msg.dst.id))
+                    )
                 ):
                     tcs = getattr(dst_dev, "tcs", None)
 
@@ -233,7 +239,7 @@ async def update_topology_schema_state(
                         (
                             registry.device_by_id.get(str(msg.src.id))
                             or registry.device_by_id.get(
-                                DeviceIdT(str(msg.src.id))
+                                cast(DeviceIdT, str(msg.src.id))
                             )
                         )
                         if hasattr(registry, "device_by_id")
@@ -249,7 +255,7 @@ async def update_topology_schema_state(
                         (
                             registry.device_by_id.get(str(msg.dst.id))
                             or registry.device_by_id.get(
-                                DeviceIdT(str(msg.dst.id))
+                                cast(DeviceIdT, str(msg.dst.id))
                             )
                         )
                         if hasattr(registry, "device_by_id")

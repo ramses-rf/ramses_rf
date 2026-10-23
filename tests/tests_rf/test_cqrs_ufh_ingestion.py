@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime as dt
+from typing import cast
 from unittest.mock import MagicMock
 
 from ramses_rf.const import (
@@ -515,7 +516,7 @@ def test_update_hvac_state_10d0_rp_to_fan_sets_flag() -> None:
     target._supports_10d0 = False
     target._strategy = None
     target._scheme = None
-    target.id = DeviceIdT("32:153289")
+    target.id = cast(DeviceIdT, "32:153289")
     msg = _make_msg(Code._10D0)
     msg.verb = Verb.RP
     payload = {SZ_REMAINING_DAYS: 30, SZ_REMAINING_PERCENT: None}

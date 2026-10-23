@@ -18,6 +18,7 @@ Covers:
 """
 
 import asyncio
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -184,8 +185,8 @@ def test_pre_creates_children_from_configured_hgi_ids() -> None:
     """Children are pre-created with HGI IDs and callback_driven=True."""
     pool, _, _ = _make_callback_pool(hgi_ids=["18:001111", "18:002222"])
     assert len(pool._children) == 2
-    assert pool._children[0].hgi_id == DeviceIdT("18:001111")
-    assert pool._children[1].hgi_id == DeviceIdT("18:002222")
+    assert pool._children[0].hgi_id == cast(DeviceIdT, "18:001111")
+    assert pool._children[1].hgi_id == cast(DeviceIdT, "18:002222")
     assert pool._children[0].callback_driven is True
     assert pool._children[1].callback_driven is True
     assert pool._children[0].transport is None
@@ -349,7 +350,7 @@ async def test_on_child_packet_carries_ingress_hgi_id() -> None:
     adapter.on_child_online("18:001111")
     pkt = _make_packet()
     adapter.on_child_packet(
-        "18:001111", pkt, ingress_hgi_id=DeviceIdT("18:001111")
+        "18:001111", pkt, ingress_hgi_id=cast(DeviceIdT, "18:001111")
     )
     assert pkt._ingress_hgi_id == "18:001111"
 
@@ -385,9 +386,9 @@ def test_on_child_identity_confirms_hgi() -> None:
     # Clear the pre-set HGI to simulate unknown identity.
     pool._children[0].hgi_id = None
     pool._children[0].send_ready = False
-    adapter.on_child_identity("18:001111", DeviceIdT("18:001111"))
+    adapter.on_child_identity("18:001111", cast(DeviceIdT, "18:001111"))
     child = pool._child_by_id(0)
-    assert child.hgi_id == DeviceIdT("18:001111")
+    assert child.hgi_id == cast(DeviceIdT, "18:001111")
     assert child.send_ready is True
 
 
@@ -399,7 +400,7 @@ def test_on_unknown_hgi_fires_discovery_callback() -> None:
     discovery = _FakeDiscovery()
     _, adapter, _ = _make_callback_pool(discovery=discovery)
     adapter.on_unknown_hgi(
-        DeviceIdT("18:999999"), topic="RAMSES/GATEWAY/18:999999/rx"
+        cast(DeviceIdT, "18:999999"), topic="RAMSES/GATEWAY/18:999999/rx"
     )
     assert len(discovery.unknowns) == 1
     assert discovery.unknowns[0] == (
@@ -411,14 +412,14 @@ def test_on_unknown_hgi_fires_discovery_callback() -> None:
 def test_on_unknown_hgi_no_discovery_callback_is_safe() -> None:
     """Unknown HGI without a discovery callback does not crash."""
     _, adapter, _ = _make_callback_pool(discovery=None)
-    adapter.on_unknown_hgi(DeviceIdT("18:999999"))
+    adapter.on_unknown_hgi(cast(DeviceIdT, "18:999999"))
 
 
 def test_on_unknown_hgi_does_not_create_child() -> None:
     """Unknown HGI does not create a PoolChild."""
     pool, adapter, _ = _make_callback_pool()
     initial_count = len(pool._children)
-    adapter.on_unknown_hgi(DeviceIdT("18:999999"))
+    adapter.on_unknown_hgi(cast(DeviceIdT, "18:999999"))
     assert len(pool._children) == initial_count
 
 
@@ -474,7 +475,7 @@ async def test_write_routed_no_outbound_returns_not_submitted() -> None:
         config=TransportConfig(),
     )
     pool._children[0].callback_driven = True
-    pool._children[0].hgi_id = DeviceIdT("18:001111")
+    pool._children[0].hgi_id = cast(DeviceIdT, "18:001111")
     pool._children[0].connection_state = ConnectionState.CONNECTED
     pool._children[0].send_ready = True
     from ramses_tx.routing import RoutedCommand
@@ -549,7 +550,7 @@ def test_unknown_hgi_does_not_forward_rf_frames() -> None:
     adapter.on_child_online("18:001111")
     # Simulate a packet from an unknown HGI on the wildcard topic.
     # The adapter's on_unknown_hgi is called instead of on_child_packet.
-    adapter.on_unknown_hgi(DeviceIdT("18:999999"))
+    adapter.on_unknown_hgi(cast(DeviceIdT, "18:999999"))
     # No packet was forwarded because on_unknown_hgi does not route
     # packets — it only fires the discovery callback.
     assert proto.packet_received.call_count == 0
@@ -559,7 +560,7 @@ def test_unknown_hgi_does_not_mutate_registry() -> None:
     """Unknown HGI does not add a child to the registry."""
     pool, adapter, _ = _make_callback_pool()
     initial_count = len(pool._children)
-    adapter.on_unknown_hgi(DeviceIdT("18:999999"))
+    adapter.on_unknown_hgi(cast(DeviceIdT, "18:999999"))
     assert len(pool._children) == initial_count
     # No child has HGI 18:999999.
     assert pool._child_by_hgi_id("18:999999") is None
@@ -568,10 +569,12 @@ def test_unknown_hgi_does_not_mutate_registry() -> None:
 def test_unknown_hgi_does_not_become_sendable() -> None:
     """Unknown HGI does not appear as a sendable child."""
     pool, adapter, _ = _make_callback_pool()
-    adapter.on_unknown_hgi(DeviceIdT("18:999999"))
+    adapter.on_unknown_hgi(cast(DeviceIdT, "18:999999"))
     for child in pool._children:
-        assert child.hgi_id != DeviceIdT("18:999999")
-        assert not child.is_sendable or child.hgi_id != DeviceIdT("18:999999")
+        assert child.hgi_id != cast(DeviceIdT, "18:999999")
+        assert not child.is_sendable or child.hgi_id != cast(
+            DeviceIdT, "18:999999"
+        )
 
 
 # -- LWT vs broker distinction (fact-check gap) ---------------------------

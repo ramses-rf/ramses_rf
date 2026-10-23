@@ -3,6 +3,7 @@
 
 from collections.abc import Generator
 from datetime import datetime as dt, timedelta as td
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -77,7 +78,7 @@ class Test_entity_base:
     async def test_entity_base_dev(self, mock_gateway: MagicMock) -> None:
         """Test the base entity behavior for a device."""
         dev = _Entity(mock_gateway)
-        dev.id = DeviceIdT("04:189078")
+        dev.id = cast(DeviceIdT, "04:189078")
         dev._z_id = dev.id
 
         # put messages in the message_store (bypass proxy)
@@ -149,7 +150,7 @@ class Test_entity_base:
     async def test_entity_base_zone(self, mock_gateway: MagicMock) -> None:
         """Test the base entity behavior for a zone."""
         dev = _Entity(mock_gateway)
-        dev.id = DeviceIdT("04:189078_01")
+        dev.id = cast(DeviceIdT, "04:189078_01")
         dev._z_id = dev.id
 
         # put messages in the message_store (bypass proxy)
@@ -218,7 +219,7 @@ class Test_entity_base:
     async def test_entity_base_dhw(self, mock_gateway: MagicMock) -> None:
         """Test the base entity behavior for DHW."""
         dev = _Entity(mock_gateway)
-        dev.id = DeviceIdT("01:145038_HW")
+        dev.id = cast(DeviceIdT, "01:145038_HW")
         dev._z_id = dev.id
 
         # put messages in the message_store (bypass proxy)
@@ -274,7 +275,7 @@ class Test_entity_base:
     def test_msg_value_msg_hardening(self, mock_gateway: MagicMock) -> None:
         """Test hardening fixes in _msg_value_msg (empty lists, full list return)."""
         dev = _Entity(mock_gateway)
-        dev.id = DeviceIdT("01:123456")
+        dev.id = cast(DeviceIdT, "01:123456")
 
         # Case 1: Empty payload list (should not crash with IndexError)
         msg_empty = MagicMock(spec=Message)

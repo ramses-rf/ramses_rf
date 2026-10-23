@@ -270,7 +270,9 @@ class BindTopologyHandler(TopologyHandler):
                             TopologyChangedEvent(
                                 action=TopologyAction.BIND_DEVICE,
                                 parent_id=msg.src.id,  # The Controller
-                                child_id=DeviceIdT(child_id),  # The Device
+                                child_id=cast(
+                                    DeviceIdT, child_id
+                                ),  # The Device
                                 metadata=event_meta,
                                 causation="Rule_000C_Domain_Binding",
                             )
@@ -293,7 +295,9 @@ class BindTopologyHandler(TopologyHandler):
                             TopologyChangedEvent(
                                 action=TopologyAction.BIND_DEVICE,
                                 parent_id=msg.src.id,  # The Controller
-                                child_id=DeviceIdT(child_id),  # The Device
+                                child_id=cast(
+                                    DeviceIdT, child_id
+                                ),  # The Device
                                 metadata=event_meta,
                                 causation="Rule_000C_Zone_Binding",
                             )

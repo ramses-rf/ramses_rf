@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -201,7 +201,7 @@ def test_child_set_parent_promotion_from_system_to_zone() -> None:
     parent_zone = Zone("00")
 
     # Act 1: Initial System parent binding
-    child_dev_id = DeviceIdT(child.id)
+    child_dev_id = cast(DeviceIdT, child.id)
     child._apply_topology_link(parent_system, child_id="FC")
 
     # Act 2: Promote parent to Zone
@@ -254,7 +254,7 @@ def test_generic_parent_add_and_detach_child() -> None:
     assert child in parent.childs
     assert parent.child_by_id["13:123456"] is child
     assert child in parent.actuators
-    assert parent.actuator_by_id[DeviceIdT("13:123456")] is child
+    assert parent.actuator_by_id[cast(DeviceIdT, "13:123456")] is child
 
     # Act 2: Detach child
     parent._detach_child(child)
@@ -263,7 +263,7 @@ def test_generic_parent_add_and_detach_child() -> None:
     assert child not in parent.childs
     assert "13:123456" not in parent.child_by_id
     assert child not in parent.actuators
-    assert DeviceIdT("13:123456") not in parent.actuator_by_id
+    assert cast(DeviceIdT, "13:123456") not in parent.actuator_by_id
     assert child._parent is None
     assert child._child_id is None
 
@@ -294,7 +294,7 @@ class MockController(Child):
 
     def __init__(self, dev_id: str) -> None:
         super().__init__()
-        self.id = DeviceIdT(dev_id)
+        self.id = cast(DeviceIdT, dev_id)
         self._SLUG = "01"
         self.tcs = None
 
@@ -334,7 +334,7 @@ class MockUfhController(Parent[BdrSwitch]):
 
     def __init__(self, dev_id: str) -> None:
         super().__init__(child_id="FA")
-        self.id = DeviceIdT(dev_id)
+        self.id = cast(DeviceIdT, dev_id)
         self.tcs: Any | None = None
         self.circuits: dict[str, BdrSwitch] = {}
         self.circuit_by_id: dict[str, BdrSwitch] = {}

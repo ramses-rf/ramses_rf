@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Generator
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -52,7 +53,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
     def _get_device(dev_id: str, **kwargs: object) -> object:
         if dev_id in registry.device_by_id:
             return registry.device_by_id[dev_id]
-        dev = HvacVentilator(gateway, Address(DeviceIdT(dev_id)))
+        dev = HvacVentilator(gateway, Address(cast(DeviceIdT, dev_id)))
         registry.device_by_id[dev_id] = dev
         return dev
 
@@ -64,7 +65,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
 
 def _make_fan(gateway: MagicMock) -> HvacVentilator:
     """Create a real HvacVentilator registered in the mock registry."""
-    fan = HvacVentilator(gateway, Address(DeviceIdT(FAN_DEVICE_ID)))
+    fan = HvacVentilator(gateway, Address(cast(DeviceIdT, FAN_DEVICE_ID)))
     gateway.device_registry.device_by_id[FAN_DEVICE_ID] = fan
     return fan
 
@@ -96,7 +97,7 @@ def test_load_fan_processes_remotes_and_sensors(
         "sensors": [SENSOR_DEVICE_ID],
     }
 
-    result = load_fan(mock_gateway, DeviceIdT(FAN_DEVICE_ID), schema)
+    result = load_fan(mock_gateway, cast(DeviceIdT, FAN_DEVICE_ID), schema)
 
     # load_fan returns the FAN device
     assert result is fan

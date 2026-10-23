@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -20,12 +21,12 @@ async def test_topology_event_properties() -> None:
     # Arrange
     single_event = TopologyChangedEvent(
         action=TopologyAction.UPDATE_DEVICE_CLASS,
-        device_id=DeviceIdT("04:123456"),
+        device_id=cast(DeviceIdT, "04:123456"),
     )
     rel_event = TopologyChangedEvent(
         action=TopologyAction.BIND_DEVICE,
-        parent_id=DeviceIdT("01:111111"),
-        child_id=DeviceIdT("04:222222"),
+        parent_id=cast(DeviceIdT, "01:111111"),
+        child_id=cast(DeviceIdT, "04:222222"),
     )
 
     # Act & Assert
@@ -73,7 +74,7 @@ async def test_device_registry_topology_event_triggers_schema_callback() -> (
 
     event = TopologyChangedEvent(
         action=TopologyAction.UPDATE_DEVICE_CLASS,
-        device_id=DeviceIdT("04:123456"),
+        device_id=cast(DeviceIdT, "04:123456"),
     )
 
     # Act: Dispatch topology event to device registry
@@ -91,8 +92,8 @@ def test_topology_event_is_frozen() -> None:
     """TopologyChangedEvent is immutable (frozen dataclass)."""
     event = TopologyChangedEvent(
         action=TopologyAction.BIND_DEVICE,
-        parent_id=DeviceIdT("01:111111"),
-        child_id=DeviceIdT("04:222222"),
+        parent_id=cast(DeviceIdT, "01:111111"),
+        child_id=cast(DeviceIdT, "04:222222"),
     )
     with pytest.raises((AttributeError, Exception)):
         event.action = TopologyAction.CREATE_CONTROLLER  # type: ignore[misc]
@@ -102,8 +103,8 @@ def test_topology_event_has_metadata() -> None:
     """TopologyChangedEvent carries metadata dict."""
     event = TopologyChangedEvent(
         action=TopologyAction.BIND_DEVICE,
-        parent_id=DeviceIdT("01:111111"),
-        child_id=DeviceIdT("04:222222"),
+        parent_id=cast(DeviceIdT, "01:111111"),
+        child_id=cast(DeviceIdT, "04:222222"),
         metadata={"zone_index": "01"},
     )
     assert "zone_index" in event.metadata
@@ -113,8 +114,8 @@ def test_topology_event_has_event_id() -> None:
     """TopologyChangedEvent has a UUID event_id."""
     event = TopologyChangedEvent(
         action=TopologyAction.BIND_DEVICE,
-        parent_id=DeviceIdT("01:111111"),
-        child_id=DeviceIdT("04:222222"),
+        parent_id=cast(DeviceIdT, "01:111111"),
+        child_id=cast(DeviceIdT, "04:222222"),
     )
     assert hasattr(event, "event_id")
 

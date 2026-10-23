@@ -9,7 +9,7 @@ These tests verify that ramses_rf's strip+map pipeline correctly:
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -386,7 +386,7 @@ async def test_known_list_data_pipeline_boundary() -> None:
     registry_known_list = await gateway.device_registry.known_list()
     assert isinstance(registry_known_list, dict)
 
-    dev_id = DeviceIdT("04:222222")
+    dev_id = cast(DeviceIdT, "04:222222")
     assert registry_known_list[dev_id]["faked"] is True
 
     with contextlib.suppress(asyncio.CancelledError):

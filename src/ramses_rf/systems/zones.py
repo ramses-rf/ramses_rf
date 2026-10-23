@@ -8,7 +8,7 @@ import logging
 import math
 from collections.abc import Mapping
 from datetime import datetime as dt, timedelta as td
-from typing import TYPE_CHECKING, Any, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Self, TypeVar, cast
 
 from ramses_rf import exceptions as exc
 from ramses_rf.address import Address
@@ -114,9 +114,9 @@ class ZoneBase(Child, Parent[Device], Entity):
         # own index
         self._z_id = tcs.id  # the responsible device is the controller
         # the zone index (ctx), 00-0B (or 0F), HW (FA)
-        self._z_index: DevIndexT = DevIndexT(zone_index)
+        self._z_index: DevIndexT = cast(DevIndexT, zone_index)
 
-        self.id: DeviceIdT = DeviceIdT(f"{tcs.id}_{zone_index}")
+        self.id: DeviceIdT = cast(DeviceIdT, f"{tcs.id}_{zone_index}")
 
         self.tcs: Evohome = tcs
         self.ctl: Controller = tcs.ctl

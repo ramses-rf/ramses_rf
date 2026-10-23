@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import timedelta as td
-from typing import Any
+from typing import Any, cast
 
 from ramses_rf import exceptions as exc
 from ramses_rf.address import HGI_DEV_ADDR, Address
@@ -244,7 +244,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             child = self._gateway.device_registry.get_device(
                 dev_id
             )  # ensure exists
-            self._remote_ids.add(DeviceIdT(dev_id))
+            self._remote_ids.add(cast(DeviceIdT, dev_id))
             # 6d: set bidirectional parent link on the child
             if hasattr(child, "_parent_fan"):
                 child._parent_fan = self
@@ -252,7 +252,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             child = self._gateway.device_registry.get_device(
                 dev_id
             )  # ensure exists
-            self._sensor_ids.add(DeviceIdT(dev_id))
+            self._sensor_ids.add(cast(DeviceIdT, dev_id))
             # 6d: set bidirectional parent link on the child
             if hasattr(child, "_parent_fan"):
                 child._parent_fan = self
@@ -755,7 +755,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
         )
 
         intent = Intent(
-            src=Address(DeviceIdT(src_id)),
+            src=Address(cast(DeviceIdT, src_id)),
             dst=Address(self.id),
             action=Action.SET_FAN_MODE,
             data={"fan_mode": fan_mode, "strategy": self.get_strategy()},

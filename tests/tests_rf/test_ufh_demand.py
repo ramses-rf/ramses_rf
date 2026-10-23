@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -253,7 +254,7 @@ def test_load_tcs_hydrates_ufh_circuits() -> None:
     }
 
     # Act
-    result_tcs = load_tcs(gateway, DeviceIdT("01:145038"), schema)
+    result_tcs = load_tcs(gateway, cast(DeviceIdT, "01:145038"), schema)
 
     # Assert
     assert result_tcs is tcs

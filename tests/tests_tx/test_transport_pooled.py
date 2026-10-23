@@ -14,6 +14,7 @@ Covers:
 
 import asyncio
 from datetime import datetime as dt, timedelta as td
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -681,7 +682,7 @@ def test_move_hgi_transfers_identity_and_rssi(
     assert pool.move_hgi(0, 1) is True
 
     assert src.hgi_id is None
-    assert dst.hgi_id == DeviceIdT("18:001111")
+    assert dst.hgi_id == cast(DeviceIdT, "18:001111")
     assert dst.accepted is True
     assert dst.rssi_tracker is src.rssi_tracker
     # Source falls back to the accepted-set rule with no HGI.
@@ -1111,7 +1112,7 @@ def test_get_extra_info_evofw3_callback_driven_returns_true(
         )
     )
     pool._children[1].connection_state = ConnectionState.CONNECTED
-    pool._children[1].hgi_id = DeviceIdT("18:002222")
+    pool._children[1].hgi_id = cast(DeviceIdT, "18:002222")
     pool._children[1].send_ready = True
 
     assert pool.get_extra_info(SZ_IS_EVOFW3) is True
@@ -1340,7 +1341,7 @@ def test_pool_child_send_ready_requires_identity() -> None:
     assert not child.is_sendable  # no HGI identity yet
 
     # Learn HGI from a puzzle response.
-    child.learn_hgi(DeviceIdT("18:001111"))
+    child.learn_hgi(cast(DeviceIdT, "18:001111"))
     assert child.is_sendable
 
 
@@ -1363,10 +1364,10 @@ def test_ingress_frame_is_frozen() -> None:
     iframe = IngressFrame(
         frame=" 000 I --- 01:123456 18:000730 --:------ 30C9 000 00",
         timestamp="2026-09-04T12:00:00",
-        ingress_hgi_id=DeviceIdT("18:001111"),
+        ingress_hgi_id=cast(DeviceIdT, "18:001111"),
     )
     assert iframe.frame.startswith(" 000 I")
-    assert iframe.ingress_hgi_id == DeviceIdT("18:001111")
+    assert iframe.ingress_hgi_id == cast(DeviceIdT, "18:001111")
     # Frozen dataclass — cannot set attributes.
     with pytest.raises(AttributeError):
         iframe.frame = "other"
@@ -1451,7 +1452,7 @@ async def test_explicit_ingress_hgi_overrides_child_record() -> None:
     _connect_child(pool, 0, t0)
 
     pkt = _make_packet(src="04:123456")
-    pool._on_child_packet(0, pkt, ingress_hgi_id=DeviceIdT("18:009999"))
+    pool._on_child_packet(0, pkt, ingress_hgi_id=cast(DeviceIdT, "18:009999"))
 
     await asyncio.sleep(0.01)
     forwarded_pkt = proto.packet_received.call_args[0][0]
@@ -1684,8 +1685,8 @@ def test_identity_unknown_child_becomes_sendable_after_learn_hgi() -> None:
     child.availability = NodeAvailability.ONLINE
     child.accepted = True
     assert not child.is_sendable
-    child.learn_hgi(DeviceIdT("18:001234"))
-    assert child.hgi_id == DeviceIdT("18:001234")
+    child.learn_hgi(cast(DeviceIdT, "18:001234"))
+    assert child.hgi_id == cast(DeviceIdT, "18:001234")
     assert child.send_ready
     assert child.is_sendable
 
@@ -1715,7 +1716,7 @@ async def test_serial_child_learns_hgi_from_18_src_packet(
     await asyncio.sleep(0.01)
 
     # Child should have learned its HGI ID and become sendable
-    assert pool._children[0].hgi_id == DeviceIdT("18:149488")
+    assert pool._children[0].hgi_id == cast(DeviceIdT, "18:149488")
     assert pool._children[0].send_ready
     assert pool._children[0].is_sendable
 
@@ -1843,7 +1844,7 @@ def test_disconnected_child_resets_send_ready() -> None:
     child.connection_state = ConnectionState.CONNECTED
     child.availability = NodeAvailability.ONLINE
     child.accepted = True
-    child.learn_hgi(DeviceIdT("18:001234"))
+    child.learn_hgi(cast(DeviceIdT, "18:001234"))
     assert child.is_sendable
 
     child.mark_disconnected()
@@ -1983,7 +1984,7 @@ async def test_write_routed_callback_driven_marks_child_online() -> None:
     )
     # Make child 0 callback-driven with a known HGI
     pool._children[0].callback_driven = True
-    pool._children[0].hgi_id = DeviceIdT("18:001111")
+    pool._children[0].hgi_id = cast(DeviceIdT, "18:001111")
     pool._children[0].connection_state = ConnectionState.CONNECTED
     pool._children[0].accepted = True
     pool._children[0].send_ready = True
@@ -2030,7 +2031,7 @@ async def test_tx_via_transport_child_echo_via_callback_child() -> None:
     _connect_and_ready(pool, 0, t0)
     # Child 1 is callback-driven (remote MQTT-connected HGI).
     pool._children[1].callback_driven = True
-    pool._children[1].hgi_id = DeviceIdT("18:130236")
+    pool._children[1].hgi_id = cast(DeviceIdT, "18:130236")
     pool._children[1].accepted = True
     pool._children[1].send_ready = True
 
@@ -2072,7 +2073,7 @@ async def test_tx_heard_by_multiple_children_all_copies_marked() -> None:
     _connect_and_ready(pool, 0, t0)
     _connect_and_ready(pool, 1, t1)
     pool._children[2].callback_driven = True
-    pool._children[2].hgi_id = DeviceIdT("18:130236")
+    pool._children[2].hgi_id = cast(DeviceIdT, "18:130236")
     pool._children[2].accepted = True
     pool._children[2].send_ready = True
 
@@ -2110,7 +2111,7 @@ async def test_unrelated_frame_is_not_marked_as_echo() -> None:
     pool = PooledTransport(proto, [t0, None], config=TransportConfig())
     _connect_and_ready(pool, 0, t0)
     pool._children[1].callback_driven = True
-    pool._children[1].hgi_id = DeviceIdT("18:130236")
+    pool._children[1].hgi_id = cast(DeviceIdT, "18:130236")
     pool._children[1].accepted = True
     pool._children[1].send_ready = True
 

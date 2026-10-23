@@ -8,7 +8,7 @@ import dataclasses
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from typing import Final, TypeAlias
+from typing import Final
 
 from .. import exceptions as exc
 from ..interfaces import TransportInterface
@@ -28,7 +28,7 @@ _DEFAULT_TIMEOUT_MQTT: Final[float] = 60.0
 _DEFAULT_TIMEOUT_ZIGBEE: Final[float] = 60.0
 _DEFAULT_TIMEOUT_POOL: Final[float] = 10.0
 
-RamsesTransportT: TypeAlias = TransportInterface
+type RamsesTransportT = TransportInterface
 
 
 async def transport_factory(  # type: ignore[explicit-any]  # variadic factory kwargs

@@ -3,7 +3,7 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import Any, Final
+from typing import Any, Final, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -296,7 +296,7 @@ async def test_virtual_rf_packet_flow() -> None:
 
         await assert_code_in_device_msgindex(
             gwy_0,
-            DeviceIdT("01:022222"),
+            cast(DeviceIdT, "01:022222"),
             Code._1F09,
             max_sleep=0,
             test_not=True,
@@ -311,7 +311,7 @@ async def test_virtual_rf_packet_flow() -> None:
             gwy_0, ["01:022222", "18:000000", "18:111111", "40:000000"]
         )
         await assert_code_in_device_msgindex(
-            gwy_0, DeviceIdT("01:022222"), Code._1F09
+            gwy_0, cast(DeviceIdT, "01:022222"), Code._1F09
         )
 
         await assert_this_packet(gwy_0._engine._transport, cmd)

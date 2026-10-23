@@ -7,7 +7,7 @@ import asyncio
 import dataclasses
 import logging
 from collections import OrderedDict
-from typing import TYPE_CHECKING, NewType, TypeAlias
+from typing import TYPE_CHECKING, NewType
 
 from ramses_rf import exceptions as exc
 from ramses_rf.const import SZ_LOG_ENTRY, SZ_LOG_INDEX
@@ -33,9 +33,7 @@ if TYPE_CHECKING:
     from ramses_rf.systems.tcs import _LogbookT
 
 
-FaultTupleT: TypeAlias = tuple[
-    FaultType, FaultDeviceClass, DeviceIdT | None, str
-]
+type FaultTupleT = tuple[FaultType, FaultDeviceClass, DeviceIdT | None, str]
 
 
 DEFAULT_GET_LIMIT = 6
@@ -152,8 +150,8 @@ class FaultLogEntry:
 FaultDtmT = NewType("FaultDtmT", str)
 FaultIdxT = NewType("FaultIdxT", int)
 
-FaultLogT: TypeAlias = dict[FaultDtmT, FaultLogEntry]
-FaultMapT: TypeAlias = OrderedDict[FaultIdxT, FaultDtmT]
+type FaultLogT = dict[FaultDtmT, FaultLogEntry]
+type FaultMapT = OrderedDict[FaultIdxT, FaultDtmT]
 
 
 class FaultLog:  # 0418

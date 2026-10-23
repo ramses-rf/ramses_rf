@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import UTC, datetime as dt
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -111,7 +112,7 @@ def mock_gateway() -> Generator[MagicMock, None, None]:
 
 def _make_fan(gateway: MagicMock) -> HvacVentilator:
     """Create a real HvacVentilator registered in the mock registry."""
-    fan = HvacVentilator(gateway, Address(DeviceIdT(TEST_DEVICE_ID)))
+    fan = HvacVentilator(gateway, Address(cast(DeviceIdT, TEST_DEVICE_ID)))
     gateway.device_registry.device_by_id[TEST_DEVICE_ID] = fan
     return fan
 

@@ -5,18 +5,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import EnumCheck, IntEnum, StrEnum, verify
-from typing import Final, TypeAlias
+from typing import Final
 
 from ramses_rf.typing import SchemaT
 from ramses_tx.const import Code
 
-_DataValueT: TypeAlias = float | int | list[int] | str | None
-_FrameT: TypeAlias = str
-_MsgStrT: TypeAlias = str
+type _DataValueT = float | int | list[int] | str | None
+type _FrameT = str
+type _MsgStrT = str
 
 
-_FlagsSchemaT: TypeAlias = dict[int, dict[str, str]]
-_OtMsgSchemaT: TypeAlias = SchemaT
+type _FlagsSchemaT = dict[int, dict[str, str]]
+type _OtMsgSchemaT = SchemaT
 
 
 class OtDataId(IntEnum):
@@ -101,7 +101,7 @@ class OtDataId(IntEnum):
     _7F = 0x7F
 
 
-_OtDataIdT: TypeAlias = OtDataId  # | int
+type _OtDataIdT = OtDataId  # | int
 
 # grep -E 'RP.* 34:.* 30:.* 3220 ' | grep -vE ' 005 00..(01   |05|  |11|12|13|19|1A|1C            |73                           )' returns no results
 # grep -E 'RP.* 10:.* 01:.* 3220 ' | grep -vE ' 005 00..(   03|05|0F|11|12|13|19|1A|1C|38|39|71|72|73|74|75|76|77|78|79|7A|7B|7F)' returns no results

@@ -10,7 +10,7 @@ import asyncio
 import logging
 import re
 from enum import StrEnum
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 import probatio as vol
 
@@ -721,8 +721,10 @@ class BindStateBase:
                 for a in (command.addr1, command.addr2, command.addr3)
                 if a != NON_DEVICE_ID
             ]
-            source = DeviceIdT(addrs[0] if addrs else NON_DEVICE_ID)
-            destination = DeviceIdT(addrs[1] if len(addrs) > 1 else source)
+            source = cast(DeviceIdT, addrs[0] if addrs else NON_DEVICE_ID)
+            destination = cast(
+                DeviceIdT, addrs[1] if len(addrs) > 1 else source
+            )
 
         if phase == BindPhase.TENDER:
             return command.verb == I_ and destination in (

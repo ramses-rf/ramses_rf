@@ -71,7 +71,7 @@ def hvac_ventilator(mock_gateway: MagicMock) -> HvacVentilator:
     :return: An initialized HvacVentilator.
     :rtype: HvacVentilator
     """
-    device_id = DeviceIdT(TEST_DEVICE_ID)
+    device_id = cast(DeviceIdT, TEST_DEVICE_ID)
     return HvacVentilator(mock_gateway, Address(device_id))
 
 

@@ -6,7 +6,7 @@ import os
 from collections.abc import AsyncGenerator
 from dataclasses import fields
 from pathlib import Path
-from typing import Any, Final, NoReturn, TypeAlias, TypedDict, cast
+from typing import Any, Final, NoReturn, TypedDict, cast
 from unittest.mock import patch
 
 import pytest
@@ -24,7 +24,7 @@ from ramses_tx.typing import DeviceIdT
 from tests_rf.virtual_rf import HgiFwTypes, VirtualRf
 
 #
-PortStrT: TypeAlias = str
+type PortStrT = str
 
 # TEST_DIR = f"{os.path.dirname(__file__)}"
 TEST_DIR = Path(__file__).resolve().parent

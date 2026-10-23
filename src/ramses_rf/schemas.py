@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import probatio as vol
 
@@ -437,7 +437,9 @@ def load_schema(  # type: ignore[explicit-any]  # schema-tree kwargs
     # create any devices in the known list that are faked, or fake those already created
     for device_id, traits in known_list.items():
         if traits.get(SZ_FAKED):
-            device = _get_device(gateway, DeviceIdT(device_id))  # , **traits)
+            device = _get_device(
+                gateway, cast(DeviceIdT, device_id)
+            )  # , **traits)
             if not isinstance(device, Fakeable):
                 raise exc.DeviceNotFaked(f"Device is not fakeable: {device}")
             if not device.is_faked:
@@ -485,7 +487,7 @@ def _load_ufh_system(
         if not isinstance(ufc_schema, dict):
             continue
 
-        ufc = _get_device(gateway, DeviceIdT(device_id), parent=tcs)
+        ufc = _get_device(gateway, cast(DeviceIdT, device_id), parent=tcs)
         if not hasattr(ufc, "get_circuit"):
             continue
 

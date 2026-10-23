@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ramses_tx.const import Code, Verb
 from ramses_tx.typing import DeviceIdT
@@ -238,7 +238,9 @@ class StateHeader:
             safe_verb = verb
 
         safe_src = (
-            DeviceIdT(source_id) if isinstance(source_id, str) else source_id
+            cast(DeviceIdT, source_id)
+            if isinstance(source_id, str)
+            else source_id
         )
 
         return cls(

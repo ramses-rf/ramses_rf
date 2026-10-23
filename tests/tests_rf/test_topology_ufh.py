@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -271,15 +272,15 @@ def test_device_registry_handle_create_circuit_wires_zone() -> None:
         device_factory_cb=MagicMock(),
     )
     tcs, ufc = _make_mock_system("01:145038", "02:044435")
-    registry.device_by_id[DeviceIdT("01:145038")] = tcs.ctl
-    registry.device_by_id[DeviceIdT("02:044435")] = ufc
+    registry.device_by_id[cast(DeviceIdT, "01:145038")] = tcs.ctl
+    registry.device_by_id[cast(DeviceIdT, "02:044435")] = ufc
 
     zone = UfhZone(tcs, "05")
     tcs.zone_by_index["05"] = zone
 
     event = TopologyChangedEvent(
         action=TopologyAction.CREATE_CIRCUIT,
-        device_id=DeviceIdT("02:044435"),
+        device_id=cast(DeviceIdT, "02:044435"),
         metadata={
             SZ_UFH_INDEX: "01",
             SZ_ZONE_INDEX: "05",
@@ -314,8 +315,8 @@ async def test_topology_builder_build_zone_wires_circuits() -> None:
     tcs.zone_by_index["02"] = zone
     gwy.tcs = tcs
     gwy.device_registry.device_by_id = {
-        DeviceIdT("01:145038"): tcs.ctl,
-        DeviceIdT("02:044435"): ufc,
+        cast(DeviceIdT, "01:145038"): tcs.ctl,
+        cast(DeviceIdT, "02:044435"): ufc,
     }
 
     mock_msg = MagicMock(spec=Message)

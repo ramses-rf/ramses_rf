@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from ramses_rf.const import (
     SZ_CIRCUITS,
@@ -421,7 +421,7 @@ class UfhCircuit(Child, Entity):
         self._z_id = ufc.id
         self._z_index = DevIndexT(ufh_index)
 
-        self.id: DeviceIdT = DeviceIdT(f"{ufc.id}_{ufh_index}")
+        self.id: DeviceIdT = cast(DeviceIdT, f"{ufc.id}_{ufh_index}")
 
         self.ufc: UfhController = ufc
         self._child_id = ufh_index

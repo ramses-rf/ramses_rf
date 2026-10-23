@@ -22,11 +22,10 @@ from logging.handlers import (
 from os import PathLike
 from queue import Queue
 from types import TracebackType
-from typing import TypeAlias
 
 from .version import VERSION
 
-_SysExcInfoT: TypeAlias = (
+type _SysExcInfoT = (
     tuple[type[BaseException], BaseException, TracebackType | None]
     | tuple[None, None, None]
     | None

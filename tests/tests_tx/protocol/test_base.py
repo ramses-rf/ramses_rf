@@ -96,7 +96,7 @@ async def test_is_wanted_addrs_empty_filters(protocol: DummyProtocol) -> None:
     """Test default behavior with no filters set."""
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), DeviceIdT("01:222222")
+            cast(DeviceIdT, "01:111111"), cast(DeviceIdT, "01:222222")
         )
         is True
     )
@@ -104,22 +104,22 @@ async def test_is_wanted_addrs_empty_filters(protocol: DummyProtocol) -> None:
 
 async def test_is_wanted_addrs_exclude_list(protocol: DummyProtocol) -> None:
     """Test that devices in the exclude list are rejected."""
-    protocol._exclude = [DeviceIdT("01:111111")]
+    protocol._exclude = [cast(DeviceIdT, "01:111111")]
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), DeviceIdT("01:222222")
+            cast(DeviceIdT, "01:111111"), cast(DeviceIdT, "01:222222")
         )
         is False
     )
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:222222"), DeviceIdT("01:111111")
+            cast(DeviceIdT, "01:222222"), cast(DeviceIdT, "01:111111")
         )
         is False
     )
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:333333"), DeviceIdT("01:444444")
+            cast(DeviceIdT, "01:333333"), cast(DeviceIdT, "01:444444")
         )
         is True
     )
@@ -130,21 +130,24 @@ async def test_is_wanted_addrs_enforce_include(
 ) -> None:
     """Test enforce_include logic ensures ALL addresses are in the include list."""
     protocol.enforce_include = True
-    protocol._include = [DeviceIdT("01:111111")]
+    protocol._include = [cast(DeviceIdT, "01:111111")]
 
     # Only one device included, the other isn't -> False
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), DeviceIdT("01:222222")
+            cast(DeviceIdT, "01:111111"), cast(DeviceIdT, "01:222222")
         )
         is False
     )
 
     # Both devices included -> True
-    protocol._include = [DeviceIdT("01:111111"), DeviceIdT("01:222222")]
+    protocol._include = [
+        cast(DeviceIdT, "01:111111"),
+        cast(DeviceIdT, "01:222222"),
+    ]
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), DeviceIdT("01:222222")
+            cast(DeviceIdT, "01:111111"), cast(DeviceIdT, "01:222222")
         )
         is True
     )
@@ -153,13 +156,13 @@ async def test_is_wanted_addrs_enforce_include(
 async def test_is_wanted_addrs_active_hgi(protocol: DummyProtocol) -> None:
     """Test that the active HGI bypasses the enforce_include filter."""
     protocol.enforce_include = True
-    protocol._include = [DeviceIdT("01:111111")]
-    protocol._active_hgi = DeviceIdT("18:999999")
+    protocol._include = [cast(DeviceIdT, "01:111111")]
+    protocol._active_hgi = cast(DeviceIdT, "18:999999")
 
     # 18:999999 is the active HGI, so it should be permitted despite not being in _include
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), DeviceIdT("18:999999")
+            cast(DeviceIdT, "01:111111"), cast(DeviceIdT, "18:999999")
         )
         is True
     )
@@ -176,19 +179,19 @@ async def test_is_wanted_addrs_sending_to_hgi(protocol: DummyProtocol) -> None:
     protocol.enforce_include = True
     # Preserve the default include entries (ALL_DEV_ADDR, NON_DEV_ADDR,
     # HGI_DEV_ADDR) and add a known device.
-    protocol._include += [DeviceIdT("01:111111")]
+    protocol._include += [cast(DeviceIdT, "01:111111")]
 
     # When sending, HGI_DEV_ADDR (18:000730) is always allowed
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:111111"), HGI_DEV_ADDR.id, sending=True
+            cast(DeviceIdT, "01:111111"), HGI_DEV_ADDR.id, sending=True
         )
         is True
     )
     # Also when receiving (HGI80 echo comes back with src=HGI_DEV_ADDR)
     assert (
         protocol._is_wanted_addrs(
-            HGI_DEV_ADDR.id, DeviceIdT("01:111111"), sending=False
+            HGI_DEV_ADDR.id, cast(DeviceIdT, "01:111111"), sending=False
         )
         is True
     )
@@ -204,20 +207,22 @@ async def test_is_wanted_addrs_blocked_hgi_is_filtered(
     is safe and prevents noise.  The issue 822 eavesdropping exemption
     only applies to unknown HGIs that might be our own second gateway.
     """
-    protocol._active_hgi = DeviceIdT("18:191664")
-    protocol._exclude = [DeviceIdT("18:072981")]  # foreign HGI in block_list
+    protocol._active_hgi = cast(DeviceIdT, "18:191664")
+    protocol._exclude = [
+        cast(DeviceIdT, "18:072981")
+    ]  # foreign HGI in block_list
 
     # Packet from controller to blocked HGI — filtered
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:216136"), DeviceIdT("18:072981")
+            cast(DeviceIdT, "01:216136"), cast(DeviceIdT, "18:072981")
         )
         is False
     )
     # Packet from blocked HGI to controller — filtered
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("18:072981"), DeviceIdT("01:216136")
+            cast(DeviceIdT, "18:072981"), cast(DeviceIdT, "01:216136")
         )
         is False
     )
@@ -232,21 +237,21 @@ async def test_is_wanted_addrs_unknown_hgi_not_blocked(
     Its packets must pass through so the active gateway can eavesdrop
     on the controller's responses to it.
     """
-    protocol._active_hgi = DeviceIdT("18:191664")
+    protocol._active_hgi = cast(DeviceIdT, "18:191664")
     protocol._exclude = []
     protocol._include = []
 
     # Packet from unknown HGI to controller — allowed through
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("18:072981"), DeviceIdT("01:216136")
+            cast(DeviceIdT, "18:072981"), cast(DeviceIdT, "01:216136")
         )
         is True
     )
     # Packet from controller to unknown HGI — allowed through
     assert (
         protocol._is_wanted_addrs(
-            DeviceIdT("01:216136"), DeviceIdT("18:072981")
+            cast(DeviceIdT, "01:216136"), DeviceIdT("18:072981")
         )
         is True
     )

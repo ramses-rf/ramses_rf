@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -172,7 +172,7 @@ def test_load_tcs_hydrates_legacy_zone_idx() -> None:
     }
 
     # Act
-    result_tcs = load_tcs(gateway, DeviceIdT("01:195932"), schema)
+    result_tcs = load_tcs(gateway, cast(DeviceIdT, "01:195932"), schema)
 
     # Assert
     assert result_tcs is tcs

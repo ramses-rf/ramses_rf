@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta as td
-from typing import Any
+from typing import Any, cast
 
 from ramses_rf import exceptions as exc
 from ramses_rf.address import Address
@@ -276,7 +276,7 @@ class HvacCarbonDioxideSensor(CarbonDioxide, Fakeable):  # CO2: I/1298
         device_ids = bound if isinstance(bound, list) else [bound]
         return next(
             (
-                DeviceIdT(fan_id)
+                cast(DeviceIdT, fan_id)
                 for fan_id in device_ids
                 if isinstance(fan_id, str) and fan_id.startswith("32:")
             ),

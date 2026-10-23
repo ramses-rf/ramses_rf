@@ -12,7 +12,7 @@ import tty
 from collections import deque
 from io import FileIO
 from types import TracebackType
-from typing import Final, Self, TypeAlias, TypedDict
+from typing import Final, Self, TypedDict
 
 import serialx
 from serialx import serial_for_url
@@ -31,8 +31,8 @@ _LOGGER: Final = logging.getLogger(__name__)
 _LOGGER.setLevel(logging.DEBUG)
 
 # Types
-_FD: TypeAlias = int  # file descriptor
-_PN: TypeAlias = str  # port name
+type _FD = int  # file descriptor
+type _PN = str  # port name
 
 
 class _GatewaysT(TypedDict):

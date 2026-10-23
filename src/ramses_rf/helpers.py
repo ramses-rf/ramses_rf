@@ -7,9 +7,9 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from inspect import iscoroutinefunction
-from typing import Any, TypeAlias, cast
+from typing import Any, cast
 
-_SchemaT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous schema
+type _SchemaT = dict[  # type: ignore[explicit-any]  # heterogeneous schema
     str, Any
 ]
 

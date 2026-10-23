@@ -224,8 +224,8 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         self._eavesdrop_engine: EavesdropEngine | None = None
 
         self._device_filter: DeviceFilterInterface = DeviceFilter(
-            include=[DeviceIdT(k) for k in self._gwy_config.known_list],
-            exclude=[DeviceIdT(k) for k in self._gwy_config.block_list],
+            include=[cast(DeviceIdT, k) for k in self._gwy_config.known_list],
+            exclude=[cast(DeviceIdT, k) for k in self._gwy_config.block_list],
             unwanted=self._engine._unwanted,
             enforce_known_list=self._gwy_config.engine.enforce_known_list,
             hgi_id_provider=lambda: (
@@ -274,7 +274,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
         # 1. Controller Knowledge Bridge
         def is_controller(device_id: str) -> bool:
             device = self._device_registry.device_by_id.get(
-                DeviceIdT(device_id)
+                cast(DeviceIdT, device_id)
             )
             if device:
                 return getattr(device, "_is_controller", True)
@@ -302,7 +302,9 @@ class Gateway(GatewayLifecycle, GatewayInterface):
             (whether the user has locked the class), and "faked", or None.
         :rtype: SchemaT | None
         """
-        device = self._device_registry.device_by_id.get(DeviceIdT(device_id))
+        device = self._device_registry.device_by_id.get(
+            cast(DeviceIdT, device_id)
+        )
         if not device:
             return None
         slug = getattr(device, "_SLUG", None)

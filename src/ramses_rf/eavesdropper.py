@@ -89,9 +89,9 @@ class EavesdropEngine:
         if hasattr(msg, "_dto") and msg._dto:
             addrs_to_check.extend(
                 [
-                    DeviceIdT(msg._dto.addr1),
-                    DeviceIdT(msg._dto.addr2),
-                    DeviceIdT(msg._dto.addr3),
+                    cast(DeviceIdT, msg._dto.addr1),
+                    cast(DeviceIdT, msg._dto.addr2),
+                    cast(DeviceIdT, msg._dto.addr3),
                 ]
             )
 

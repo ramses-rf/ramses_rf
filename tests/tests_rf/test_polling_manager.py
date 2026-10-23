@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 from datetime import UTC, datetime as dt, timedelta as td
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -915,8 +915,8 @@ async def test_polling_schema_traits_parsing() -> None:
     gateway = Gateway(port_name="/dev/null", config=config, loop=loop)
 
     # ACT
-    ctl_dev = gateway.device_registry.get_device(DeviceIdT("01:111111"))
-    trv_dev = gateway.device_registry.get_device(DeviceIdT("04:222222"))
+    ctl_dev = gateway.device_registry.get_device(cast(DeviceIdT, "01:111111"))
+    trv_dev = gateway.device_registry.get_device(cast(DeviceIdT, "04:222222"))
 
     # ASSERT
     assert ctl_dev.polling_interval == {Code._1F41: 3600, Code._10E0: 600}

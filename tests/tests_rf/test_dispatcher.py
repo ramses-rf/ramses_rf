@@ -5,6 +5,7 @@ import logging
 import threading
 from collections.abc import Generator
 from datetime import datetime as dt, timedelta as td
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -89,7 +90,7 @@ class Test_dispatcher_gateway:
     @pytest.mark.skip(reason="requires gwy")
     def test_instantiate_devices(self, mock_gateway: MagicMock) -> None:
         """Test device creation from addresses via pipeline stage."""
-        dev1 = Device(mock_gateway, Address(DeviceIdT("04:189078")))
+        dev1 = Device(mock_gateway, Address(cast(DeviceIdT, "04:189078")))
         mock_gateway.device_registry.device_by_id.get = MagicMock(
             return_value=dev1
         )

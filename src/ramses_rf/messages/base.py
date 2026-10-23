@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from datetime import datetime as dt
-from typing import TYPE_CHECKING, Any, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from ramses_rf.address import Address, id_to_address
 from ramses_rf.const import (
@@ -54,7 +54,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # Transition alias for typing until full payload migration is complete
-PayloadT: TypeAlias = Any  # type: ignore[explicit-any]  # legacy payload union
+type PayloadT = Any  # type: ignore[explicit-any]  # legacy payload union
 
 
 # TypeVar bound to Message to allow strict inheritance typing
@@ -104,14 +104,14 @@ class Message:
         addr3 = dto.addr3 if dto.addr3 else "--:------"
 
         self._addrs: tuple[Address, Address, Address] = (
-            id_to_address(DeviceIdT(addr1)),
-            id_to_address(DeviceIdT(addr2)),
-            id_to_address(DeviceIdT(addr3)),
+            id_to_address(cast(DeviceIdT, addr1)),
+            id_to_address(cast(DeviceIdT, addr2)),
+            id_to_address(cast(DeviceIdT, addr3)),
         )
 
         valid = [a for a in self._addrs if a.id != "--:------"]
         self.src: Address = (
-            valid[0] if valid else id_to_address(DeviceIdT("--:------"))
+            valid[0] if valid else id_to_address(cast(DeviceIdT, "--:------"))
         )
         self.dst: Address = valid[1] if len(valid) > 1 else self.src
 

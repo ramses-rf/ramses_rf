@@ -1,28 +1,28 @@
 """RAMSES RF - Domain-specific type definitions."""
 
 from datetime import timedelta as td
-from typing import Any, NotRequired, TypeAlias, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from ramses_tx.typing import DeviceIdT as TxDeviceIdT, DevIndexT as TxIndexT
 
-DeviceIdT: TypeAlias = TxDeviceIdT
-DevIndexT: TypeAlias = TxIndexT
-IndexT: TypeAlias = TxIndexT
+type DeviceIdT = TxDeviceIdT
+type DevIndexT = TxIndexT
+type IndexT = TxIndexT
 
-DeviceTraitsT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous traits
+type DeviceTraitsT = dict[  # type: ignore[explicit-any]  # heterogeneous traits
     str, Any
 ]
-DeviceListT: TypeAlias = dict[str, DeviceTraitsT]
-PollingIntervalsT: TypeAlias = dict[str, int]
+type DeviceListT = dict[str, DeviceTraitsT]
+type PollingIntervalsT = dict[str, int]
 
 # Domain Payload Type Aliases
-HvacPayloadT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous payload
+type HvacPayloadT = dict[  # type: ignore[explicit-any]  # heterogeneous payload
     str, Any
 ]
-OpenThermPayloadT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous payload
+type OpenThermPayloadT = dict[  # type: ignore[explicit-any]  # heterogeneous payload
     str, Any
 ]
-HeatingPayloadT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous payload
+type HeatingPayloadT = dict[  # type: ignore[explicit-any]  # heterogeneous payload
     str, Any
 ]
 
@@ -73,8 +73,8 @@ class SwitchPointZon(TypedDict):
     heat_setpoint: float
 
 
-SwitchPointT: TypeAlias = SwitchPointDhw | SwitchPointZon
-SwitchPointsT: TypeAlias = list[SwitchPointT]
+type SwitchPointT = SwitchPointDhw | SwitchPointZon
+type SwitchPointsT = list[SwitchPointT]
 
 
 class DayOfWeek(TypedDict):
@@ -84,9 +84,9 @@ class DayOfWeek(TypedDict):
     switchpoints: SwitchPointsT
 
 
-DayOfWeekT: TypeAlias = DayOfWeek
-WeeklySchedule: TypeAlias = list[DayOfWeek]
-InnerScheduleT: TypeAlias = WeeklySchedule
+type DayOfWeekT = DayOfWeek
+type WeeklySchedule = list[DayOfWeek]
+type InnerScheduleT = WeeklySchedule
 
 
 class WeeklyScheduleDict(TypedDict, total=False):
@@ -104,17 +104,17 @@ class EmptySchedule(TypedDict, total=False):
 
 
 # Legacy aliases for backward compatibility
-OuterSchedule: TypeAlias = WeeklyScheduleDict
-OuterScheduleT: TypeAlias = WeeklyScheduleDict | EmptySchedule
+type OuterSchedule = WeeklyScheduleDict
+type OuterScheduleT = WeeklyScheduleDict | EmptySchedule
 
 
-PayloadT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous protocol payload
+type PayloadT = dict[  # type: ignore[explicit-any]  # heterogeneous protocol payload
     str, Any
 ]
-SchemaT: TypeAlias = dict[  # type: ignore[explicit-any]  # heterogeneous schema tree
+type SchemaT = dict[  # type: ignore[explicit-any]  # heterogeneous schema tree
     str, Any
 ]
-PayloadSetT: TypeAlias = list[PayloadT | None]
+type PayloadSetT = list[PayloadT | None]
 
-FragmentT: TypeAlias = str
-FragmentSetT: TypeAlias = list[FragmentT]
+type FragmentT = str
+type FragmentSetT = list[FragmentT]

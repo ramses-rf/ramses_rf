@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime as dt
 from enum import Enum, auto
-from typing import Any, TypeAlias
+from typing import Any
 
 from .. import exceptions as exc
 from ..address import HGI_DEV_ADDR
@@ -26,7 +26,7 @@ _MAX_TRACKED_TRANSMITS = 99
 _MAX_TRACKED_DURATION = 300
 _DBG_DISABLE_REGEX_WARNINGS = False
 
-_TxKeyT: TypeAlias = tuple[str, str, str, str, str, str]
+type _TxKeyT = tuple[str, str, str, str, str, str]
 
 
 class SignaturePolicy(Enum):
@@ -515,4 +515,4 @@ class _FullTransport(_ReadTransport):
             _LOGGER.debug("Failed to log Tx frame: %s", err)
 
 
-_RegexRuleT: TypeAlias = dict[str, str]
+type _RegexRuleT = dict[str, str]

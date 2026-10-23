@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
 
 from ramses_rf.const import (
     DEV_ROLE_MAP,
@@ -85,7 +86,7 @@ class UfhTopologyHandler(TopologyHandler):
             # Explicitly promote to UFC to prevent strict parser dropping
             event_promote = TopologyChangedEvent(
                 action=TopologyAction.UPDATE_DEVICE_CLASS,
-                device_id=DeviceIdT(ufc_id),
+                device_id=cast(DeviceIdT, ufc_id),
                 metadata={"device_class": DevType.UFC},
                 causation="Rule_UFH_Communication_Promotion",
             )
@@ -94,8 +95,8 @@ class UfhTopologyHandler(TopologyHandler):
             # Bind the UFC to the parent Controller
             event_bind = TopologyChangedEvent(
                 action=TopologyAction.BIND_DEVICE,
-                parent_id=DeviceIdT(ctl_id),
-                child_id=DeviceIdT(ufc_id),
+                parent_id=cast(DeviceIdT, ctl_id),
+                child_id=cast(DeviceIdT, ufc_id),
                 metadata={SZ_DEVICE_ROLE: DEV_ROLE_MAP.UFH},
                 causation="Rule_UFH_Communication_Binding",
             )
@@ -142,7 +143,7 @@ class UfhTopologyHandler(TopologyHandler):
                     )
                     event_circuit = TopologyChangedEvent(
                         action=TopologyAction.CREATE_CIRCUIT,
-                        device_id=DeviceIdT(target_ufc_id),
+                        device_id=cast(DeviceIdT, target_ufc_id),
                         metadata={
                             SZ_UFH_INDEX: str(ufh_index),
                             SZ_ZONE_INDEX: zone_index_str,

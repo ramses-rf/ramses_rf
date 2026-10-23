@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Final, TypeAlias, cast
+from typing import TYPE_CHECKING, Final, cast
 
 from ..address import HGI_DEVICE_ID
 from ..const import (
@@ -797,4 +797,4 @@ class PortProtocol(_DeviceIdFilterMixin):
             raise
 
 
-RamsesProtocolT: TypeAlias = PortProtocol | ReadProtocol
+type RamsesProtocolT = PortProtocol | ReadProtocol

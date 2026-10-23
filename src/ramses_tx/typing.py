@@ -10,7 +10,6 @@ from typing import (
     Literal,
     NewType,
     NotRequired,
-    TypeAlias,
     TypedDict,
     TypeVar,
 )
@@ -49,7 +48,7 @@ class DeviceTraitsT(TypedDict):
     class_: str | None  # "class" is a reserved keyword
 
 
-DeviceListT: TypeAlias = dict[DeviceIdT, DeviceTraitsT]
+type DeviceListT = dict[DeviceIdT, DeviceTraitsT]
 
 
 if TYPE_CHECKING:
@@ -57,7 +56,7 @@ if TYPE_CHECKING:
 
     MsgFilterT = Callable[["PacketDTO"], bool]
     MsgHandlerT = Callable[["PacketDTO"], Awaitable[None]]
-    RamsesProtocolT: TypeAlias = ProtocolInterface
+    type RamsesProtocolT = ProtocolInterface
 else:
     MsgFilterT = Callable[[Any], bool]
     MsgHandlerT = Callable[[Any], Awaitable[None]]
@@ -136,7 +135,7 @@ class SendParams:
 
 
 # TypedDicts (formerly in typed_dicts.py)
-_HexToTempT: TypeAlias = float | None
+type _HexToTempT = float | None
 
 
 LogIdxT = Literal[
@@ -638,81 +637,81 @@ class _JASPER(TypedDict):
 class PayDictT:
     """Payload dict types."""
 
-    EMPTY: TypeAlias = _empty
+    type EMPTY = _empty
 
-    _0004: TypeAlias = _0004
-    _0006: TypeAlias = _0006
-    _0008: TypeAlias = _0008
-    _000A: TypeAlias = _000a
-    _0100: TypeAlias = _0100
-    _0404: TypeAlias = _0404
-    _0418: TypeAlias = _0418
-    _0418_NULL: TypeAlias = _0418_NULL
-    _1030: TypeAlias = _1030
-    _1060: TypeAlias = _1060
-    _1081: TypeAlias = _Setpoint
-    _1090: TypeAlias = _1090
-    _10A0: TypeAlias = _10a0
-    _10D0: TypeAlias = _10d0
-    _10E1: TypeAlias = _10e1
-    _1100: TypeAlias = _1100
-    _1100_INDEX: TypeAlias = _1100_INDEX
-    _1260: TypeAlias = _Temperature
-    _1280: TypeAlias = OutdoorHumidity
-    _1290: TypeAlias = OutdoorTemp
-    _1298: TypeAlias = Co2Level
-    _12A0: TypeAlias = _12a0
-    _12B0: TypeAlias = _12b0
-    _12C0: TypeAlias = _12c0
-    _12C8: TypeAlias = AirQuality
-    _12F0: TypeAlias = _FlowRate
-    _1300: TypeAlias = _Pressure
-    _1F09: TypeAlias = _1f09
-    _1F41: TypeAlias = _1f41
-    _1FC9: TypeAlias = _1fc9
-    _1FD4: TypeAlias = _1fd4
-    _22B0: TypeAlias = _22b0
-    _22F4: TypeAlias = _22f4
-    _2309: TypeAlias = _2309
-    _2349: TypeAlias = _2349
-    _22D9: TypeAlias = _Setpoint
-    _2D49: TypeAlias = _2d49
-    _2E04: TypeAlias = _2e04
-    _3110: TypeAlias = _3110
-    _313F: TypeAlias = _313f
-    _31DA: TypeAlias = _VentilationState
-    _3200: TypeAlias = _Temperature
-    _3210: TypeAlias = _Temperature
-    _3B00: TypeAlias = _3b00
-    _3EF0: TypeAlias = _3ef0_3 | _3ef0_6 | _3ef0_9
-    _3EF1: TypeAlias = _3ef1
+    type _0004 = _0004
+    type _0006 = _0006
+    type _0008 = _0008
+    type _000A = _000a
+    type _0100 = _0100
+    type _0404 = _0404
+    type _0418 = _0418
+    type _0418_NULL = _0418_NULL
+    type _1030 = _1030
+    type _1060 = _1060
+    type _1081 = _Setpoint
+    type _1090 = _1090
+    type _10A0 = _10a0
+    type _10D0 = _10d0
+    type _10E1 = _10e1
+    type _1100 = _1100
+    type _1100_INDEX = _1100_INDEX
+    type _1260 = _Temperature
+    type _1280 = OutdoorHumidity
+    type _1290 = OutdoorTemp
+    type _1298 = Co2Level
+    type _12A0 = _12a0
+    type _12B0 = _12b0
+    type _12C0 = _12c0
+    type _12C8 = AirQuality
+    type _12F0 = _FlowRate
+    type _1300 = _Pressure
+    type _1F09 = _1f09
+    type _1F41 = _1f41
+    type _1FC9 = _1fc9
+    type _1FD4 = _1fd4
+    type _22B0 = _22b0
+    type _22F4 = _22f4
+    type _2309 = _2309
+    type _2349 = _2349
+    type _22D9 = _Setpoint
+    type _2D49 = _2d49
+    type _2E04 = _2e04
+    type _3110 = _3110
+    type _313F = _313f
+    type _31DA = _VentilationState
+    type _3200 = _Temperature
+    type _3210 = _Temperature
+    type _3B00 = _3b00
+    type _3EF0 = _3ef0_3 | _3ef0_6 | _3ef0_9
+    type _3EF1 = _3ef1
 
-    _JASPER: TypeAlias = _JASPER
+    type _JASPER = _JASPER
 
-    FAULT_LOG_ENTRY: TypeAlias = FaultLogEntry
-    FAULT_LOG_ENTRY_NULL: TypeAlias = FaultLogEntryNull
-    TEMPERATURE: TypeAlias = _Temperature
+    type FAULT_LOG_ENTRY = FaultLogEntry
+    type FAULT_LOG_ENTRY_NULL = FaultLogEntryNull
+    type TEMPERATURE = _Temperature
 
-    RELATIVE_HUMIDITY: TypeAlias = RelativeHumidity
+    type RELATIVE_HUMIDITY = RelativeHumidity
 
-    AIR_QUALITY: TypeAlias = AirQuality
-    CO2_LEVEL: TypeAlias = Co2Level
-    EXHAUST_TEMP: TypeAlias = ExhaustTemp
-    SUPPLY_TEMP: TypeAlias = SupplyTemp
-    INDOOR_HUMIDITY: TypeAlias = IndoorHumidity
-    OUTDOOR_HUMIDITY: TypeAlias = OutdoorHumidity
-    INDOOR_TEMP: TypeAlias = IndoorTemp
-    OUTDOOR_TEMP: TypeAlias = OutdoorTemp
-    CAPABILITIES: TypeAlias = Capabilities
-    BYPASS_POSITION: TypeAlias = BypassPosition
-    FAN_INFO: TypeAlias = FanInfo
-    EXHAUST_FAN_SPEED: TypeAlias = ExhaustFanSpeed
-    SUPPLY_FAN_SPEED: TypeAlias = SupplyFanSpeed
-    REMAINING_MINUTES: TypeAlias = RemainingMins
-    POST_HEATER: TypeAlias = PostHeater
-    PRE_HEATER: TypeAlias = PreHeater
-    SUPPLY_FLOW: TypeAlias = SupplyFlow
-    EXHAUST_FLOW: TypeAlias = ExhaustFlow
+    type AIR_QUALITY = AirQuality
+    type CO2_LEVEL = Co2Level
+    type EXHAUST_TEMP = ExhaustTemp
+    type SUPPLY_TEMP = SupplyTemp
+    type INDOOR_HUMIDITY = IndoorHumidity
+    type OUTDOOR_HUMIDITY = OutdoorHumidity
+    type INDOOR_TEMP = IndoorTemp
+    type OUTDOOR_TEMP = OutdoorTemp
+    type CAPABILITIES = Capabilities
+    type BYPASS_POSITION = BypassPosition
+    type FAN_INFO = FanInfo
+    type EXHAUST_FAN_SPEED = ExhaustFanSpeed
+    type SUPPLY_FAN_SPEED = SupplyFanSpeed
+    type REMAINING_MINUTES = RemainingMins
+    type POST_HEATER = PostHeater
+    type PRE_HEATER = PreHeater
+    type SUPPLY_FLOW = SupplyFlow
+    type EXHAUST_FLOW = ExhaustFlow
 
 
 class PortConfigT(TypedDict):

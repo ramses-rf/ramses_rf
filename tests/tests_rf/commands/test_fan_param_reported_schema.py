@@ -8,6 +8,7 @@ some devices and sensor sensitivity on others).
 """
 
 from datetime import datetime as dt
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -76,15 +77,15 @@ def _gateway() -> MagicMock:
 
 
 def _fan(gateway: MagicMock, dev_id: str = FAN) -> HvacVentilator:
-    fan = HvacVentilator(gateway, Address(DeviceIdT(dev_id)))
+    fan = HvacVentilator(gateway, Address(cast(DeviceIdT, dev_id)))
     gateway.device_registry.device_by_id[dev_id] = fan
     return fan
 
 
 def _intent(param_id: str, value: float, dst: str = FAN) -> Command:
     return Command(
-        src=Address(DeviceIdT(REM)),
-        dst=Address(DeviceIdT(dst)),
+        src=Address(cast(DeviceIdT, REM)),
+        dst=Address(cast(DeviceIdT, dst)),
         action=Action.SET_FAN_PARAM,
         data={"param_id": param_id, "value": value},
     )

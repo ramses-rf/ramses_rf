@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime as dt
-from typing import Any
+from typing import Any, cast
 
 from ramses_rf.address import Address
 from ramses_rf.enums import Topic
@@ -51,10 +51,10 @@ class Message:
         :rtype: Address
         """
         if not self.packets:
-            return Address(DeviceIdT("--:------"))
+            return Address(cast(DeviceIdT, "--:------"))
 
         addr_str = self.packets[0].addr3
-        return Address(DeviceIdT(addr_str if addr_str else "--:------"))
+        return Address(cast(DeviceIdT, addr_str if addr_str else "--:------"))
 
     def get(  # type: ignore[explicit-any]  # dict-compat shim
         self, key: str, default: Any = None

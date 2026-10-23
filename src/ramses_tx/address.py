@@ -4,15 +4,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Final
+from typing import Final, cast
 
 from . import exceptions as exc
 from .const import DEVICE_ID_REGEX, HGI_PREFIX
 from .typing import DeviceIdT
 
-HGI_DEVICE_ID: DeviceIdT = DeviceIdT("18:000730")
-NON_DEVICE_ID: DeviceIdT = DeviceIdT("--:------")
-ALL_DEVICE_ID: DeviceIdT = DeviceIdT("63:262142")
+HGI_DEVICE_ID: DeviceIdT = cast(DeviceIdT, "18:000730")
+NON_DEVICE_ID: DeviceIdT = cast(DeviceIdT, "--:------")
+ALL_DEVICE_ID: DeviceIdT = cast(DeviceIdT, "63:262142")
 
 # NOTE: All debug flags should be False for deployment to end-users
 _DBG_DISABLE_STRICT_CHECKING: Final[bool] = False
@@ -97,8 +97,8 @@ class Address:
             return NON_DEVICE_ID
 
         _tmp = int(device_hex, 16)
-        return DeviceIdT(
-            f"{(_tmp & 0xFC0000) >> 18:02d}:{_tmp & 0x03FFFF:06d}"
+        return cast(
+            DeviceIdT, f"{(_tmp & 0xFC0000) >> 18:02d}:{_tmp & 0x03FFFF:06d}"
         )
 
     @classmethod
@@ -139,7 +139,7 @@ def hex_id_to_dev_id(device_hex: str) -> DeviceIdT:
 
     _tmp = int(device_hex, 16)
     dev_type = f"{(_tmp & 0xFC0000) >> 18:02d}"
-    return DeviceIdT(f"{dev_type}:{_tmp & 0x03FFFF:06d}")
+    return cast(DeviceIdT, f"{dev_type}:{_tmp & 0x03FFFF:06d}")
 
 
 @lru_cache(maxsize=2048)

@@ -8,7 +8,7 @@ import sys
 import time
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime as dt
-from typing import Literal, TypeAlias, TypeGuard, overload
+from typing import Literal, TypeGuard, overload
 
 
 def is_hex_byte(value: object) -> TypeGuard[HexByte]:
@@ -92,15 +92,15 @@ HexByteAlt = Literal[
 ]
 # fmt: on
 
-HexByte: TypeAlias = str
-HexStr2: TypeAlias = str  # two characters, one byte
-HexStr4: TypeAlias = str
-HexStr8: TypeAlias = str
-HexStr12: TypeAlias = str
-HexStr14: TypeAlias = str
+type HexByte = str
+type HexStr2 = str  # two characters, one byte
+type HexStr4 = str
+type HexStr8 = str
+type HexStr12 = str
+type HexStr14 = str
 
 
-ReturnValueDictT: TypeAlias = Mapping[str, float | str | None]
+type ReturnValueDictT = Mapping[str, float | str | None]
 
 
 class _FILE_TIME(ctypes.Structure):

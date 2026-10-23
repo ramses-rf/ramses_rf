@@ -11,7 +11,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime as dt
-from typing import TYPE_CHECKING, Final, TypeAlias
+from typing import TYPE_CHECKING, Final
 from unittest.mock import Mock
 
 from ramses_rf.commands.builders import build_dto
@@ -34,7 +34,7 @@ SendCallbackT = Callable[[CommandDTO], Awaitable[Packet]]
 #: Single-flight signature: the full frame identity of an intent's
 #: DTO (verb, addr1, addr2, addr3, code, payload).  Identical
 #: signatures produce byte-identical frames (ramses-rf/ramses_cc#1336).
-_ConvSigT: TypeAlias = tuple[str, str, str, str, str, str]
+type _ConvSigT = tuple[str, str, str, str, str, str]
 
 
 @dataclass

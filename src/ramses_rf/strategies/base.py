@@ -9,7 +9,7 @@ See :doc:`roadmap item 5 <https://github.com/ramses-rf/ramses_rf/issues/1093>`.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 from ramses_rf.enums import DevType
 from ramses_rf.exceptions import BindingError, DeviceNotFaked
@@ -431,7 +431,7 @@ class HvacStrategyBase:
         registry = getattr(gateway, "device_registry", None)
         device_by_id = getattr(registry, "device_by_id", None)
         child = (
-            device_by_id.get(DeviceIdT(device_id))
+            device_by_id.get(cast(DeviceIdT, device_id))
             if isinstance(device_by_id, dict)
             else None
         )
