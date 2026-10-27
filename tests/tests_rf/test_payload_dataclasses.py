@@ -1105,6 +1105,36 @@ def test_hvac_fan_param_payload_2411_22byte_parity() -> None:
     assert as_dict["value_scaled"] == 50
 
 
+@pytest.mark.parametrize(
+    ("raw_hex", "zone_index", "frag_number", "total_frags"),
+    [
+        ("032000080D0404C06C85D90A6EED669FFA6B39FF", 3, 4, 4),
+        ("062000080D05050037C00D70A3F9E737085346B8", 6, 5, 5),
+    ],
+)
+def test_schedule_fragment_0404_exactly_20_bytes(
+    raw_hex: str,
+    zone_index: int,
+    frag_number: int,
+    total_frags: int,
+) -> None:
+    """Recognise 20-byte fragments without misreading switchpoints."""
+    # Arrange
+    raw = bytes.fromhex(raw_hex)
+    assert len(raw) == 20
+
+    # Act
+    payload = ScheduleSwitchpointPayload.from_bytes(raw)
+
+    # Assert
+    assert isinstance(payload, ScheduleFragmentPayload)
+    assert payload.zone_index == zone_index
+    assert payload.frag_number == frag_number
+    assert payload.total_frags == total_frags
+    assert payload.fragment_bytes == raw[7:]
+    assert payload.to_bytes() == raw
+
+
 def test_schedule_fragment_payload_0404_parity() -> None:
     # Arrange
     raw_hex = (
