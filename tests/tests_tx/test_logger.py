@@ -3,6 +3,7 @@
 
 import asyncio
 import logging
+from datetime import datetime as dt
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import pytest
 
 from ramses_rf import Gateway, GatewayConfig
 from ramses_tx.config import EngineConfig
-from ramses_tx.logger import flush_packet_log
+from ramses_tx.logger import PacketLogFormatter, flush_packet_log
 from ramses_tx.packet import PKT_LOGGER, Packet
 
 
@@ -45,7 +46,9 @@ async def test_packet_logging_outputs_formatted_frame(tmp_path: Path) -> None:
     await gwy.start()
 
     raw_packet_line = "...  I --- 01:161591 --:------ 01:161591 3150 002 0000"
-    packet = Packet.from_file("2026-07-31T10:00:00.000000", raw_packet_line)
+    packet = Packet.from_file(
+        "2026-07-31T10:00:00.000000+00:00", raw_packet_line
+    )
 
     try:
         # Act
@@ -58,11 +61,33 @@ async def test_packet_logging_outputs_formatted_frame(tmp_path: Path) -> None:
 
         # Assert
         content = log_file.read_text()
-        assert "2026-07-31T10:00:00.000000" in content
+        assert "2026-07-31T10:00:00.000000+00:00" in content
         assert raw_packet_line in content
 
     finally:
         await gwy.stop()
+
+
+@pytest.mark.parametrize(
+    ("local_timestamp", "utc_timestamp"),
+    (
+        (
+            "2026-10-25T02:00:00.000000+02:00",
+            "2026-10-25T00:00:00.000000+00:00",
+        ),
+        (
+            "2026-10-25T02:00:00.000000+01:00",
+            "2026-10-25T01:00:00.000000+00:00",
+        ),
+    ),
+)
+def test_packet_log_formatter_distinguishes_dst_occurrences(
+    local_timestamp: str, utc_timestamp: str
+) -> None:
+    record = logging.LogRecord("test", logging.INFO, "", 0, "", (), None)
+    record.created = dt.fromisoformat(local_timestamp).timestamp()
+
+    assert PacketLogFormatter().formatTime(record) == utc_timestamp
 
 
 @pytest.mark.asyncio
