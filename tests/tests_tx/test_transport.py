@@ -13,6 +13,7 @@ from ramses_tx.const import Verb
 from ramses_tx.discovery import is_hgi80
 from ramses_tx.transport import TransportConfig, transport_factory
 from ramses_tx.transport.callback import CallbackTransport
+from ramses_tx.transport.file import FileTransport
 from ramses_tx.typing import SerPortNameT
 
 
@@ -25,6 +26,41 @@ async def _async_callback_factory(
 ) -> CallbackTransport:
     """Async wrapper for CallbackTransport to satisfy transport_factory signature."""
     return CallbackTransport(protocol, io_writer, config=config, **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("line", "timestamp"),
+    (
+        (
+            "2026-10-28 19:08:21.449000 "
+            "-56  I --- 04:003882 --:------ 01:105025 3150 002 0200",
+            "2026-10-28 19:08:21.449000",
+        ),
+        (
+            "2026-10-28T19:08:21.449000 "
+            "-56  I --- 04:003882 --:------ 01:105025 3150 002 0200",
+            "2026-10-28T19:08:21.449000",
+        ),
+        (
+            "2026-10-28T19:08:21.449000+00:00 "
+            "-56  I --- 04:003882 --:------ 01:105025 3150 002 0200",
+            "2026-10-28T19:08:21.449000+00:00",
+        ),
+    ),
+)
+async def test_file_transport_splits_naive_and_aware_timestamps(
+    line: str, timestamp: str
+) -> None:
+    """Packet-log timestamps may include a UTC offset."""
+    transport = object.__new__(FileTransport)
+    transport._process_line = AsyncMock()  # type: ignore[method-assign]
+
+    await transport._process_line_from_raw(line)
+
+    transport._process_line.assert_awaited_once_with(
+        timestamp,
+        "-56  I --- 04:003882 --:------ 01:105025 3150 002 0200",
+    )
 
 
 async def test_callback_transport_handshake() -> None:
