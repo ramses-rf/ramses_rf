@@ -53,7 +53,7 @@ async def test_file_transport_splits_naive_and_aware_timestamps(
 ) -> None:
     """Packet-log timestamps may include a UTC offset."""
     transport = object.__new__(FileTransport)
-    transport._process_line = AsyncMock()  # type: ignore[method-assign]
+    transport._process_line = AsyncMock()
 
     await transport._process_line_from_raw(line)
 
