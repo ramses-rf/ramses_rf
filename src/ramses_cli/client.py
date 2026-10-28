@@ -154,7 +154,16 @@ def split_kwargs(
     cli_kwargs.update(
         {k: v for k, v in kwargs.items() if k not in LIB_KEYS + LIB_CFG_KEYS}
     )
-    lib_kwargs.update({k: v for k, v in kwargs.items() if k in LIB_KEYS})
+
+    lib_values = {k: v for k, v in kwargs.items() if k in LIB_KEYS}
+    if (
+        SZ_PACKET_LOG in lib_values
+        and lib_values[SZ_PACKET_LOG] is None
+        and SZ_PACKET_LOG in lib_kwargs
+    ):
+        del lib_values[SZ_PACKET_LOG]
+    lib_kwargs.update(lib_values)
+
     lib_kwargs[SZ_CONFIG].update(
         {k: v for k, v in kwargs.items() if k in LIB_CFG_KEYS}
     )
