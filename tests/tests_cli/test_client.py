@@ -268,6 +268,22 @@ def test_split_kwargs() -> None:
     assert "debug_mode" in cli_args
 
 
+def test_split_kwargs_preserves_configured_packet_log() -> None:
+    """An omitted -o option must not replace packet-log configuration."""
+    packet_log = {
+        "packet_log_prefix": "/var/log/evohome/evohome-2026102808",
+        "packet_log_retention_days": 0,
+    }
+    obj: tuple[dict[str, Any], dict[str, Any]] = (
+        {},
+        {SZ_CONFIG: {}, SZ_PACKET_LOG: packet_log},
+    )
+
+    _, lib_args = split_kwargs(obj, {SZ_PACKET_LOG: None})
+
+    assert lib_args[SZ_PACKET_LOG] == packet_log
+
+
 @pytest.mark.asyncio
 async def test_print_summary(
     mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
