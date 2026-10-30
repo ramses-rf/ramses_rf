@@ -383,6 +383,7 @@ async def test_async_main_kwargs_separation(mock_gateway: MagicMock) -> None:
     }
     kwargs: dict[str, Any] = {
         "long_format": False,
+        "json_format": False,
         "restore_schema": None,
         "restore_state": None,
         "print_state": 0,
@@ -427,6 +428,7 @@ async def test_async_main_parse(mock_gateway: MagicMock) -> None:
     }
     kwargs: dict[str, Any] = {
         "long_format": False,
+        "json_format": False,
         "restore_schema": None,
         "restore_state": None,
         "print_state": 0,
@@ -619,6 +621,7 @@ async def test_async_main_msg_handler(
     }
     kwargs: dict[str, Any] = {
         "long_format": False,
+        "json_format": False,
         "restore_schema": None,
         "restore_state": None,
         "print_state": 0,
