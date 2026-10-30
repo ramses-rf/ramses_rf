@@ -215,6 +215,10 @@ async def assert_this_packet(
 async def test_virtual_rf_dev_disc() -> None:
     """Check virtual RF network device discovery."""
     rf = VirtualRf(3)
+    discovery_patch = patch(
+        "serialx.async_list_serial_ports", rf.async_comports
+    )
+    discovery_patch.start()
 
     gwy_0: Gateway | None = None
     gwy_1: Gateway | None = None
@@ -268,6 +272,7 @@ async def test_virtual_rf_dev_disc() -> None:
         )
 
     finally:
+        discovery_patch.stop()
         ser_2.close()
         if gwy_0:
             await gwy_0.stop()

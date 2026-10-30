@@ -103,7 +103,10 @@ async def rf_factory(
 
         rf.set_gateway(rf.ports[index], hgi_id, fw_type=fw_type)
 
-        with patch("ramses_tx.discovery.comports", rf.comports):
+        with (
+            patch("ramses_tx.discovery.comports", rf.comports),
+            patch("serialx.async_list_serial_ports", rf.async_comports),
+        ):
             if isinstance(schema, GatewayConfig):
                 schema.engine.hgi_id = hgi_id
                 gwy_config = schema
