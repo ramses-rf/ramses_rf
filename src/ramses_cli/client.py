@@ -214,6 +214,9 @@ class DeviceIdParamType(click.ParamType[str]):
 @click.option(
     "-lf", "--long-format", is_flag=True, help="dont truncate STDOUT"
 )
+@click.option(
+    "-jf", "--json-format", is_flag=True, help="messages as json output"
+)
 @click.option("-e/-ne", "--eavesdrop/--no-eavesdrop", default=None)
 @click.option(
     "-g", "--print-state", count=True, help="print state (g=schema, gg=all)"
@@ -890,6 +893,21 @@ async def async_main(  # type: ignore[explicit-any]  # heterogeneous click kwarg
                 f"{_msg.dtm.isoformat(timespec='microseconds')} ... "
                 f"{_msg!r}  # {_msg.payload}"  # or f'  # ("{msg.src!r}", "{msg.dst!r}")'
             )
+            return
+
+        if kwargs["json_format"]:
+            out: dict[str, object] = {}
+            out["timestamp"] = _msg.dtm.timestamp()
+            out["type"] = _msg.verb.strip()
+            out["source_id"] = (
+                str(_msg.src.id) if str(_msg.src.id) != "--:------" else None
+            )
+            out["destination_id"] = (
+                str(_msg.dst.id) if str(_msg.dst.id) != "--:------" else None
+            )
+            out["code"] = _msg.code
+            out["payload"] = _msg.payload
+            print(json.dumps(out, default=str))
             return
 
         dtm = f"{_msg.dtm:%H:%M:%S.%f}"[:-3]

@@ -42,6 +42,7 @@ CLI_CONFIG_BASE = {
     "restore_schema": None,
     "restore_state": None,
     "long_format": False,
+    "json_format": False,
     "print_state": 0,
     "show_schema": False,
     "show_params": False,
