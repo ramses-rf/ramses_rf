@@ -2297,7 +2297,10 @@ class TestVirtualRfIntegration:
                 schema={},
             )
 
-            with patch("ramses_tx.discovery.comports", rf.comports):
+            with (
+                patch("ramses_tx.discovery.comports", rf.comports),
+                patch("serialx.async_list_serial_ports", rf.async_comports),
+            ):
                 gwy = Gateway(rf.ports[0], config=gwy_config)
                 await gwy.start()
 
@@ -2417,7 +2420,10 @@ class TestVirtualRfIntegration:
             )
 
             # --- Phase 1: scan and export ---
-            with patch("ramses_tx.discovery.comports", rf.comports):
+            with (
+                patch("ramses_tx.discovery.comports", rf.comports),
+                patch("serialx.async_list_serial_ports", rf.async_comports),
+            ):
                 gwy = Gateway(rf.ports[0], config=gwy_config)
                 await gwy.start()
 
@@ -2442,7 +2448,10 @@ class TestVirtualRfIntegration:
             await gwy.stop()
 
             # --- Phase 2: new scan imports state and continues ---
-            with patch("ramses_tx.discovery.comports", rf.comports):
+            with (
+                patch("ramses_tx.discovery.comports", rf.comports),
+                patch("serialx.async_list_serial_ports", rf.async_comports),
+            ):
                 gwy2 = Gateway(rf.ports[0], config=gwy_config)
                 await gwy2.start()
 
@@ -2518,7 +2527,10 @@ class TestVirtualRfIntegration:
                 schema={},
             )
 
-            with patch("ramses_tx.discovery.comports", rf.comports):
+            with (
+                patch("ramses_tx.discovery.comports", rf.comports),
+                patch("serialx.async_list_serial_ports", rf.async_comports),
+            ):
                 gwy = Gateway(rf.ports[0], config=gwy_config)
                 await gwy.start()
 
