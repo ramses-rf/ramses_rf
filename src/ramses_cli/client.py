@@ -898,7 +898,7 @@ async def async_main(  # type: ignore[explicit-any]  # heterogeneous click kwarg
         if kwargs["json_format"]:
             out: dict[str, object] = {}
             out["timestamp"] = _msg.dtm.timestamp()
-            out["type"] = _msg.verb
+            out["type"] = _msg.verb.strip()
             out["source_id"] = (
                 str(_msg.src.id) if str(_msg.src.id) != "--:------" else None
             )
@@ -907,7 +907,7 @@ async def async_main(  # type: ignore[explicit-any]  # heterogeneous click kwarg
             )
             out["code"] = _msg.code
             out["payload"] = _msg.payload
-            print(json.dumps(out))
+            print(json.dumps(out, default=str))
             return
 
         dtm = f"{_msg.dtm:%H:%M:%S.%f}"[:-3]

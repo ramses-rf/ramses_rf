@@ -679,6 +679,76 @@ async def test_async_main_msg_handler(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("code", "payload"),
+    [
+        (Code._3150, {"zone_index": "02", "heat_demand": 0.0}),
+        (Code._30C9, [{"zone_index": "02", "temperature": 19.0}]),
+    ],
+    ids=["object-payload", "array-payload"],
+)
+async def test_async_main_json_format(
+    mock_gateway: MagicMock,
+    capsys: pytest.CaptureFixture[str],
+    code: Code,
+    payload: object,
+) -> None:
+    """Test JSON output from the internal message handler."""
+    lib_kwargs: dict[str, Any] = {
+        SZ_CONFIG: {"reduce_processing": 0},
+        SZ_PACKET_LOG: {},
+    }
+    kwargs: dict[str, Any] = {
+        "long_format": False,
+        "json_format": True,
+        "restore_schema": None,
+        "restore_state": None,
+        "print_state": 0,
+    }
+    captured_callback: Callable[[Any], Awaitable[None]] | None = None
+
+    def capture_cb(cb: Any) -> None:
+        nonlocal captured_callback
+        captured_callback = cb
+
+    mock_gateway.add_msg_handler.side_effect = capture_cb
+
+    with (
+        patch("ramses_cli.client.Gateway", return_value=mock_gateway),
+        patch(
+            "ramses_cli.client.normalise_config",
+            return_value=(None, lib_kwargs),
+        ),
+    ):
+        await async_main(PARSE, lib_kwargs, **kwargs)
+
+        msg = MagicMock(spec=Message)
+        msg.dtm = dt(2026, 10, 28, 19, 8, 21, 449000)
+        msg.verb = I_
+        msg.src = MagicMock()
+        msg.src.id = "04:003882"
+        msg.dst = MagicMock()
+        msg.dst.id = "01:105025"
+        msg.code = code
+        msg.payload = payload
+
+        assert captured_callback is not None
+        capsys.readouterr()
+        with patch("ramses_cli.client.Message", return_value=msg):
+            await captured_callback(MagicMock())
+
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "timestamp": msg.dtm.timestamp(),
+        "type": "I",
+        "source_id": "04:003882",
+        "destination_id": "01:105025",
+        "code": str(code),
+        "payload": payload,
+    }
+
+
+@pytest.mark.asyncio
 async def test_async_main_long_format(
     mock_gateway: MagicMock, capsys: pytest.CaptureFixture[str]
 ) -> None:
