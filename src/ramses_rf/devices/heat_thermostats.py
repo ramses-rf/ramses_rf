@@ -71,6 +71,7 @@ class TrvActuator(BatteryState, HeatDemand, Setpoint):  # TRV (04):
 
     _SLUG = DevType.TRV
     _STATE_ATTR = SZ_HEAT_DEMAND
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_TRV
 
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
@@ -78,15 +79,6 @@ class TrvActuator(BatteryState, HeatDemand, Setpoint):  # TRV (04):
         """Initialize the TRV actuator device."""
         super().__init__(*args, traits=traits, **kwargs)
         self.trv_state = TrvState()
-
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        :return: The timeout duration.
-        :rtype: td
-        """
-        return HEARTBEAT_TIMEOUT_TRV
 
     async def heat_demand(self) -> float | None:  # 3150
         """Return current heat demand percentage (0.0 to 1.0)."""

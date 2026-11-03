@@ -1,0 +1,15 @@
+{
+    "main_tcs": "01:115583",
+    "01:115583": {
+        "system": {},
+        "orphans": [],
+        "stored_hotwater": {},
+        "underfloor_heating": {},
+        "zones": {
+            "00": {"class": "radiator_valve", "sensor": "22:000001", "actuators": ["04:009982"]},
+            "04": {"class": "radiator_valve", "sensor": "22:000004", "actuators": ["04:009986", "04:009980"]},
+            "05": {"class": "radiator_valve", "sensor": "22:000005", "actuators": ["04:245808"]},
+            "06": {"class": "radiator_valve", "sensor": "22:000006", "actuators": ["04:150334"]}
+        }
+    }
+}

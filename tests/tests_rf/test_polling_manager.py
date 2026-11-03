@@ -16,6 +16,7 @@ from ramses_rf.pipeline.polling import (
     DEFAULT_POLLING_SCHEDULES,
     INTERVAL_DAILY,
     INTERVAL_FAN_KEEP_ALIVE,
+    INTERVAL_FAN_KEEP_ALIVE_RETRY,
     INTERVAL_STARTUP_2E04,
     INTERVAL_STARTUP_POLL,
     POLL_REPLY_TIMEOUT,
@@ -1277,3 +1278,112 @@ async def test_polling_manager_shadow_mode_no_missed_polls(
     tasks = poller.get_scheduled_cmds()
     assert fan_dev.consecutive_missed_polls == 0
     assert all(t.failures == 0 for t in tasks)
+
+
+@pytest.mark.asyncio
+async def test_polling_manager_fan_keepalive_retry_on_miss(
+    mock_gateway: MagicMock,
+) -> None:
+    """An unanswered FAN keep-alive poll is retried at retry cadence.
+
+    A FAN that answers only some of its polls would otherwise stay
+    silent past HEARTBEAT_TIMEOUT_FAN on a single miss and flap to
+    unavailable (ramses-rf/ramses_rf issue 1353).
+    """
+    poller = PollingManager(mock_gateway, shadow_mode=False)
+    fan_dev = MockDevice(mock_gateway, "32:333333", slug="FAN")
+    mock_gateway.device_registry.devices = [fan_dev]
+    mock_gateway.device_registry.device_by_id = {fan_dev.id: fan_dev}
+
+    poller.update_device_tasks(fan_dev)
+    task = poller._tasks[("32:333333", Code._10E0)]
+    assert task.retry_interval == INTERVAL_FAN_KEEP_ALIVE_RETRY
+    assert poller._tasks[("32:333333", Code._10D0)].retry_interval is None
+
+    # heard before (so retries apply), but silent since the last poll
+    fan_dev._last_msg_dtm = dt.now(UTC) - td(minutes=1)
+    task.last_polled = dt.now(UTC)
+    task.next_due = task.last_polled + td(seconds=INTERVAL_FAN_KEEP_ALIVE)
+
+    await poller.poll_due_commands()
+
+    assert task.next_due == task.last_polled + td(
+        seconds=INTERVAL_FAN_KEEP_ALIVE_RETRY
+    )
+
+
+@pytest.mark.asyncio
+async def test_polling_manager_fan_keepalive_retry_restores_cadence(
+    mock_gateway: MagicMock,
+) -> None:
+    """Once the FAN speaks again, the regular keep-alive interval resumes."""
+    poller = PollingManager(mock_gateway, shadow_mode=False)
+    fan_dev = MockDevice(mock_gateway, "32:333333", slug="FAN")
+    mock_gateway.device_registry.devices = [fan_dev]
+    mock_gateway.device_registry.device_by_id = {fan_dev.id: fan_dev}
+
+    poller.update_device_tasks(fan_dev)
+    task = poller._tasks[("32:333333", Code._10E0)]
+
+    task.last_polled = dt.now(UTC) - td(minutes=3)
+    # any message since the last poll counts as an answer
+    fan_dev._last_msg_dtm = task.last_polled + td(seconds=30)
+    # as if a previous cycle had pulled next_due forward for a retry
+    task.next_due = task.last_polled + td(
+        seconds=INTERVAL_FAN_KEEP_ALIVE_RETRY
+    )
+
+    await poller.poll_due_commands()
+
+    assert task.next_due == task.last_polled + td(
+        seconds=INTERVAL_FAN_KEEP_ALIVE
+    )
+
+
+@pytest.mark.asyncio
+async def test_polling_manager_fan_keepalive_no_retry_when_unavailable(
+    mock_gateway: MagicMock,
+) -> None:
+    """A FAN silent past its heartbeat keeps the regular poll cadence.
+
+    Bounding retries by availability keeps a truly absent device at
+    normal poll rate instead of hammering it at retry cadence.
+    """
+    poller = PollingManager(mock_gateway, shadow_mode=False)
+    fan_dev = MockDevice(mock_gateway, "32:333333", slug="FAN")
+    mock_gateway.device_registry.devices = [fan_dev]
+    mock_gateway.device_registry.device_by_id = {fan_dev.id: fan_dev}
+    fan_dev._last_msg_dtm = dt.now(UTC) - td(hours=1)
+
+    poller.update_device_tasks(fan_dev)
+    task = poller._tasks[("32:333333", Code._10E0)]
+    task.last_polled = dt.now(UTC)
+    task.next_due = task.last_polled + td(seconds=INTERVAL_FAN_KEEP_ALIVE)
+
+    await poller.poll_due_commands()
+
+    assert task.next_due == task.last_polled + td(
+        seconds=INTERVAL_FAN_KEEP_ALIVE
+    )
+
+
+@pytest.mark.asyncio
+async def test_polling_manager_no_retry_when_never_heard(
+    mock_gateway: MagicMock,
+) -> None:
+    """A device never heard from is not retried at keep-alive cadence."""
+    poller = PollingManager(mock_gateway, shadow_mode=False)
+    fan_dev = MockDevice(mock_gateway, "32:333333", slug="FAN")
+    mock_gateway.device_registry.devices = [fan_dev]
+    mock_gateway.device_registry.device_by_id = {fan_dev.id: fan_dev}
+
+    poller.update_device_tasks(fan_dev)
+    task = poller._tasks[("32:333333", Code._10E0)]
+    task.last_polled = dt.now(UTC)
+    task.next_due = task.last_polled + td(seconds=INTERVAL_FAN_KEEP_ALIVE)
+
+    await poller.poll_due_commands()
+
+    assert task.next_due == task.last_polled + td(
+        seconds=INTERVAL_FAN_KEEP_ALIVE
+    )

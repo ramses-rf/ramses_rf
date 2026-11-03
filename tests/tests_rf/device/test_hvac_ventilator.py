@@ -90,6 +90,45 @@ class TestHvacVentilator:
         hvac_ventilator._last_msg_dtm = dt.now(UTC) - td(minutes=16)
         assert not hvac_ventilator.is_available
 
+    def test_fan_heartbeat_timeout_trait_override(
+        self, mock_gateway: MagicMock
+    ) -> None:
+        """A heartbeat_timeout trait overrides the class default.
+
+        Fans that answer keep-alive polls only intermittently can still
+        be silent for longer than HEARTBEAT_TIMEOUT_FAN while alive —
+        the trait lets a schema widen (or disable) the timeout for a
+        specific device (ramses-rf/ramses_rf issue 1353).
+        """
+        device_id = cast(DeviceIdT, TEST_DEVICE_ID)
+        device = HvacVentilator(
+            mock_gateway,
+            Address(device_id),
+            traits=DeviceTraits(heartbeat_timeout=2700),
+        )
+
+        assert device.heartbeat_timeout == td(minutes=45)
+
+        device._last_msg_dtm = dt.now(UTC) - td(minutes=16)
+        assert device.is_available
+
+        device._last_msg_dtm = dt.now(UTC) - td(minutes=46)
+        assert not device.is_available
+
+    def test_fan_heartbeat_timeout_trait_disabled(
+        self, mock_gateway: MagicMock
+    ) -> None:
+        """A heartbeat_timeout of 0 disables the timeout entirely."""
+        device_id = cast(DeviceIdT, TEST_DEVICE_ID)
+        device = HvacVentilator(
+            mock_gateway,
+            Address(device_id),
+            traits=DeviceTraits(heartbeat_timeout=0),
+        )
+
+        device._last_msg_dtm = dt.now(UTC) - td(days=365)
+        assert device.is_available
+
     def test_initialization(self, hvac_ventilator: HvacVentilator) -> None:
         """Test that the ventilator initializes correctly.
 

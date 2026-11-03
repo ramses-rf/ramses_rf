@@ -29,6 +29,8 @@ class HvacRemoteBase(DeviceHvac):
     It provides common functionality and interfaces for remote control operations.
     """
 
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_REMOTE
+
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
     ) -> None:
@@ -41,15 +43,6 @@ class HvacRemoteBase(DeviceHvac):
         super().__init__(*args, traits=traits, **kwargs)
         if not hasattr(self, "hvac_state"):
             self.hvac_state = HvacState()
-
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        :return: The timeout duration.
-        :rtype: td
-        """
-        return HEARTBEAT_TIMEOUT_REMOTE
 
 
 class HvacRemote(BatteryState, Fakeable, HvacRemoteBase):  # REM: I/22F[138]
