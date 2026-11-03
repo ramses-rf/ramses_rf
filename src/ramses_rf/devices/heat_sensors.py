@@ -136,17 +136,12 @@ class DhwSensor(
     _SLUG: str = DevType.DHW
     _STATE_ATTR = SZ_TEMPERATURE
 
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        DHW sensors (e.g. CS92) are battery-powered and only transmit on
-        temperature changes, not on a regular heartbeat schedule.  The
-        CTL polls them for 10A0 (DHW params) every 24 hours, so the
-        default 1-hour timeout is far too short — use 24 hours to match
-        the CTL's polling interval (issue 925).
-        """
-        return HEARTBEAT_TIMEOUT_DHW
+    # DHW sensors (e.g. CS92) are battery-powered and only transmit on
+    # temperature changes, not on a regular heartbeat schedule.  The
+    # CTL polls them for 10A0 (DHW params) every 24 hours, so the
+    # default 1-hour timeout is far too short — use 24 hours to match
+    # the CTL's polling interval (issue 925).
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_DHW
 
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any

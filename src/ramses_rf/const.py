@@ -326,6 +326,7 @@ DONT_UPDATE_ENTITIES: Final[int] = 1
 
 SZ_DISABLE_POLLING: Final = "disable_polling"
 SZ_DISABLE_DISCOVERY: Final = "disable_discovery"
+SZ_HEARTBEAT_TIMEOUT: Final = "heartbeat_timeout"
 SZ_IS_BATTERY: Final = "is_battery"
 SZ_POLLING_INTERVAL: Final = "polling_interval"
 

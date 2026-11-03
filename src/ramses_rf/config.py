@@ -15,7 +15,13 @@ from ramses_tx.config import EngineConfig
 from ramses_tx.const import DEVICE_ID_REGEX
 from ramses_tx.schemas import SZ_BLOCK_LIST, SZ_KNOWN_LIST
 
-from .const import DEV_TYPE_MAP, SZ_IS_BATTERY, SZ_POLLING_INTERVAL, DevType
+from .const import (
+    DEV_TYPE_MAP,
+    SZ_HEARTBEAT_TIMEOUT,
+    SZ_IS_BATTERY,
+    SZ_POLLING_INTERVAL,
+    DevType,
+)
 from .typing import DeviceListT
 
 _T = TypeVar("_T")
@@ -80,6 +86,11 @@ def sch_global_traits_dict_factory(
             vol.Optional(SZ_FAKED, default=None): vol.Any(None, bool),
             vol.Optional(SZ_POLLING_INTERVAL, default=None): vol.Any(
                 None, SCH_POLLING_INTERVAL
+            ),
+            # seconds of silence before entities go unavailable; 0 (or
+            # false) disables the timeout entirely (issue 1353)
+            vol.Optional(SZ_HEARTBEAT_TIMEOUT, default=None): vol.Any(
+                None, vol.All(int, vol.Range(min=0))
             ),
             vol.Optional(SZ_IS_BATTERY, default=False): vol.Any(None, bool),
             vol.Remove("_note"): str,
@@ -172,6 +183,7 @@ _TRAIT_KEY_MAP: Final[dict[str, str]] = {
     "_faked": SZ_FAKED,
     "_class": SZ_CLASS,
     "_polling_interval": SZ_POLLING_INTERVAL,
+    "_heartbeat_timeout": SZ_HEARTBEAT_TIMEOUT,
     "_is_battery": SZ_IS_BATTERY,
     "_locked": "locked",
 }
