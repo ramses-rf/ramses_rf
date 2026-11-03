@@ -52,7 +52,7 @@ class PayloadBase(ABC):
     def to_dict(  # type: ignore[explicit-any]  # compat shim: subclasses vary
         self, *args: Any, **kwargs: Any
     ) -> PayloadT:
-        """Convert payload dataclass to legacy dictionary format.
+        """Convert payload dataclass to pre-0.60 dictionary format.
 
         :param args: Optional positional arguments for compatibility.
         :param kwargs: Optional keyword arguments for compatibility.
@@ -62,7 +62,7 @@ class PayloadBase(ABC):
         return payload_to_dict(self)
 
     def __getitem__(self, key: str) -> Any:  # type: ignore[explicit-any]  # dict-compat shim
-        """Access payload field via dictionary lookup for legacy compatibility.
+        """Access payload field via dictionary lookup for pre-0.60 compatibility.
 
         :param key: Field name key.
         :type key: str
@@ -106,7 +106,7 @@ class PayloadBase(ABC):
         )
 
     def keys(self) -> KeysView[str]:
-        """Return dictionary keys view for legacy compatibility.
+        """Return dictionary keys view for pre-0.60 compatibility.
 
         :returns: Keys view.
         :rtype: KeysView[str]
@@ -117,7 +117,7 @@ class PayloadBase(ABC):
         )
 
     def values(self) -> ValuesView[object]:
-        """Return dictionary values view for legacy compatibility.
+        """Return dictionary values view for pre-0.60 compatibility.
 
         :returns: Values view.
         :rtype: ValuesView[Any]
@@ -130,7 +130,7 @@ class PayloadBase(ABC):
         )
 
     def items(self) -> ItemsView[str, object]:
-        """Return dictionary items view for legacy compatibility.
+        """Return dictionary items view for pre-0.60 compatibility.
 
         :returns: Items view.
         :rtype: ItemsView[str, Any]

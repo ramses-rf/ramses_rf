@@ -103,7 +103,7 @@ class EmptySchedule(TypedDict, total=False):
     schedule: NotRequired[EmptyDictT | None]
 
 
-# Legacy aliases for backward compatibility
+# Pre-0.60 aliases for backward compatibility
 type OuterSchedule = WeeklyScheduleDict
 type OuterScheduleT = WeeklyScheduleDict | EmptySchedule
 

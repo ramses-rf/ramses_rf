@@ -142,7 +142,7 @@ class SystemClockPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert system clock payload to legacy dictionary format.
+        """Convert system clock payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -257,7 +257,7 @@ class SystemChangeCounterPayload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert system change counter payload to legacy dictionary layout."""
+        """Convert system change counter payload to pre-0.60 dictionary layout."""
         return {"change_counter": getattr(self, "change_counter", None)}
 
     @classmethod
@@ -418,7 +418,7 @@ class OemCodePayload(PayloadBase):
         return bytes.fromhex(self.payload_hex)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OEM code payload to legacy dictionary format.
+        """Convert OEM code payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -649,7 +649,7 @@ class SystemLanguage2BPayload(SystemLanguagePayload):
         return struct.pack(self._STRUCT_FMT, 0x00, l_code)
 
     def to_dict(self) -> PayloadT:
-        """Convert system language payload to legacy dictionary layout."""
+        """Convert system language payload to pre-0.60 dictionary layout."""
         return {"language": self.language}
 
 
@@ -702,7 +702,7 @@ class SystemLanguage3BPayload(SystemLanguagePayload):
         return b"\x00" + self.language.encode("latin-1")[:2]
 
     def to_dict(self) -> PayloadT:
-        """Convert system language payload to legacy dictionary layout."""
+        """Convert system language payload to pre-0.60 dictionary layout."""
         return {"language": self.language}
 
 
@@ -884,7 +884,7 @@ class SystemFaultLogPayload(PayloadBase):
         return bytes([self.log_index]) + self.log_data
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert fault log payload to legacy dictionary layout.
+        """Convert fault log payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1016,7 +1016,7 @@ class SystemLogIndexPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert system log index payload to legacy dictionary format.
+        """Convert system log index payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1164,7 +1164,7 @@ class DeviceBatteryPayload(PayloadBase):
         return bytes([self.header, raw_level, raw_flags])
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 1060 payload to legacy dictionary format.
+        """Convert 1060 payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1241,7 +1241,7 @@ class SystemDeviceInfoPayload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert device info payload to legacy dictionary layout.
+        """Convert device info payload to pre-0.60 dictionary layout.
 
         :returns: Decoded device info dictionary.
         :rtype: PayloadT
@@ -1331,7 +1331,7 @@ class SystemOutdoorTempPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert outdoor temperature payload to legacy dictionary layout.
+        """Convert outdoor temperature payload to pre-0.60 dictionary layout.
 
         :returns: Decoded outdoor temperature dictionary.
         :rtype: PayloadT
@@ -1426,7 +1426,7 @@ class SystemSyncHeartbeat1BPayload(SystemSyncHeartbeatPayload):
         return struct.pack(self._STRUCT_FMT, self.sync_sequence)
 
     def to_dict(self) -> PayloadT:
-        """Convert system sync heartbeat payload to legacy dictionary layout."""
+        """Convert system sync heartbeat payload to pre-0.60 dictionary layout."""
         return {"sync_sequence": self.sync_sequence}
 
 
@@ -1485,7 +1485,7 @@ class SystemSyncHeartbeat3BPayload(SystemSyncHeartbeatPayload):
         return struct.pack(self._STRUCT_FMT, self.sync_sequence, secs_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert system sync heartbeat payload to legacy dictionary layout."""
+        """Convert system sync heartbeat payload to pre-0.60 dictionary layout."""
         return {"remaining_seconds": self.remaining_seconds}
 
 
@@ -1589,7 +1589,7 @@ class SystemConfig2BPayload(SystemConfigPayload):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert system config payload to legacy dictionary layout."""
+        """Convert system config payload to pre-0.60 dictionary layout."""
         if msg and hasattr(msg, "src"):
             dev_type = (
                 getattr(msg.src, "type", None)
@@ -1673,7 +1673,7 @@ class SystemConfigVarPayload(SystemConfigPayload):
         ) + (self.raw_extra or b"")
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert system config payload to legacy dictionary layout."""
+        """Convert system config payload to pre-0.60 dictionary layout."""
         if msg and hasattr(msg, "src"):
             dev_type = (
                 getattr(msg.src, "type", None)
@@ -1795,7 +1795,7 @@ class SystemDateTime2BPayload(SystemDateTimePayload):
         return struct.pack(self._STRUCT_FMT, self.domain_index, 0x00)
 
     def to_dict(self) -> PayloadT:
-        """Convert date & time payload to legacy dictionary layout.
+        """Convert date & time payload to pre-0.60 dictionary layout.
 
         :returns: Decoded system date & time dictionary.
         :rtype: PayloadT
@@ -1879,7 +1879,7 @@ class SystemDateTime9BPayload(SystemDateTimePayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert system date & time payload to legacy dictionary layout.
+        """Convert system date & time payload to pre-0.60 dictionary layout.
 
         :returns: Decoded system date & time dictionary.
         :rtype: PayloadT
@@ -1996,7 +1996,7 @@ class SystemOpenThermBridgePayload(PayloadBase):
         return self.raw_bytes
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 3222 payload to legacy dictionary format.
+        """Convert 3222 payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2071,7 +2071,7 @@ class PuzzlePayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert puzzle diagnostic payload to legacy dictionary format.
+        """Convert puzzle diagnostic payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2170,7 +2170,7 @@ class RelayFailsafePayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert relay failsafe payload to legacy dictionary format.
+        """Convert relay failsafe payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any

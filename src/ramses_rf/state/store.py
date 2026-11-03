@@ -274,11 +274,11 @@ class MessageStore(MessageStoreInterface):
         while True:
             core_msg = await in_queue.get()
             try:
-                # Strangler Bridge: Pass the raw packet back to the legacy SSOT
+                # Strangler Bridge: Pass the raw packet back to the pre-0.60 SSOT
                 if core_msg.packets:
                     try:
                         legacy_msg = Message(core_msg.packets[0])
-                        # Unwrap _array to preserve legacy List[Dict] compatibility
+                        # Unwrap _array to preserve pre-0.60 List[Dict] compatibility
                         if "_array" in core_msg.data:
                             legacy_msg._payload = core_msg.data["_array"]
                             legacy_msg._force_has_array()

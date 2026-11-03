@@ -64,13 +64,13 @@ _22F1_SCHEMES: dict[str, dict[str, str]] = {
 }
 
 # Canonical HVAC parameter schema: the single source of truth for what each
-# 2411 parameter means. Exposed as a legacy dict-shaped view at
+# 2411 parameter means. Exposed as a pre-0.60 dict-shaped view at
 # protocol.ramses._2411_PARAMS_SCHEMA (payload decode + ramses_cc entity
 # metadata) and consumed directly here by the command builders.
 #
 # Note: semantics of a given param_id can differ per device family (e.g.
 # ClimaRad Ventura vs Orcon); where the two former tables conflicted, the
-# legacy protocol.ramses entries won as they were validated against real
+# pre-0.60 protocol.ramses entries won as they were validated against real
 # traffic for years (and restore the pre-0.59.1 write behaviour). These
 # static entries are only the fallback: a definition reported by the device
 # itself (cached on the HvacVentilator from RP/I 2411 frames) takes

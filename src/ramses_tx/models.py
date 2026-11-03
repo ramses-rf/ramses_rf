@@ -47,7 +47,7 @@ class RawPacket:
     arrived, without interpreting its domain meaning.
 
     Note: Named 'RawPacket' temporarily to avoid clashing with the
-    legacy 'Packet' class during the incremental refactoring phase.
+    pre-0.60 'Packet' class during the incremental refactoring phase.
     """
 
     raw_packet: str

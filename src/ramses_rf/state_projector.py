@@ -872,7 +872,7 @@ def _update_temperature_state(
         target_id = getattr(target, "id", str(target))
         src_id = getattr(msg.src, "id", str(msg.src))
 
-        # Legacy Parity: Physical sensors only track their own local sensor readings.
+        # Pre-0.60 Parity: Physical sensors only track their own local sensor readings.
         # We must ignore Zone temperature syncs sent TO them by the Controller.
         # Symmetrically, a CTL/UFC ignores an actuator's report addressed
         # to it — its temp_state is its own measured temperature, not the
@@ -1058,10 +1058,10 @@ def _update_demand_state(
     target.apply_state_update(event)
 
     # Populate the TCS's per-domain demand dicts (issue 1102 / ramses_cc#1026).
-    # The legacy _handle_msg stored 0008/3150 messages keyed by domain/zone
+    # The pre-0.60 _handle_msg stored 0008/3150 messages keyed by domain/zone
     # index in _relay_demands/_heat_demands.  The CQRS DemandState only tracks
     # a single heat_demand/relay_demand, so the per-domain dicts were never
-    # populated after the legacy handler was removed.
+    # populated after the pre-0.60 handler was removed.
     tcs = getattr(target, "tcs", None) or (
         target if slug in ("CTL", "UFC") else None
     )
@@ -1137,7 +1137,7 @@ def _update_faultlog_state(
 def _route_2411_to_fan(gateway: Gateway, msg: Message) -> None:
     """Route a 2411 parameter message to its HvacVentilator aggregate root.
 
-    Phase 2.95 removed the ``HvacVentilator._handle_msg`` override that
+    removed the ``HvacVentilator._handle_msg`` override that
     previously invoked ``_handle_2411_message`` (which sets
     ``_supports_2411`` and stores the parameter) and
     ``_handle_initialized_callback`` (which fires the ramses_cc entity
@@ -1281,7 +1281,7 @@ async def process_state_updates(gateway: Gateway, msg: Message) -> None:
                 getattr(msg.dst, "id", None),
             ):
                 # Fire the initialized callback on the first message from/to
-                # a FAN device.  Phase 2.95 removed the _handle_msg override
+                # a FAN device. removed the _handle_msg override
                 # that used to do this; without it, ramses_cc never sends the
                 # initial 2411 RQs and all parameter entities stay
                 # unavailable.  See ramses_cc issue 851.
@@ -1322,7 +1322,7 @@ async def process_state_updates(gateway: Gateway, msg: Message) -> None:
             if isinstance(payload, dict):
                 await update_topology_schema_state(gateway, payload, msg)
 
-    # Legacy Parity: Request packets (RQ) do not contain state update telemetry.
+    # Pre-0.60 Parity: Request packets (RQ) do not contain state update telemetry.
     if getattr(msg, "verb", "") == RQ:
         return
 

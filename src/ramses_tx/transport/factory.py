@@ -217,7 +217,7 @@ async def pooled_transport_factory(
     wiring a callback adapter (e.g. ``MqttCallbackPoolAdapter``) to
     feed packets into these children.  This enables hybrid pools
     where serial children are transport-driven and MQTT children are
-    callback-driven via the HA-native MQTT integration (Phase 2,
+    callback-driven via the HA-native MQTT integration ,
     issue 1119 — no paho inside HA).
 
     ``per_child_config_overrides`` allows each transport-driven child
@@ -225,7 +225,7 @@ async def pooled_transport_factory(
     ``config`` via :func:`dataclasses.replace`.  This is required for
     mixed USB pools where different device types need different
     ``signature_policy``, ``startup_grace``, or ``configured_hgi_id``
-    values (Gap D, Phase 2).  If provided, must be the same length as
+    values (Gap D, .  If provided, must be the same length as
     ``port_names``.
 
     :param protocol: The real protocol that receives deduplicated
@@ -307,7 +307,7 @@ async def pooled_transport_factory(
         proxy = _ChildProtocolProxy(pool, i)
         pconfig = port_configs[i] if port_configs else None
 
-        # Apply per-child config overrides (Gap D, Phase 2).
+        # Apply per-child config overrides (Gap D, .
         # Each override is merged into the shared config via
         # dataclasses.replace, allowing per-child signature_policy,
         # startup_grace, configured_hgi_id, etc.

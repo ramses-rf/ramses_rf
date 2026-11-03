@@ -309,7 +309,7 @@ class PollingManager:
         For CTL devices with zones, the ``0004`` (zone name) code is
         expanded into one task per zone, keyed by
         ``(device_id, "0004", zone_index)``.  This restores the per-zone
-        zone-name polling that was lost when the legacy DiscoveryService
+        zone-name polling that was lost when the pre-0.60 DiscoveryService
         was removed (issue 947 / ramses-rf/ramses_cc#947).
 
         For CTL devices with zones, the ``2349`` (zone mode) code is
@@ -322,7 +322,7 @@ class PollingManager:
         For CTL devices with zones, the ``30C9`` (zone temperature) code is
         expanded into one task per zone **that has no dedicated sensor**,
         keyed by ``(device_id, "30C9", zone_index)``.  This restores the
-        per-zone temperature polling that was lost when the legacy
+        per-zone temperature polling that was lost when the pre-0.60
         DiscoveryService was removed (issue 1013).  Multi-room zones
         without a sensor are absent from the CTL's 30C9 broadcast array,
         so the eavesdropper cannot learn a representative TRV sensor

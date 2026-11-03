@@ -133,7 +133,7 @@ class _Entity:
         """Replace the internal CQRS read-model state with a new immutable object.
 
         This method acts as the single ingestion point for state changes, completely
-        bypassing legacy packet interception.
+        bypassing pre-0.60 packet interception.
 
         :param event: The StateUpdatedEvent container wrapping the new frozen state.
         :type event: StateUpdatedEvent

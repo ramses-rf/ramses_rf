@@ -495,17 +495,17 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[Verb, PayloadT | set[str]]]] = {
         Code._10E0: {I_: {}, RP: {}},
         Code._22C9: {I_: {}},  # NOTE: No RP
         Code._22D0: {I_: {}, RP: {}},
-        Code._22F1: {I_: {}},  # Added for Phase 2.95 snapshot parity
+        Code._22F1: {I_: {}},  # Added for snapshot parity
         Code._2309: {RP: {}},
         Code._3110: {I_: {}},  # Spider Autotemp
-        Code._3120: {I_: {}},  # Added for Phase 2.95 snapshot parity
+        Code._3120: {I_: {}},  # Added for snapshot parity
         Code._3150: {I_: {}},
         Code._4E01: {I_: {}},  # Spider Autotemp Zone controller
-        Code._4E02: {I_: {}},  # Added for Phase 2.95 snapshot parity
+        Code._4E02: {I_: {}},  # Added for snapshot parity
         Code._4E04: {
             I_: {},
             W_: {},
-        },  # Added W_ for Phase 2.95 snapshot parity
+        },  # Added W_ for snapshot parity
     },
     DevType.TRV: {  # e.g. HR92/HR91: Radiator Controller
         Code._0001: {W_: {r"^0[0-9A-F]"}},
@@ -958,7 +958,7 @@ _22F1_SCHEMES: dict[str, dict[str, str]] = {
     "vasco": _22F1_MODE_VASCO,
 }
 
-# Legacy dict-shaped view over the canonical FanParamInfo table in
+# Pre-0.60 dict-shaped view over the canonical FanParamInfo table in
 # models/hvac_schemas.py — kept for payload decode + downstream consumers
 # (ramses_cc entity metadata). Do not add entries here.
 # unclear if true for only Orcon/*all* models

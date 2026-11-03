@@ -307,7 +307,7 @@ class UfhController(Parent["UfhCircuit"], DeviceHeat):  # UFC (02):
         """Return the UFH setpoints dictionary.
 
         # TODO: Refactor for #714 (CQRS API Boundaries).
-        # This is a legacy shim to maintain backward compatibility with ramses_cc.
+        # This is a pre-0.60 shim to maintain backward compatibility with ramses_cc.
 
         :returns: Setpoints dictionary mapped by circuit index, or None.
         :rtype: SchemaT | None

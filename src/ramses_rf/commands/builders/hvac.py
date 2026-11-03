@@ -266,11 +266,11 @@ def build_set_fan_mode(intent: Command) -> CommandDTO:
         # fan_id if seqn is present
         pass
 
-    # legacy from_attrs mapping
+    # pre-0.60 from_attrs mapping
     if sequence_number:
         # I_, addr2=fan_id, seqn=seqn
         # CommandDTO doesn't accept seqn yet? Wait, CommandDTO has no seqn.
-        # Oh, legacy builder took seqn and placed it. Wait, how do I set seqn in CommandDTO?
+        # Oh, pre-0.60 builder took seqn and placed it. Wait, how do I set seqn in CommandDTO?
         # seqn is handled by the modem. CommandDTO doesn't have seqn!
         # DTO has verb, addr1, addr2, addr3, code, payload, priority, num_repeats.
         # wait! CommandDTO has no seqn, but PacketDTO has seqn.

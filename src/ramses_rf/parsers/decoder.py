@@ -57,10 +57,10 @@ def _get_code(code_string: str) -> Code | None:
 
 
 class _LegacyAddress:
-    """Adapter class to mimic ramses_tx.Address for legacy parsers."""
+    """Adapter class to mimic ramses_tx.Address for pre-0.60 parsers."""
 
     def __init__(self, address_string: str) -> None:
-        """Initialize the legacy address with id and type.
+        """Initialize the pre-0.60 address with id and type.
 
         :param address_string: The raw address string instance.
         """
@@ -81,10 +81,10 @@ class _LegacyAddress:
 
 
 class _LegacyMessage:
-    """Anti-corruption adapter mimicking the legacy ramses_tx.Message interface."""
+    """Anti-corruption adapter mimicking the pre-0.60 ramses_tx.Message interface."""
 
     def __init__(self, dto: PacketDTO) -> None:
-        """Initialize the legacy message using data strictly from the DTO.
+        """Initialize the pre-0.60 message using data strictly from the DTO.
 
         :param dto: The data transfer object representation of the packet.
         """
@@ -133,7 +133,7 @@ class _LegacyMessage:
         self._has_array = self._calculate_has_array()
 
     def _get_addr(self, address_string: str) -> _LegacyAddress:
-        """Retrieve or create an interned legacy address instance.
+        """Retrieve or create an interned pre-0.60 address instance.
 
         :param address_string: The address identity string.
         :return: A cached or newly instantiated _LegacyAddress object.
@@ -144,7 +144,7 @@ class _LegacyMessage:
 
     @property
     def _has_payload(self) -> bool:
-        """Return False if there is no payload, matching legacy message.py exactly.
+        """Return False if there is no payload, matching pre-0.60 message.py exactly.
 
         :return: True if a parsable payload is expected, otherwise False.
         """
@@ -227,7 +227,7 @@ class _LegacyMessage:
         """Extract the exact index leveraging protocol.ramses definitions.
 
         :return: String or boolean representation if index parsing passes constraints.
-        :raises exc.PacketPayloadInvalid: If structural legacy checks fail validations.
+        :raises exc.PacketPayloadInvalid: If structural pre-0.60 checks fail validations.
         """
         if self.code == Code._0005:
             return self._has_array
@@ -291,7 +291,7 @@ class _LegacyMessage:
         if self.code_enum in CODE_INDEX_ARE_SIMPLE:
             return None
 
-        # Explicit legacy guard (0xAB block) - non-controllers cannot send non-zero indices here
+        # Explicit pre-0.60 guard (0xAB block) - non-controllers cannot send non-zero indices here
         if self.payload[:2] != "00":
             raise exc.PacketPayloadInvalid(
                 f"Packet index is {self.payload[:2]}, but expecting no index (00) (0xAB)"
@@ -338,7 +338,7 @@ def _build_index_dict(msg: _LegacyMessage) -> dict[str, str]:
     if msg.code == Code._3220:
         return {}
 
-    # Legacy (AA) logic: Filters strictly for allowed indexed device types
+    # Pre-0.60 (AA) logic: Filters strictly for allowed indexed device types
     if not {msg.src.type, msg.dst.type} & {
         "01",
         "02",
@@ -350,7 +350,7 @@ def _build_index_dict(msg: _LegacyMessage) -> dict[str, str]:
     }:
         return {}
 
-    # Legacy (AB) logic: Additional constraint if sent to itself
+    # Pre-0.60 (AB) logic: Additional constraint if sent to itself
     if msg.src.type == msg.dst.type and msg.src.type not in (
         "01",
         "02",
@@ -360,7 +360,7 @@ def _build_index_dict(msg: _LegacyMessage) -> dict[str, str]:
     ):
         return {}
 
-    # Legacy (BC) logic: Bypasses strict internal constraints if it isn't a recognized controller
+    # Pre-0.60 (BC) logic: Bypasses strict internal constraints if it isn't a recognized controller
     if msg.src.type == msg.dst.type and not msg._has_ctl:
         return {}
 
@@ -392,7 +392,7 @@ def parse_unknown_payload(raw_payload: str, msg: _LegacyMessage) -> PayloadT:
 
     :param raw_payload: The raw hex string of the packet payload.
     :type raw_payload: str
-    :param msg: The legacy message abstraction layer object.
+    :param msg: The pre-0.60 message abstraction layer object.
     :type msg: _LegacyMessage
     :returns: Standard structural error dictionaries or generic payloads.
     :rtype: PayloadT
@@ -426,7 +426,7 @@ def parse_heartbeat_payload(raw_payload: str, msg: _LegacyMessage) -> PayloadT:
 
     :param raw_payload: The raw packet payload value string.
     :type raw_payload: str
-    :param msg: The legacy structural envelope message object.
+    :param msg: The pre-0.60 structural envelope message object.
     :type msg: _LegacyMessage
     :returns: Decoded validation flags.
     :rtype: PayloadT

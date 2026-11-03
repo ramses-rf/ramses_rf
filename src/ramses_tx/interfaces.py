@@ -33,7 +33,7 @@ class TransportInterface(ABC):
 
     @abstractmethod
     async def write_frame(self, frame: str) -> None:
-        """Write a frame (legacy alias for send_frame)."""
+        """Write a frame (pre-0.60 alias for send_frame)."""
 
     # -- Pre-serialization routing contract (PR 2) ---------------------
 

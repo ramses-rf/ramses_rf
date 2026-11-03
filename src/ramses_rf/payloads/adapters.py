@@ -1,7 +1,7 @@
-"""RAMSES RF - Dataclass to Legacy Dictionary Adapter.
+"""RAMSES RF - Dataclass to Pre-0.60 Dictionary Adapter.
 
 This module provides serialization utilities to convert typed PayloadBase instances
-into legacy dictionary formats for parity testing and backward compatibility.
+into pre-0.60 dictionary formats for parity testing and backward compatibility.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from .base import PayloadBase
 
 
-# Map internal Pythonic dataclass field names to legacy dictionary schema keys
+# Map internal Pythonic dataclass field names to pre-0.60 dictionary schema keys
 _FIELD_TO_LEGACY_KEY: dict[str, str] = {
     "dhw_index": "dhw_index",
     "zone_index": "zone_index",
@@ -55,8 +55,8 @@ def payload_to_dict(payload: PayloadBase, *, legacy: bool = False) -> PayloadT:
 
     :param payload: The payload dataclass instance to convert.
     :type payload: PayloadBase
-    :param legacy: If True, translate field names to legacy abbreviated keys.
-    :type legacy: bool
+    :param pre-0.60: If True, translate field names to pre-0.60 abbreviated keys.
+    :type pre-0.60: bool
     :returns: Dictionary representation of the payload attributes.
     :rtype: dict[str, Any]
     :raises TypeError: If the input is not a dataclass instance.

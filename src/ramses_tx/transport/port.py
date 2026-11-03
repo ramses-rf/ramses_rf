@@ -454,7 +454,7 @@ class PortTransport(_FullTransport):
 
             For ESP32 USB devices that reset on port open (DTR/RTS
             transition pulses EN).  The grace period allows the ESP32
-            to boot before sending probes (Phase 2, issue 1119).
+            to boot before sending probes , issue 1119).
             """
             grace = self._startup_grace
             _LOGGER.info(
@@ -471,7 +471,7 @@ class PortTransport(_FullTransport):
             evofw3's ``!I`` command returns ``# 18:000730\r\n``
             directly from EEPROM — no RF TX, no RF loopback, no
             ``_PUZZ`` echo.  Works on all evofw3 hardware including
-            ATmega devices that cannot echo ``_PUZZ`` (Gap E, Phase 2).
+            ATmega devices that cannot echo ``_PUZZ`` (Gap E, .
 
             Falls back to ``configured_hgi_id`` (Gap B) or
             ``connect_with_signature()`` if ``!I`` fails.
@@ -752,7 +752,7 @@ class PortTransport(_FullTransport):
         When ``enable_reconnect`` is True and the transport is not
         being explicitly closed, close only the underlying serial
         transport (keeping the PortTransport alive) and start a
-        reconnect loop with exponential backoff (Phase 2, issue 1119).
+        reconnect loop with exponential backoff , issue 1119).
 
         When ``enable_reconnect`` is False, perform a full close via
         ``_close()`` which marks the transport as closing and notifies
