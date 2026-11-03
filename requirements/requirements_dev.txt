@@ -11,7 +11,7 @@
 
 # used for development (linting)
   prek == 0.5.9                                  # latest, same as ramses_cc
-  ruff >= 0.17.2                                 # also in: pre-commit-config.yaml
+  ruff >= 0.17.3                                 # also in: pre-commit-config.yaml
 
 # used for development (typing)
   mypy >= 2.4.0                                  # HA uses  1.19.0a4 !
