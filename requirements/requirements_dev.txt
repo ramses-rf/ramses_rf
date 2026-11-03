@@ -14,7 +14,7 @@
   ruff >= 0.17.3                                 # also in: pre-commit-config.yaml
 
 # used for development (typing)
-  mypy >= 2.4.0                                  # HA uses  1.19.0a4 !
+  mypy >= 2.4.1                                  # HA uses  1.19.0a4 !
   types-aiofiles >= 25.1.0.20260518
   types-colorama >= 0.4.15.20260508
   types-PyYAML >= 6.0.12.20260906                # HA uses 6.0.12.20250516
