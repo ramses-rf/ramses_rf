@@ -17,7 +17,7 @@
   mypy >= 2.4.1                                  # HA uses  1.19.0a4 !
   types-aiofiles >= 25.1.0.20260518
   types-colorama >= 0.4.15.20260508
-  types-PyYAML >= 6.0.12.20260906                # HA uses 6.0.12.20250516
+  types-PyYAML >= 6.0.12.20261030                # HA uses 6.0.12.20250516
   serialx >= 1.15.0
   probatio >= 0.13.0                             # HA uses 0.13.0 since 2026.10.0
 
