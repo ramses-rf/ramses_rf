@@ -18,8 +18,11 @@ See: https://github.com/ramses-rf/ramses_cc/issues/1395
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
+
+from ramses_tx.typing import DeviceIdT
 
 from .helpers import TEST_DIR, load_test_gwy
 
@@ -34,7 +37,9 @@ async def test_tcs_heat_demand_hydrated_from_ctl_3150_fc() -> None:
     try:
         tcs = gwy.tcs
         assert tcs is not None, "no TCS loaded"
-        ctl = gwy.device_registry.device_by_id.get("01:115583")
+        ctl = gwy.device_registry.device_by_id.get(
+            cast(DeviceIdT, "01:115583")
+        )
         assert ctl is not None, "no CTL device loaded"
 
         # last packet in the log is FC8C (140/200 = 0.7)
