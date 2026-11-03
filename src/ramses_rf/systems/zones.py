@@ -777,9 +777,17 @@ class Zone(ZoneSchedule):
         """Return current zone temperature in degrees Celsius."""
         return self.temp_state.temperature
 
-    async def heat_demand(self) -> float | None:  # 3150
-        """Return estimated zone heat demand from child devices."""
-        return self.demand_state.heat_demand
+    async def heat_demand(self) -> float | None:  # 3150, falling back to 0008
+        """Return estimated zone heat demand from child devices.
+
+        Zones without a broadcasting TRV (e.g. zones where the
+        controller itself is the room sensor) never emit ``3150|idx`` —
+        for those, the controller's ``0008|idx`` relay demand is the
+        only per-zone demand signal (ramses-rf/ramses_cc issue 1395).
+        """
+        if self.demand_state.heat_demand is not None:
+            return self.demand_state.heat_demand
+        return self.demand_state.relay_demand
 
     async def window_open(self) -> bool | None:  # 12B0
         """Return an estimate of the zone's current window_open state."""
