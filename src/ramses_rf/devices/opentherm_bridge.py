@@ -107,14 +107,7 @@ class OtbGateway(HeatDemand):  # OTB (10): 3220 (22D9, others)
 
         self._child_id = FC  # NOTE: domain_id
 
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        :return: The timeout duration.
-        :rtype: td
-        """
-        return HEARTBEAT_TIMEOUT_OTB
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_OTB
 
     @property
     def flags(self) -> OpenThermFlags:

@@ -167,16 +167,11 @@ class BdrSwitch(Actuator, RelayDemand):  # BDR (13):
     _SLUG = DevType.BDR
     _STATE_ATTR = "active"
 
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        BDR91s are mains-powered relays that only transmit 3EF0 on state
-        changes (on/off).  When in a steady state they can go many hours
-        without sending any RF traffic, so the default 1-hour timeout is
-        far too short — use 24 hours (issue 1010).
-        """
-        return HEARTBEAT_TIMEOUT_BDR
+    # BDR91s are mains-powered relays that only transmit 3EF0 on state
+    # changes (on/off).  When in a steady state they can go many hours
+    # without sending any RF traffic, so the default 1-hour timeout is
+    # far too short — use 24 hours (issue 1010).
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_BDR
 
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
@@ -253,15 +248,10 @@ class JimDevice(Actuator):  # BDR (08):
 
     JIM_STATE: Final = SZ_JIM_STATE
 
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        JIM actuators are relay-type devices that, like BDR91s, only
-        transmit on state changes and can go many hours without RF
-        traffic (issue 1010).
-        """
-        return HEARTBEAT_TIMEOUT_BDR
+    # JIM actuators are relay-type devices that, like BDR91s, only
+    # transmit on state changes and can go many hours without RF
+    # traffic (issue 1010).
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_BDR
 
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
@@ -304,15 +294,10 @@ class JstDevice(RelayDemand):  # BDR (31):
     _SLUG: str = DevType.JST
     _STATE_ATTR: str | None = None
 
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        JST relays are relay-type devices that, like BDR91s, only
-        transmit on state changes and can go many hours without RF
-        traffic (issue 1010).
-        """
-        return HEARTBEAT_TIMEOUT_BDR
+    # JST relays are relay-type devices that, like BDR91s, only
+    # transmit on state changes and can go many hours without RF
+    # traffic (issue 1010).
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_BDR
 
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any

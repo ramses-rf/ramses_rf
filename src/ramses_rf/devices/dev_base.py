@@ -25,6 +25,7 @@ from ramses_rf.const import (
     SZ_BATTERY_LEVEL,
     SZ_BATTERY_LOW,
     SZ_BATTERY_STATE,
+    SZ_HEARTBEAT_TIMEOUT,
     SZ_IS_BATTERY,
     SZ_OEM_CODE,
     SZ_POLLING_INTERVAL,
@@ -115,6 +116,11 @@ class DeviceBase(Entity):
             traits.polling_interval if traits else None
         )
         self._is_battery: bool | None = traits.is_battery if traits else None
+        self._heartbeat_timeout: td | None = (
+            td(seconds=traits.heartbeat_timeout)
+            if traits is not None and traits.heartbeat_timeout is not None
+            else None
+        )
         self._last_msg_dtm: dt | None = None
         self._last_msg: Message | None = None
         self._last_fan_mode_dtm: dt | None = None
@@ -136,14 +142,25 @@ class DeviceBase(Entity):
             return NotImplemented
         return bool(self.id < other.id)
 
+    # Per-class heartbeat default; subclasses override this attribute.
+    # A ``heartbeat_timeout`` device trait takes precedence over both —
+    # see the heartbeat_timeout property.
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_DEFAULT
+
     @property
     def heartbeat_timeout(self) -> td:
         """Return the timeout after which the device is considered unavailable.
 
+        A ``heartbeat_timeout`` device trait (seconds) overrides the
+        per-class default; ``0`` disables the timeout entirely, so the
+        device never goes unavailable (issue 1353).
+
         :return: The timeout duration before going unavailable.
         :rtype: td
         """
-        return HEARTBEAT_TIMEOUT_DEFAULT
+        if self._heartbeat_timeout is not None:
+            return self._heartbeat_timeout
+        return self._HEARTBEAT_TIMEOUT
 
     @property
     def is_available(self) -> bool:
@@ -161,7 +178,10 @@ class DeviceBase(Entity):
         else:
             now = dt.now()
 
-        return bool((now - self._last_msg_dtm) <= self.heartbeat_timeout)
+        timeout = self.heartbeat_timeout
+        if timeout <= td(0):
+            return True  # heartbeat check disabled by a 0 trait value
+        return bool((now - self._last_msg_dtm) <= timeout)
 
     @property
     def last_seen(self) -> dt | None:
@@ -426,6 +446,11 @@ class DeviceBase(Entity):
 
         self._scheme = traits.scheme
         self._polling_interval = traits.polling_interval
+        self._heartbeat_timeout = (
+            td(seconds=traits.heartbeat_timeout)
+            if traits.heartbeat_timeout is not None
+            else None
+        )
         self._is_battery = traits.is_battery
 
     @classmethod
@@ -631,6 +656,11 @@ class DeviceBase(Entity):
                 SZ_ALIAS: known_dev.get(SZ_ALIAS) if known_dev else None,
                 SZ_FAKED: self.is_faked,
                 SZ_POLLING_INTERVAL: self.polling_interval,
+                SZ_HEARTBEAT_TIMEOUT: (
+                    int(self._heartbeat_timeout.total_seconds())
+                    if self._heartbeat_timeout is not None
+                    else None
+                ),
                 SZ_IS_BATTERY: self.is_battery,
             }
         )

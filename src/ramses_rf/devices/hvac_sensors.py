@@ -54,6 +54,8 @@ class HvacSensorBase(DeviceHvac):
     It provides common functionality for sensor data collection and processing.
     """
 
+    _HEARTBEAT_TIMEOUT: td = HEARTBEAT_TIMEOUT_SENSOR
+
     def __init__(  # type: ignore[explicit-any]  # heterogeneous construction/schema kwargs
         self, *args: Any, traits: DeviceTraits | None = None, **kwargs: Any
     ) -> None:
@@ -66,15 +68,6 @@ class HvacSensorBase(DeviceHvac):
         super().__init__(*args, traits=traits, **kwargs)
         if not hasattr(self, "hvac_state"):
             self.hvac_state = HvacState()
-
-    @property
-    def heartbeat_timeout(self) -> td:
-        """Return the timeout before the device is considered unavailable.
-
-        :return: The timeout duration.
-        :rtype: td
-        """
-        return HEARTBEAT_TIMEOUT_SENSOR
 
 
 class CarbonDioxide(HvacSensorBase):  # 1298
