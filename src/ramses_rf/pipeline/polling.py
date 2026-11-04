@@ -40,6 +40,13 @@ INTERVAL_ZONE_TEMP: Final[int] = 900  # 15 minutes — zone temperature polling
 # without a reply-generating poll their entities go unavailable
 # (ramses-rf/ramses_rf issue 1288).  RP replies stamp device liveness.
 INTERVAL_FAN_KEEP_ALIVE: Final[int] = 600  # 10 minutes
+# Retry cadence for an unanswered FAN keep-alive poll.  Some FANs answer
+# only about half their polls, so a single miss already creates a
+# silence longer than HEARTBEAT_TIMEOUT_FAN and their entities flap
+# (ramses-rf/ramses_rf issue 1353).  While a previously-heard FAN is
+# still available, an unanswered keep-alive is retried at this cadence
+# instead of waiting out the full interval.
+INTERVAL_FAN_KEEP_ALIVE_RETRY: Final[int] = 120  # 2 minutes
 # First-poll delay for the Evohome system mode (2E04).  Cached 2E04
 # packets are no longer replayed on restore (a stale mode would be
 # presented as authoritative), so the real mode is fetched shortly
@@ -186,6 +193,10 @@ class PollingTask:
     :type last_missed_at: dt | None
     :param payload: Optional payload suffix (e.g., zone_index for 0004).
     :type payload: str | None
+    :param retry_interval: Cadence (seconds) for re-polling while a poll
+        remains unanswered and the device is still available, or None
+        for no retries (default).
+    :type retry_interval: int | None
     """
 
     device_id: DeviceIdT
@@ -196,6 +207,7 @@ class PollingTask:
     failures: int = 0
     last_missed_at: dt | None = None
     payload: str | None = None
+    retry_interval: int | None = None
 
 
 class PollingManager:
@@ -519,6 +531,14 @@ class PollingManager:
             else:
                 dkey = (device.id, code)
                 active_keys.add(dkey)
+                # FAN keep-alive tasks get a retry cadence so a single
+                # unanswered poll cannot flap the device (issue 1353).
+                retry_secs = (
+                    INTERVAL_FAN_KEEP_ALIVE_RETRY
+                    if slug == DevType.FAN
+                    and interval == INTERVAL_FAN_KEEP_ALIVE
+                    else None
+                )
                 if dkey not in self._tasks:
                     # 2E04 gets an early first poll so the real system
                     # mode is hydrated shortly after startup instead of
@@ -540,10 +560,12 @@ class PollingManager:
                         interval=interval,
                         next_due=now + td(seconds=delay),
                         payload=FF if code == Code._2E04 else None,
+                        retry_interval=retry_secs,
                     )
                     self._wake_event.set()
                 else:
                     task = self._tasks[dkey]
+                    task.retry_interval = retry_secs
                     if task.interval != interval:
                         # Reschedule from now so the new cadence applies
                         # at once — e.g. the 10E0/10D0 keep-alive swap
@@ -671,6 +693,37 @@ class PollingManager:
                             task.device_id,
                             dev._missed_polls,
                         )
+
+            # Retry unanswered keep-alive polls at their (shorter) retry
+            # cadence instead of waiting out the full interval: a FAN
+            # that answers only some of its polls would otherwise go
+            # silent for longer than HEARTBEAT_TIMEOUT_FAN on a single
+            # miss and flap to unavailable (ramses-rf/ramses_rf issue
+            # 1353).  Retries only run while a previously-heard device
+            # is still available; once it answers (or is unavailable
+            # anyway) the regular interval resumes.  Because retries
+            # refresh last_polled within POLL_REPLY_TIMEOUT, they are
+            # not themselves counted as missed polls.
+            for task in self._tasks.values():
+                if task.retry_interval is None or task.last_polled is None:
+                    continue
+                dev = self._gateway.device_registry.device_by_id.get(
+                    task.device_id
+                )
+                last_seen = getattr(dev, "_last_msg_dtm", None)
+                if not isinstance(last_seen, dt):
+                    continue  # never heard — keep the regular cadence
+                if last_seen > task.last_polled:
+                    # answered since the last poll: restore the regular
+                    # cadence if a retry had pulled next_due forward
+                    due = task.last_polled + td(seconds=task.interval)
+                    if task.next_due < due:
+                        task.next_due = due
+                elif getattr(dev, "is_available", False):
+                    due = task.last_polled + td(seconds=task.retry_interval)
+                    if task.next_due > due:
+                        task.next_due = due
+                        self._wake_event.set()
 
         processed_count = 0
 
