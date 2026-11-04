@@ -191,7 +191,7 @@ class FaultLog:  # 0418
         """Replace the internal CQRS read-model state with a new immutable object.
 
         This method acts as the single ingestion point for state changes, completely
-        bypassing legacy packet interception.
+        bypassing pre-0.60 packet interception.
         """
         if isinstance(event.state, FaultLogState):
             self.state = event.state

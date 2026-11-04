@@ -183,7 +183,7 @@ class SpiderThermostatPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert Spider thermostat payload to legacy dictionary layout.
+        """Convert Spider thermostat payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -303,7 +303,7 @@ class HvacFilterChangePayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert filter change payload to legacy dictionary format.
+        """Convert filter change payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -467,7 +467,7 @@ class Co2Payload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert CO2 payload to legacy dictionary layout."""
+        """Convert CO2 payload to pre-0.60 dictionary layout."""
         result: PayloadT = {
             "co2_level": getattr(self, "co2_level", None),
         }
@@ -726,7 +726,7 @@ class RelativeHumidity1BPayload(RelativeHumidityPayload):
         return struct.pack(self._STRUCT_FMT, raw_val)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 1-byte humidity payload to legacy dictionary format.
+        """Convert 1-byte humidity payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -787,7 +787,7 @@ class RelativeHumidity2BPayload(RelativeHumidityPayload):
         return struct.pack(self._STRUCT_FMT, 0x00, raw_val)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 2-byte humidity payload to legacy dictionary format.
+        """Convert 2-byte humidity payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -896,7 +896,7 @@ class RelativeHumidity6BPayload(RelativeHumidityPayload):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert humidity payload to legacy dictionary format.
+        """Convert humidity payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -988,7 +988,7 @@ class AirQualityBasisPayload(PayloadBase):
         return bytes([aq_raw, self.basis_flag])
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert air quality basis payload to legacy dictionary format.
+        """Convert air quality basis payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1276,7 +1276,7 @@ class HvacAutoRequestPayload(PayloadBase):
         return b"\x00"
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert HVAC auto request payload to legacy dictionary format.
+        """Convert HVAC auto request payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1455,7 +1455,7 @@ class HvacVentilationStatus2BPayload(HvacVentilationStatusPayload):
         return struct.pack(self._STRUCT_FMT, self.flow_mode, self.status_flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert ventilation status to legacy dictionary layout.
+        """Convert ventilation status to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1543,7 +1543,7 @@ class HvacVentilationStatus4BPayload(HvacVentilationStatusPayload):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert ventilation status to legacy dictionary layout.
+        """Convert ventilation status to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1634,7 +1634,7 @@ class HvacFanModePayload(PayloadBase):
         return struct.pack(">BBB", self.header, raw_index, raw_max)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert fan mode payload to legacy dictionary format.
+        """Convert fan mode payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1757,7 +1757,7 @@ class HvacFlowRatePayload(PayloadBase):
         return bytes(buffer)
 
     def to_dict(self, msg: Message | None = None) -> list[PayloadT]:  # type: ignore[override]
-        """Convert flow rate payload to legacy dictionary format.
+        """Convert flow rate payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1821,7 +1821,7 @@ class HvacFanRatePayload(PayloadBase):
         return self.raw_bytes
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert fan rate payload to legacy dictionary format.
+        """Convert fan rate payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1921,7 +1921,7 @@ class HvacBypassPositionPayload(PayloadBase):
         return self.raw_bytes
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert bypass position payload to legacy dictionary format.
+        """Convert bypass position payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2053,7 +2053,7 @@ class HvacVentilationControlPayload(PayloadBase):
         return bytes([self.header, self.flags_byte, self.minutes])
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 22F3 payload to legacy dictionary format.
+        """Convert 22F3 payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2318,7 +2318,7 @@ class HvacFanParamPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert HVAC fan parameters payload to legacy dictionary format.
+        """Convert HVAC fan parameters payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2433,7 +2433,7 @@ class HvacAirQualityPayload(PayloadBase):
         return struct.pack(">H", aqi_val)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert air quality payload to legacy dictionary format.
+        """Convert air quality payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2555,7 +2555,7 @@ class HvacBypassStatePayload(PayloadBase):
         return bytes([self._header, self._flags_byte, self._speed_byte])
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 31D9 payload to legacy dictionary format.
+        """Convert 31D9 payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -2694,7 +2694,7 @@ class HvacVentilationStatePayload(PayloadBase):
         return self.raw_bytes
 
     def to_dict(self) -> PayloadT:
-        """Convert extended ventilation state payload to legacy dictionary format.
+        """Convert extended ventilation state payload to pre-0.60 dictionary format.
 
         :returns: Decoded ventilation parameters dictionary.
         :rtype: PayloadT
@@ -3078,7 +3078,7 @@ class HvacSpiderTemperaturesPayload(PayloadBase):
         return bytes([self.hdr]) + temp_bytes + bytes([self.trailer])
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert Spider temperatures payload to legacy dictionary format.
+        """Convert Spider temperatures payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -3183,7 +3183,7 @@ class HvacSpiderSetpointBoundsPayload(PayloadBase):
         return bytes([self.hdr]) + min_b + bytes([self.mode_code]) + max_b
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert Spider setpoint bounds payload to legacy dictionary format.
+        """Convert Spider setpoint bounds payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -3259,7 +3259,7 @@ class HvacSpiderModePayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert Spider mode payload to legacy dictionary format.
+        """Convert Spider mode payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -3328,7 +3328,7 @@ class HvacSpiderStatusPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.hdr, self.flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert Spider status payload to legacy dictionary format.
+        """Convert Spider status payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -3428,7 +3428,7 @@ class WindowStatePayload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert window state payload to legacy dictionary layout."""
+        """Convert window state payload to pre-0.60 dictionary layout."""
         z_index = getattr(self, "zone_index", 0)
         open_val = getattr(self, "window_open", None)
         index_str = f"{z_index:02X}"
@@ -3573,7 +3573,7 @@ class HvacVentilationDemandPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert ventilation demand payload to legacy dictionary layout."""
+        """Convert ventilation demand payload to pre-0.60 dictionary layout."""
         flg = getattr(self, "flags", 0)
         dem = getattr(self, "demand_percent", 0.0)
         return {"flags": f"{flg:02X}", "vent_demand": dem}
@@ -3832,7 +3832,7 @@ class SetpointBoundsPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert setpoint bounds payload to legacy dictionary format.
+        """Convert setpoint bounds payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -4001,7 +4001,7 @@ class UfhSystemModePayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.ufh_index, self.flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert UFH system mode payload to legacy dictionary format.
+        """Convert UFH system mode payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -4082,7 +4082,7 @@ class DesiredBoilerSetpointPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.domain_or_zone_index, t_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert desired boiler setpoint payload to legacy dictionary layout.
+        """Convert desired boiler setpoint payload to pre-0.60 dictionary layout.
 
         :returns: Decoded setpoint dictionary.
         :rtype: PayloadT
@@ -4136,7 +4136,7 @@ class CoolingStatePayload(PayloadBase):
     def to_dict(self, msg: Message | None = None) -> PayloadT:
         """Convert cooling state payload to dictionary format.
 
-        :param msg: Optional legacy message context.
+        :param msg: Optional pre-0.60 message context.
         :type msg: Any
         :returns: Decoded dictionary format.
         :rtype: PayloadT

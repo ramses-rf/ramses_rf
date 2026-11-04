@@ -88,7 +88,7 @@ class DhwTempPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, index, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert DHW temperature payload to legacy dictionary layout.
+        """Convert DHW temperature payload to pre-0.60 dictionary layout.
 
         :returns: Decoded DHW temperature dictionary.
         :rtype: PayloadT
@@ -161,7 +161,7 @@ class DhwFlowRatePayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.dhw_index, raw_val)
 
     def to_dict(self) -> PayloadT:
-        """Convert DHW flow rate payload to legacy dictionary layout.
+        """Convert DHW flow rate payload to pre-0.60 dictionary layout.
 
         :returns: Decoded DHW flow rate dictionary.
         :rtype: PayloadT
@@ -361,7 +361,7 @@ class DhwParams3BPayload(DhwParamsPayload):
         return struct.pack(self._STRUCT_FMT, index, sp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert 3-byte DHW parameters payload to legacy dictionary layout."""
+        """Convert 3-byte DHW parameters payload to pre-0.60 dictionary layout."""
         return {"setpoint": self.setpoint}
 
 
@@ -434,7 +434,7 @@ class DhwParams6BPayload(DhwParamsPayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert 6-byte DHW parameters payload to legacy dictionary layout."""
+        """Convert 6-byte DHW parameters payload to pre-0.60 dictionary layout."""
         return {
             "setpoint": self.setpoint,
             "overrun": self.overrun,
@@ -545,7 +545,7 @@ class DhwState2BPayload(DhwStatePayload):
         return struct.pack(self._STRUCT_FMT, self.dhw_index, self.active_flag)
 
     def to_dict(self) -> PayloadT:
-        """Convert 2-byte DHW state to legacy dictionary format."""
+        """Convert 2-byte DHW state to pre-0.60 dictionary format."""
         result: PayloadT = {SZ_DHW_INDEX: f"{self.dhw_index:02X}"}
         result[SZ_ACTIVE] = (
             None if self.active_flag == 0xFF else (self.active_flag == 0x01)
@@ -600,7 +600,7 @@ class DhwState3BPayload(DhwStatePayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert 3-byte DHW state to legacy dictionary format."""
+        """Convert 3-byte DHW state to pre-0.60 dictionary format."""
         result: PayloadT = {SZ_DHW_INDEX: f"{self.dhw_index:02X}"}
         result[SZ_ACTIVE] = (
             None if self.active_flag == 0xFF else (self.active_flag == 0x01)
@@ -671,7 +671,7 @@ class DhwStateOverridePayload(DhwStatePayload):
         return self.raw_bytes
 
     def to_dict(self) -> PayloadT:
-        """Convert extended DHW state to legacy dictionary format."""
+        """Convert extended DHW state to pre-0.60 dictionary format."""
         result: PayloadT = {SZ_DHW_INDEX: f"{self.dhw_index:02X}"}
         result[SZ_ACTIVE] = (
             None if self.active_flag == 0xFF else (self.active_flag == 0x01)

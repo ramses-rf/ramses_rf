@@ -73,7 +73,7 @@ class ConversationManager:
     """Manages L7 Request/Reply (RQ/RP) conversations and retries.
 
     Correlates outbound commands with inbound decoded Messages from the L7
-    dispatcher queue, replacing legacy L3 regex matching.
+    dispatcher queue, replacing pre-0.60 L3 regex matching.
     """
 
     def __init__(

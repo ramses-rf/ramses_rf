@@ -133,7 +133,7 @@ class OpenThermMsgPayload(PayloadBase):
         return header_byte
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm message payload to legacy dictionary layout.
+        """Convert OpenTherm message payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -563,7 +563,7 @@ class OpenThermDiagnosticsPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.diagnostic_code, self.flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm diagnostics payload to legacy dictionary layout.
+        """Convert OpenTherm diagnostics payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -622,7 +622,7 @@ class OpenThermFaultFlagsPayload(PayloadBase):
         return OpenThermFaultFlags2BPayload(fault_code=fault_code, flags=flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm fault flags payload to legacy dictionary layout.
+        """Convert OpenTherm fault flags payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -888,7 +888,7 @@ class OpenThermParamsPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm parameters payload to legacy dictionary layout.
+        """Convert OpenTherm parameters payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -896,7 +896,7 @@ class OpenThermParamsPayload(PayloadBase):
         :rtype: PayloadT
         """
         heat_demand = self.parameter_value / 200.0
-        # 1.01 (raw uint8 202) represents 100% modulation in legacy OpenTherm packets
+        # 1.01 (raw uint8 202) represents 100% modulation in pre-0.60 OpenTherm packets
         if heat_demand == 1.01:
             heat_demand = 1.0
         return {SZ_HEAT_DEMAND: heat_demand}
@@ -1077,7 +1077,7 @@ class OpenThermFrameExPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.frame_code, self.flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm extended frame payload to legacy dictionary layout.
+        """Convert OpenTherm extended frame payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1143,7 +1143,7 @@ class OpenThermBridgeStatusPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.status_code, self.flags)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert OpenTherm bridge status payload to legacy dictionary layout.
+        """Convert OpenTherm bridge status payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1211,7 +1211,7 @@ class ReturnTempPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, 0, t_raw)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert return temperature payload to legacy dictionary layout.
+        """Convert return temperature payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any

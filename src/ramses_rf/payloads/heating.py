@@ -201,7 +201,7 @@ class HeatDemand1BPayload(HeatDemandPayload):
         return struct.pack(self._STRUCT_FMT, self.demand_percent & 0xFF)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert heat demand payload to legacy dictionary layout.
+        """Convert heat demand payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -280,7 +280,7 @@ class HeatDemand2BPayload(HeatDemandPayload):
         return buffer
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert heat demand payload to legacy dictionary layout.
+        """Convert heat demand payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -441,7 +441,7 @@ class Temperature2BPayload(TemperaturePayload):
         return struct.pack(self._STRUCT_FMT, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert 2-byte temperature payload to legacy dictionary layout."""
+        """Convert 2-byte temperature payload to pre-0.60 dictionary layout."""
         return {SZ_TEMPERATURE: self.temperature}
 
 
@@ -498,7 +498,7 @@ class Temperature3BPayload(TemperaturePayload):
         return struct.pack(self._STRUCT_FMT, index, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert 3-byte temperature payload to legacy dictionary layout."""
+        """Convert 3-byte temperature payload to pre-0.60 dictionary layout."""
         index_str = (
             f"{self.zone_index:02X}"
             if isinstance(self.zone_index, int)
@@ -616,7 +616,7 @@ class ScheduleFragmentPayload(PayloadBase):
         return hdr + self.fragment_bytes
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert schedule fragment payload to legacy dictionary layout.
+        """Convert schedule fragment payload to pre-0.60 dictionary layout.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -882,7 +882,7 @@ class SystemSync1BPayload(SystemSyncPayload):
         return struct.pack(self._STRUCT_FMT, self.sync_flag)
 
     def to_dict(self) -> PayloadT:
-        """Convert 1-byte system sync payload to legacy dictionary layout."""
+        """Convert 1-byte system sync payload to pre-0.60 dictionary layout."""
         return {
             SZ_SYNC_FLAG: self.sync_flag,
             SZ_MAX_FLOW_SETPOINT: None,
@@ -1116,9 +1116,9 @@ class BindingPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 1FC9 binding payload to legacy dictionary representation.
+        """Convert 1FC9 binding payload to pre-0.60 dictionary representation.
 
-        :param msg: Optional Message context for legacy compatibility.
+        :param msg: Optional Message context for pre-0.60 compatibility.
         :type msg: Any
         :returns: Dictionary representation of binding payload.
         :rtype: PayloadT
@@ -1334,7 +1334,7 @@ class ZoneConfigPayload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert zone config payload to legacy dictionary layout.
+        """Convert zone config payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone config dictionary.
         :rtype: PayloadT
@@ -1475,7 +1475,7 @@ class ZoneName22BPayload(ZoneNamePayload):
         return struct.pack(self._STRUCT_FMT, index, name_bytes)
 
     def to_dict(self) -> PayloadT:
-        """Convert zone name payload to legacy dictionary layout.
+        """Convert zone name payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone name dictionary.
         :rtype: PayloadT
@@ -1551,7 +1551,7 @@ class ZoneNameShort3BPayload(ZoneNamePayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert zone setpoint payload to legacy dictionary layout.
+        """Convert zone setpoint payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone setpoint dictionary.
         :rtype: PayloadT
@@ -1591,7 +1591,7 @@ class OutdoorTempPayload(PayloadBase):
       Field-spaced hex : 05DC
       Payload hex      : 05DC
 
-    Legacy 3-byte weather payloads use layout '00 <val> <unit_byte>' where
+    Pre-0.60 3-byte weather payloads use layout '00 <val> <unit_byte>' where
     offset 0 is header 00, offset 1 is uint8 raw value (80 = invalid), and
     offset 2 is unit byte (01 = Celsius half-degrees, 02 = Fahrenheit).
 
@@ -1599,7 +1599,7 @@ class OutdoorTempPayload(PayloadBase):
         invalid.
     :type temperature: float | None
     :param _units: Raw unit byte hex string (e.g. '01' for Celsius
-        half-degrees, '02' for Fahrenheit) present only on legacy
+        half-degrees, '02' for Fahrenheit) present only on pre-0.60
         3-byte 12C0 weather payloads (00 <val> <unit_byte>). None for
         standard 2-byte RAMSES payloads.
     :type _units: str | None
@@ -1657,7 +1657,7 @@ class OutdoorTempPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, temp_raw)
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert 12C0 payload to legacy dictionary format.
+        """Convert 12C0 payload to pre-0.60 dictionary format.
 
         :param msg: Optional message context object.
         :type msg: Any
@@ -1802,7 +1802,7 @@ class ZoneSetpoint3BPayload(ZoneSetpointPayload):
         return struct.pack(self._STRUCT_FMT, index, sp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert setpoint info payload to legacy dictionary layout.
+        """Convert setpoint info payload to pre-0.60 dictionary layout.
 
         :returns: Decoded setpoint info dictionary.
         :rtype: PayloadT
@@ -1888,7 +1888,7 @@ class FlowTempPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.domain_index, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert flow temperature payload to legacy dictionary layout.
+        """Convert flow temperature payload to pre-0.60 dictionary layout.
 
         :returns: Decoded flow temperature dictionary.
         :rtype: PayloadT
@@ -1931,7 +1931,7 @@ class SystemZonesPayload(PayloadBase):
     def to_dict(  # type: ignore[override]
         self, msg: Message | None = None
     ) -> PayloadT | list[PayloadT]:
-        """Convert system zones payload to legacy dictionary layout."""
+        """Convert system zones payload to pre-0.60 dictionary layout."""
         z_type = getattr(self, SZ_ZONE_TYPE, 0)
         z_mask = getattr(self, SZ_ZONE_MASK, 0)
 
@@ -2170,7 +2170,7 @@ class RelayDemand2BPayload(RelayDemandPayload):
         return result
 
     def to_dict(self) -> PayloadT:
-        """Convert relay demand payload to legacy dictionary layout.
+        """Convert relay demand payload to pre-0.60 dictionary layout.
 
         :returns: Decoded relay demand dictionary.
         :rtype: PayloadT
@@ -2249,7 +2249,7 @@ class ZoneDevicesPayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert zone devices payload to legacy dictionary layout."""
+        """Convert zone devices payload to pre-0.60 dictionary layout."""
         role_id = getattr(self, "device_role_id", 0)
         z_raw = getattr(self, "zone_index_raw", 0)
         sub = getattr(self, "sub_index", 0)
@@ -2535,7 +2535,7 @@ class MaxChSetpointPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, 0x00, temp_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert max CH setpoint payload to legacy dictionary layout.
+        """Convert max CH setpoint payload to pre-0.60 dictionary layout.
 
         :returns: Decoded setpoint dictionary.
         :rtype: PayloadT
@@ -2736,7 +2736,7 @@ class TpiParams4BPayload(TpiParamsPayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert TPI parameters payload to legacy dictionary layout."""
+        """Convert TPI parameters payload to pre-0.60 dictionary layout."""
         dom = (
             f"{self.domain_id:02X}"
             if isinstance(self.domain_id, int)
@@ -2841,7 +2841,7 @@ class TpiParams8BPayload(TpiParamsPayload):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert TPI parameters payload to legacy dictionary layout."""
+        """Convert TPI parameters payload to pre-0.60 dictionary layout."""
         dom = (
             f"{self.domain_id:02X}"
             if isinstance(self.domain_id, int)
@@ -2924,7 +2924,7 @@ class ChPressurePayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, 0x00, p_raw)
 
     def to_dict(self) -> PayloadT:
-        """Convert CH pressure payload to legacy dictionary layout."""
+        """Convert CH pressure payload to pre-0.60 dictionary layout."""
         return {SZ_PRESSURE: self.pressure_bar}
 
 
@@ -3080,7 +3080,7 @@ class ZoneMode4BPayload(ZoneModePayload):
         return struct.pack(self._STRUCT_FMT, index, sp_raw, mode)
 
     def to_dict(self) -> PayloadT:
-        """Convert 4-byte zone mode payload to legacy dictionary layout.
+        """Convert 4-byte zone mode payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone mode dictionary.
         :rtype: PayloadT
@@ -3199,7 +3199,7 @@ class ZoneMode7BPayload(ZoneModePayload):
         return result
 
     def to_dict(self) -> PayloadT:
-        """Convert 7-byte zone mode payload to legacy dictionary layout.
+        """Convert 7-byte zone mode payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone mode dictionary.
         :rtype: PayloadT
@@ -3337,7 +3337,7 @@ class ZoneMode13BPayload(ZoneModePayload):
         return result
 
     def to_dict(self) -> PayloadT:
-        """Convert zone mode payload to legacy dictionary layout.
+        """Convert zone mode payload to pre-0.60 dictionary layout.
 
         :returns: Decoded zone mode dictionary.
         :rtype: PayloadT
@@ -3437,7 +3437,7 @@ class SetpointOverridePayload(PayloadBase):
         )
 
     def to_dict(self) -> PayloadT:
-        """Convert setpoint override payload to legacy dictionary layout.
+        """Convert setpoint override payload to pre-0.60 dictionary layout.
 
         :returns: Decoded setpoint override dictionary.
         :rtype: PayloadT
@@ -3511,7 +3511,7 @@ class ActuatorSyncPayload(PayloadBase):
         return struct.pack(self._STRUCT_FMT, self.domain_id, self.sync_flag)
 
     def to_dict(self) -> PayloadT:
-        """Convert actuator sync payload to legacy dictionary layout.
+        """Convert actuator sync payload to pre-0.60 dictionary layout.
 
         :returns: Decoded actuator sync dictionary.
         :rtype: PayloadT
@@ -3669,12 +3669,12 @@ class ActuatorStatePayload(PayloadBase):
         return result
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert actuator state payload to legacy dictionary layout.
+        """Convert actuator state payload to pre-0.60 dictionary layout.
 
         When decoded from a 9-byte Underfloor Heating/Cooling controller (UFC /
         device type 02), flags_3 represents the pump heating/cooling relay state.
 
-        :param msg: Optional legacy message context.
+        :param msg: Optional pre-0.60 message context.
         :type msg: Any
         :returns: Decoded actuator state dictionary.
         :rtype: PayloadT
@@ -3759,7 +3759,7 @@ class ActuatorCyclePayload(PayloadBase):
         )
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
-        """Convert actuator cycle payload to legacy dictionary layout."""
+        """Convert actuator cycle payload to pre-0.60 dictionary layout."""
         return {
             SZ_CYCLE_COUNTDOWN: getattr(self, "cycle_countdown_sec", None),
             SZ_ACTUATOR_COUNTDOWN: getattr(

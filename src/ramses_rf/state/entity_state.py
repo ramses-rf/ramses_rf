@@ -143,7 +143,7 @@ class EntityState:
     def ingest_message(self, msg: Message) -> None:
         """SSOT async ingestion queue preparation.
 
-        In Phase 3, this will drop the DecodedMessage into an asyncio.Queue.
+        In , this will drop the DecodedMessage into an asyncio.Queue.
         For now, it processes the state synchronously.
         """
         self.update_state(msg)
@@ -735,7 +735,7 @@ class EntityState:
                 else:
                     continue
 
-            # Ensure timezone awareness for legacy naive dt
+            # Ensure timezone awareness for pre-0.60 naive dt
             msg_dtm = msg.dtm
             if msg_dtm.tzinfo is None:
                 msg_dtm = msg_dtm.replace(tzinfo=UTC)

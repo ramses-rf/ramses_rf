@@ -44,7 +44,7 @@ class SignaturePolicy(Enum):
     - ``ID_COMMAND``: send evofw3's ``!I\r`` serial command to
       discover the HGI ID directly over serial (no RF loopback needed).
       Works on all evofw3 hardware, including ATmega devices that
-      cannot echo the ``_PUZZ`` signature (Gap E, Phase 2).
+      cannot echo the ``_PUZZ`` signature (Gap E, .
     """
 
     IMMEDIATE = auto()
@@ -76,7 +76,7 @@ class TransportConfig:
     :param app_context: Optional application context.
     :type app_context: Any | None
     :param signature_policy: Startup signature probe policy for serial
-        transports (Phase 2, issue 1119).  ``IMMEDIATE`` sends probes
+        transports , issue 1119).  ``IMMEDIATE`` sends probes
         right after port open (default, backward-compatible).
         ``DELAYED`` waits ``startup_grace`` seconds before probing
         (for ESP32 USB devices that reset on open).  ``SKIP`` never
@@ -88,7 +88,7 @@ class TransportConfig:
         3.0s based on the hardware feasibility gate (ESP32 cold boot ~1.9s).
     :type startup_grace: float | None
     :param enable_reconnect: Enable automatic reconnect with exponential
-        backoff when the serial port disconnects (Phase 2, issue 1119).
+        backoff when the serial port disconnects , issue 1119).
         Default False preserves existing single-USB behavior.
     :type enable_reconnect: bool
     :param max_reconnect_attempts: Maximum number of reconnect attempts
@@ -98,7 +98,7 @@ class TransportConfig:
         devices that cannot be queried via ``!I`` or ``_PUZZ`` (e.g.
         HGI80), or as a fallback when identity discovery fails.  A
         discovered identity takes precedence and is checked against
-        this value (Gap B, Phase 2).
+        this value (Gap B, .
     :type configured_hgi_id: str | None
     """
 
@@ -301,7 +301,7 @@ class _ReadTransport(_BaseTransport, TransportInterface):
 
         Filters evofw3 debug responses (lines starting with ``#``)
         before the packet parser so they don't get logged as
-        ``PacketInvalid`` (Gap F, Phase 2).  These are valid evofw3
+        ``PacketInvalid`` (Gap F, .  These are valid evofw3
         serial command responses (version, ID, config), not RAMSES
         packets.
 

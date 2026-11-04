@@ -151,7 +151,7 @@ class SQLiteWorker:
             )
             """
         )
-        # Handle migration for users with the old schema (Phase 2.1 upgrade)
+        # Handle migration for users with the old schema upgrade)
         with contextlib.suppress(sqlite3.OperationalError):
             cursor.execute(
                 "ALTER TABLE messages ADD COLUMN frame TEXT DEFAULT ''"
@@ -190,7 +190,7 @@ class SQLiteWorker:
                 with contextlib.suppress(sqlite3.Error):
                     conn.execute("PRAGMA read_uncommitted = true")
 
-            # Phase 2.4: Startup Hydration
+            # Startup Hydration
             if self._disk_path and (
                 self._db_path == ":memory:" or "mode=memory" in self._db_path
             ):

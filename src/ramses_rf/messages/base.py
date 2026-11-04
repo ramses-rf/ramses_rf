@@ -54,7 +54,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # Transition alias for typing until full payload migration is complete
-type PayloadT = Any  # type: ignore[explicit-any]  # legacy payload union
+type PayloadT = Any  # type: ignore[explicit-any]  # pre-0.60 payload union
 
 
 # TypeVar bound to Message to allow strict inheritance typing
@@ -204,12 +204,12 @@ class Message:
         return self._format_frame(self.seqn)
 
     @classmethod
-    def _from_packet(  # type: ignore[explicit-any]  # legacy Packet | Message
+    def _from_packet(  # type: ignore[explicit-any]  # pre-0.60 Packet | Message
         cls: type[_MessageT], packet: Any
     ) -> _MessageT:
-        """Create a Message (or subclass) from a legacy Packet.
+        """Create a Message (or subclass) from a pre-0.60 Packet.
 
-        :param packet: The legacy packet object.
+        :param packet: The pre-0.60 packet object.
         :type packet: Any
         :return: The generated message.
         :rtype: Message
@@ -234,7 +234,7 @@ class Message:
         :return: The generated message.
         :rtype: Message
         """
-        # Temporary shim bridging backwards logic during Phase 2
+        # Temporary shim bridging backwards logic during
         from ramses_tx.packet import Packet
 
         packet = Packet._from_cmd(command, dtm=dtm)
@@ -344,7 +344,7 @@ class Message:
 
     @property
     def payload(self) -> PayloadT:
-        """Return the parsed payload, preferably as legacy dictionary or list.
+        """Return the parsed payload, preferably as pre-0.60 dictionary or list.
 
         :return: The payload.
         :rtype: PayloadT
@@ -473,7 +473,7 @@ class Message:
             # Use the injected domain logic from ramses_rf
             is_controller = Message._IS_CONTROLLER_CB(self.src.id)
         else:
-            # Fallback for legacy tests until they are updated
+            # Fallback for pre-0.60 tests until they are updated
             is_controller = getattr(self.src, "_is_controller", True)
 
         if (
@@ -500,10 +500,10 @@ class Message:
 
     @property
     def dto(self) -> TransportMessage:
-        """Generate a TransportMessage DTO from this legacy Message.
+        """Generate a TransportMessage DTO from this pre-0.60 Message.
 
         This acts as a safe, passive bridge to validate the new Data
-        Transfer Objects against the legacy snapshot tests before fully
+        Transfer Objects against the pre-0.60 snapshot tests before fully
         migrating the transport layer.
         """
         raw_hex_payload = self._dto.raw_payload

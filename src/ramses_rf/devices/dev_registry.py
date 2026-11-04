@@ -151,7 +151,7 @@ class DeviceRegistry:
         # when a sensor broadcasts before its controller does.
         parent = self.get_device(event.parent_id)
 
-        # ARCHITECTURAL PARITY: The legacy state engine uses "Just-In-Time" TCS creation.
+        # ARCHITECTURAL PARITY: The pre-0.60 state engine uses "Just-In-Time" TCS creation.
         # If an 01: device is about to adopt a child, it must instantiate its Evohome TCS
         # first, otherwise the child's inherited `.tcs` pointer becomes permanently None.
         if (
@@ -235,16 +235,16 @@ class DeviceRegistry:
 
         if parent:
             # Safely extract is_sensor without coercing None to False,
-            # allowing legacy code to correctly deduce actuators.
+            # allowing pre-0.60 code to correctly deduce actuators.
             raw_is_sensor = metadata.get("is_sensor")
             is_sensor = (
                 bool(raw_is_sensor) if raw_is_sensor is not None else None
             )
             device_role = metadata.get("device_role")
 
-            # NEW: Safe hardware fallback to prevent legacy SchemaInconsistentError
+            # NEW: Safe hardware fallback to prevent pre-0.60 SchemaInconsistentError
             # If the event lacks a sensor flag, we must flag dedicated hardware
-            # sensors before passing to the legacy graph so it doesn't crash.
+            # sensors before passing to the pre-0.60 graph so it doesn't crash.
             if is_sensor is None and event.child_id:
                 child_type = Address(event.child_id).type
                 if child_type in (
@@ -262,7 +262,7 @@ class DeviceRegistry:
             # L7 registration (state inheritance, API hooks, etc.)
             child_dev = None
             try:
-                # 1. FORWARD BINDING (Delegating down to legacy graph mutation
+                # 1. FORWARD BINDING (Delegating down to pre-0.60 graph mutation
                 # to allow the Old Brain to hydrate itself)
                 child_id_raw = metadata.get("child_id")
                 # Fallback: if domain_id is FC (appliance_control) but
@@ -946,8 +946,8 @@ class DeviceRegistry:
 
         This method interrogates the mathematically correct devices and
         systems tracked within the DeviceRegistry to produce a topology
-        dictionary matching the legacy Gateway.schema() format. This
-        safely bypasses the legacy routing monolith to resolve the
+        dictionary matching the pre-0.60 Gateway.schema() format. This
+        safely bypasses the pre-0.60 routing monolith to resolve the
         split-brain test paradox.
 
         :returns: A dictionary representing the complete network
@@ -976,7 +976,7 @@ class DeviceRegistry:
                 # 🚨 HACK: ACTIVE DEGRADATION FOR PHASE 2.95 PARITY TESTS 🚨
                 # ====================================================================
                 # The async TopologyBuilder generates a *better*, more accurate schema
-                # (e.g. correctly binding UFH TRVs that the legacy monolith rejects
+                # (e.g. correctly binding UFH TRVs that the pre-0.60 monolith rejects
                 # due to rigid hardware class assumptions).
                 #
                 # However, to mathematically pass the "Golden Master" parity tests
@@ -984,7 +984,7 @@ class DeviceRegistry:
                 # output so it identically matches the Old Brain's flawed output.
                 #
                 # TODO: PHASE 3 - Change `if False:` to `if True:` to unleash the
-                # true CQRS shadow state and fix the legacy dropped-device bugs!
+                # true CQRS shadow state and fix the pre-0.60 dropped-device bugs!
                 if _ACTIVE_DEGRADATION:
                     # --- APPLY NATIVE CQRS SHADOW STATE ---
                     cqrs_acts: dict[str, set[str]] = getattr(

@@ -432,7 +432,7 @@ class EavesdropEngine:
                 )
 
     def _evaluate_appliance_eavesdrop_rules(self, msg: Message) -> None:
-        """Evaluate legacy passive eavesdropping of System Relay."""
+        """Evaluate pre-0.60 passive eavesdropping of System Relay."""
         if msg.code not in (Code._3220, Code._3B00, Code._3EF0):
             return
 
@@ -470,7 +470,7 @@ class EavesdropEngine:
             )
 
     def _evaluate_zone_type_eavesdrop_rules(self, msg: Message) -> None:
-        """Evaluate legacy passive promotion of zone classes."""
+        """Evaluate pre-0.60 passive promotion of zone classes."""
         for payload in self._get_payloads(msg):
             if not isinstance(payload, dict):
                 continue

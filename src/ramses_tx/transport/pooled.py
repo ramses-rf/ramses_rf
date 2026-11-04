@@ -1284,7 +1284,7 @@ class PooledTransport(TransportInterface):
     async def write_frame(
         self, frame: str, disable_tx_limits: bool = False
     ) -> None:
-        """Legacy outbound dispatch — delegates to the routing API.
+        """Pre-0.60 outbound dispatch — delegates to the routing API.
 
         This method is retained for backward compatibility: it backs the
         public ``send_frame()`` API and any external callers that still

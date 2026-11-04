@@ -323,7 +323,7 @@ class StateProjector:
         # 2411 parameter messages are owned by the FAN aggregate root: they
         # set _supports_2411 and fire the initialized callback that ramses_cc
         # uses to create the ~15 parameter number entities.  This was moved
-        # from HvacVentilator._handle_msg (removed in Phase 2.95) into the
+        # from HvacVentilator._handle_msg (removed in into the
         # StateProjector.  See ramses_cc issue 851.
         if msg.code == Code._2411:
             _route_2411_to_fan(self._gateway, msg)
@@ -331,9 +331,9 @@ class StateProjector:
         # Normalise payload to a list of dicts.  Array payloads (e.g. 000A,
         # 22C9) arrive as list[dict] after to_dict() conversion on the
         # base.py:Message.payload property; single payloads arrive as dict.
-        # The legacy dict-of-dicts unfolding (for {'00': {...}, '01': {...}}
+        # The pre-0.60 dict-of-dicts unfolding (for {'00': {...}, '01': {...}}
         # structures) has been removed — no PayloadBase.to_dict() method
-        # produces nested dicts after the Phase 6 dataclass migration
+        # produces nested dicts after the dataclass migration
         # (issue 1039).  All array payloads now arrive as list[dict] with
         # the index key (zone_index, ufh_index, etc.) embedded in each
         # element by the dataclass's to_dict().
@@ -610,7 +610,7 @@ class StateProjector:
                         )
 
         # --- CQRS Reactor Hooks ---
-        # Automate the legacy Actuator discovery query (3EF1) in response to 3EF0 (I)
+        # Automate the pre-0.60 Actuator discovery query (3EF1) in response to 3EF0 (I)
         if msg.code == Code._3EF0 and msg.verb == I_:
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev and not getattr(src_dev, "is_faked", False):
@@ -631,7 +631,7 @@ class StateProjector:
                         err,
                     )
 
-        # Automate the legacy DHW Sensor discovery query (1260) to keep CTL in sync
+        # Automate the pre-0.60 DHW Sensor discovery query (1260) to keep CTL in sync
         if msg.code == Code._1260:
             src_dev = registry.device_by_id.get(msg.src.id)
             if src_dev and getattr(src_dev, "ctl", None):
@@ -1184,7 +1184,7 @@ class StateProjector:
         ):
             updates: PayloadT = {}
             if SZ_TEMPERATURE in payload:
-                # Legacy Parity: Physical sensors only track their own local sensor readings.
+                # Pre-0.60 Parity: Physical sensors only track their own local sensor readings.
                 # We must ignore Zone temperature syncs sent TO them by the Controller.
                 # Symmetrically, a CTL/UFC ignores an actuator's report addressed
                 # to it — its temp_state is its own measured temperature, not the

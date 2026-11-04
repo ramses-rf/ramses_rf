@@ -152,7 +152,7 @@ class RadTopologyHandler(TopologyHandler):
             "34": DevType.THM,
         }
 
-        # Safe L7 extraction (dropping the legacy _packet._addrs shim).
+        # Safe L7 extraction (dropping the pre-0.60 _packet._addrs shim).
         addrs = [msg.src]
         if msg.dst.id != "--:------" and msg.dst.id != msg.src.id:
             addrs.append(msg.dst)

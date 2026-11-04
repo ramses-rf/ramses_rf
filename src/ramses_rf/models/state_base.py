@@ -44,7 +44,7 @@ class DeviceTraits:
     def to_dict(self) -> SchemaT:
         """Serialize back to a dictionary.
 
-        Useful for bridging the boundary into legacy methods expecting
+        Useful for bridging the boundary into pre-0.60 methods expecting
         **kwargs.
 
         :returns: A dictionary representing the device traits.
@@ -145,7 +145,7 @@ class TopologyChangedEvent:
         return self.device_id or self.child_id or self.parent_id
 
 
-# --- Phase 2.95: CQRS Domain Read-Models and Events ---
+# --- CQRS Domain Read-Models and Events ---
 
 
 @dataclass(frozen=True, slots=True)

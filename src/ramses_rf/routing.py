@@ -2,7 +2,7 @@
 """RAMSES RF - Domain Routing and Addressing.
 
 This module provides the strictly-typed, immutable Data Transfer Objects
-responsible for L7 domain routing, replacing legacy L3 string parsing.
+responsible for L7 domain routing, replacing pre-0.60 L3 string parsing.
 It acts as the foundation for the asynchronous event-driven SSOT.
 """
 
@@ -41,7 +41,7 @@ class RoutingContext:
 
     @property
     def as_string(self) -> str:
-        """Format the context safely for legacy string interpolation.
+        """Format the context safely for pre-0.60 string interpolation.
 
         Examples:
             RoutingContext(True) -> "True"
@@ -252,12 +252,12 @@ class StateHeader:
 
     @property
     def legacy_hdr(self) -> str:
-        """Calculate the legacy state routing header natively.
+        """Calculate the pre-0.60 state routing header natively.
 
         Format: '{code}|{verb}|{src_id}|{ctx_str}'
         Example: '3220|RP|01:123456|00'
 
-        :return: The legacy pipe-separated routing string.
+        :return: The pre-0.60 pipe-separated routing string.
         :rtype: str
         """
         return f"{self.code}|{self.verb}|{self.source_id}|{self.context.as_string}"

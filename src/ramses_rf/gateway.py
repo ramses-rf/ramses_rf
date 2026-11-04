@@ -86,7 +86,7 @@ def _payload_to_serialisable(  # type: ignore[explicit-any]  # heterogeneous JSO
     Payload dataclasses may contain ``bytes`` fields (e.g.
     ``PuzzlePayload``) that HA's storage layer cannot JSON-encode.
     If the payload has a ``to_dict()`` method, use it; otherwise
-    return the payload as-is (legacy behaviour for plain dicts/strings).
+    return the payload as-is (pre-0.60 behaviour for plain dicts/strings).
 
     :param payload: The payload object from an ``ApplicationMessage``.
     :type payload: Any
@@ -557,8 +557,8 @@ class Gateway(GatewayLifecycle, GatewayInterface):
             dtm_str = msg.dtm.isoformat(timespec="microseconds")
             state_dict[dtm_str] = {
                 "verb": msg.verb,
-                "src": msg.src.id,  # Keep for downstream legacy parsers
-                "dst": msg.dst.id,  # Keep for downstream legacy parsers
+                "src": msg.src.id,  # Keep for downstream pre-0.60 parsers
+                "dst": msg.dst.id,  # Keep for downstream pre-0.60 parsers
                 "addr1": msg._addrs[0].id,  # <-- Exact raw addr1
                 "addr2": msg._addrs[1].id,  # <-- Exact raw addr2
                 "addr3": msg._addrs[2].id,  # <-- Exact raw addr3
@@ -623,7 +623,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
             else:
                 core_data = {"_payload": payload_data}
 
-            # Temporary Phase 2.8 Strangler Fig Translation
+            # Temporary Strangler Fig Translation
             from ramses_rf.enums import Topic
             from ramses_rf.messages.core import Message as CoreMessage
 
@@ -633,7 +633,7 @@ class Gateway(GatewayLifecycle, GatewayInterface):
                 src=app_msg.src,
                 dst=app_msg.dst,
                 data=core_data,
-                packets=(),  # L3 packets dropped for legacy bridging
+                packets=(),  # L3 packets dropped for pre-0.60 bridging
                 timestamp=app_msg.dtm,
             )
             await self._topology_builder.consume(core_msg)

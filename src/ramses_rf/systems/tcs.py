@@ -183,7 +183,7 @@ class SystemBase(Parent[Device], Entity):  # 3B00 (multi-relay)
         :rtype: PayDictT._1100 | None
         """
         # Read from the CQRS-populated dict (issue 1102 / ramses_cc#1026).
-        # The legacy entity_state.get_value(Code._1100) path is deprecated.
+        # The pre-0.60 entity_state.get_value(Code._1100) path is deprecated.
         if self._tpi_params:
             for params in self._tpi_params.values():
                 return {

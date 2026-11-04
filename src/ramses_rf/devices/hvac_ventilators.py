@@ -998,7 +998,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
             SZ_TEMPERATURE: await self.temperature(),
         }
 
-        # Emulate the legacy behaviour by only exposing populated payload keys
+        # Emulate the pre-0.60 behaviour by only exposing populated payload keys
         merged_status = {
             **base_status,
             **{k: v for k, v in cqrs_status.items() if v is not None},
@@ -1017,7 +1017,7 @@ class HvacVentilator(FilterChange):  # FAN: RP/31DA, I/31D[9A], 2411
 
             shim_status[k_str] = v_clean
 
-            # Legacy shim: map newer CQRS keys back to legacy downstream keys
+            # Pre-0.60 shim: map newer CQRS keys back to pre-0.60 downstream keys
             if k_str in ("indoor_temperature", "indoor_temp"):
                 shim_status["temperature"] = v_clean
 
