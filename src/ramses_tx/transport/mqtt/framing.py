@@ -102,7 +102,9 @@ class MqttFramingHandler:
         return json.dumps({"msg": frame})
 
     @staticmethod
-    def decode_payload(payload_bytes: bytes) -> tuple[str, str] | None:
+    def decode_payload(
+        payload_bytes: bytes | bytearray,
+    ) -> tuple[str, str] | None:
         """Decode an incoming MQTT JSON payload into timestamp and frame.
 
         :param payload_bytes: Raw bytes from the MQTT message.
