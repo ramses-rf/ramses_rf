@@ -29,7 +29,7 @@
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
   PyYAML                                         # required for tests/tests/test_vol_schema import
   syrupy >= 6.1.1                                # HA uses 5.0.0 - 07/02/2026 - 2026.2.1
-  coverage >= 7.17.0                             # security patch 22 Oct. 2026
+  coverage >= 7.17.2                             # security patch 22 Oct. 2026
 
 # used for build/deploy
   hatch >= 1.18.1
