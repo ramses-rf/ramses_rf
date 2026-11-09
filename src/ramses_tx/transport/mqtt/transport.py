@@ -309,7 +309,7 @@ class MqttTransport(_FullTransport, _MqttTransportAbstractor):
         elif self._log_all and _LOGGER.getEffectiveLevel() == logging.INFO:
             _LOGGER.info("mq Rx: %s", msg.payload)
 
-        decoded = self._framing.decode_payload(msg.payload)
+        decoded = self._framing.decode_payload(bytes(msg.payload))
         if decoded is None:
             return
 
