@@ -10,14 +10,14 @@
 # - pip list | grep -E 'pre-commit|ruff|mypy|types-|voluptuous|pytest|hatch'
 
 # used for development (linting)
-  prek == 0.5.9                                  # latest, same as ramses_cc
-  ruff >= 0.17.3                                 # also in: pre-commit-config.yaml
+  prek == 0.5.10                                 # latest, same as ramses_cc
+  ruff >= 0.17.4                                 # also in: pre-commit-config.yaml
 
 # used for development (typing)
-  mypy >= 2.4.1                                  # HA uses  1.19.0a4 !
+  mypy >= 2.4.1
   types-aiofiles >= 25.1.0.20260518
   types-colorama >= 0.4.15.20260508
-  types-PyYAML >= 6.0.12.20261030                # HA uses 6.0.12.20250516
+  types-PyYAML >= 6.0.12.20261030
   serialx >= 1.15.0
   probatio >= 0.13.0                             # HA uses 0.13.0 since 2026.10.0
 
