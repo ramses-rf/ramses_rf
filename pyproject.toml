@@ -267,7 +267,7 @@ zigbee = ["zigpy>=2.0.0"]           # ZigbeeTransport (Phase 3) — provided by 
   module = [
     "tests_cli.*",
     "utils.*",
-    "wip.*",
+    # "wip.*",  # empty as of 0.61.4
   ]
 
   disable_error_code = [

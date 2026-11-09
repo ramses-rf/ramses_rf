@@ -182,11 +182,13 @@ class MqttConnectionManager:
         self._connecting = False
 
         if reason_code.is_failure:
-            _LOGGER.error("MQTT connection failed: %s", reason_code.getName())  # type: ignore[no-untyped-call]  # untyped paho API
+            _LOGGER.error(
+                "MQTT connection failed: %s", str(reason_code.getName())
+            )  # type: ignore[no-untyped-call]
             self._schedule_reconnect()
             return
 
-        _LOGGER.info("MQTT connected: %s", reason_code.getName())  # type: ignore[no-untyped-call]  # untyped paho API
+        _LOGGER.info("MQTT connected: %s", str(reason_code.getName()))  # type: ignore[no-untyped-call]
         self._current_reconnect_interval = self._reconnect_interval
 
         if self._reconnect_task:
