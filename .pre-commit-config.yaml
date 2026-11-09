@@ -3,7 +3,7 @@ exclude: ^(.secrets|docs|misc|tests/deprecated)/
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.2
+    rev: v0.17.4
     hooks:
       - id: ruff-check   # linter
       - id: ruff-format  # formatter

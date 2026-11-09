@@ -1,6 +1,6 @@
 #
 ### project ##########################################################################
-# last checked/updated: 2026-10-30
+# last checked/updated: 2026-11-09
 #
 
 [project]
@@ -43,7 +43,7 @@
     "colorlog>=6.9.0",              # latest
     "orjson>=3.9.0",                # added for Phase 2.1 Fat SQLite Backend
     "paho-mqtt>=2.1.0",             # latest
-    "serialx>=1.8.2",               # Roadmap Item 9 / Issue #606 (HA container baseline; 1.8.1 fixed fd leak, Win32 race, USB string descriptors)
+    "serialx>=1.8.2",               # issue #606
     "probatio >= 0.11.2"            # latest
   ]
 
@@ -267,7 +267,7 @@ zigbee = ["zigpy>=2.0.0"]           # ZigbeeTransport (Phase 3) — provided by 
   module = [
     "tests_cli.*",
     "utils.*",
-    "wip.*",
+    # "wip.*",  # empty as of 0.61.4
   ]
 
   disable_error_code = [
