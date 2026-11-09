@@ -23,7 +23,7 @@
 
 # used for testing
   pytest >= 9.2.0                                # HA uses 8.4.2
-  pytest-asyncio >= 1.4.0                        # HA uses 1.2.0
+  pytest-asyncio >= 1.4.1.post1                        # HA uses 1.2.0
   pytest-cov >= 7.1.0                            # HA uses 6.2.1, includes older coverage.py as dep
   pytest-sugar >= 1.1.1                          # HA uses 1.0.0
   pytest-xdist >= 3.8.0                          # HA uses 3.8.0
