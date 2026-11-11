@@ -32,5 +32,5 @@
   coverage >= 7.17.0                             # security patch 22 Oct. 2026
 
 # used for build/deploy
-  hatch >= 1.18.1
+  hatch >= 1.18.2
   hatchling >= 1.33.0
