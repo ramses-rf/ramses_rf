@@ -632,13 +632,18 @@ class StateProjector:
                     )
 
         # Automate the pre-0.60 DHW Sensor discovery query (1260) to keep CTL in sync
-        if msg.code == Code._1260:
+        # Only I-broadcasts trigger the query — an RP from the controller
+        # must not trigger another request: when the CTL is itself a zone
+        # sensor, src_dev.ctl resolves to itself and the RP 1260 → RQ 1260
+        # loop saturates the RF channel (ramses-rf issue 1371).
+        if msg.code == Code._1260 and msg.verb == I_:
             src_dev = registry.device_by_id.get(msg.src.id)
-            if src_dev and getattr(src_dev, "ctl", None):
+            ctl = getattr(src_dev, "ctl", None) if src_dev else None
+            if src_dev and ctl and ctl.id != msg.src.id:
                 try:
                     intent_1260 = Intent_(
                         src=HGI_DEV_ADDR,
-                        dst=Address(src_dev.ctl.id),
+                        dst=Address(ctl.id),
                         action=Action.GET_DHW_TEMP,
                         data={SZ_DHW_INDEX: 0},
                     )
@@ -646,7 +651,7 @@ class StateProjector:
                 except Exception as err:
                     _LOGGER.error(
                         "Failed to trigger CQRS 1260 reactor for %s: %s",
-                        src_dev.ctl.id,
+                        ctl.id,
                         err,
                     )
 
