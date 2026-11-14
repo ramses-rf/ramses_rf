@@ -19,8 +19,11 @@ See: https://github.com/ramses-rf/ramses_cc/issues/1414
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import pytest
+
+from ramses_tx.typing import DeviceIdT
 
 from .helpers import TEST_DIR, load_test_gwy
 
@@ -37,7 +40,9 @@ async def test_otb_3ef0_rel_mod_uses_percent_scale() -> None:
     """
     gwy = await load_test_gwy(OTB_MOD_DIR)
     try:
-        otb = gwy.device_registry.device_by_id.get("10:048456")
+        otb = gwy.device_registry.device_by_id.get(
+            cast(DeviceIdT, "10:048456")
+        )
         assert otb is not None, "OTB not loaded"
         state = otb.opentherm_state
         assert state is not None, "no OpenTherm state"
@@ -60,7 +65,9 @@ async def test_bdr_3ef0_modulation_keeps_demand_scale() -> None:
     """A BDR's 3EF0 modulation byte stays on the 0-200 demand scale."""
     gwy = await load_test_gwy(OTB_MOD_DIR)
     try:
-        bdr = gwy.device_registry.device_by_id.get("13:164839")
+        bdr = gwy.device_registry.device_by_id.get(
+            cast(DeviceIdT, "13:164839")
+        )
         assert bdr is not None, "BDR not loaded"
         state = await bdr.actuator_state()
         assert state is not None, "no actuator state"
