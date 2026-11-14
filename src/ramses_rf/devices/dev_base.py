@@ -112,8 +112,12 @@ class DeviceBase(Entity):
 
         self._scheme: str | None = traits.scheme if traits else None
         self._strategy: HvacStrategy | None = None
+        raw_pi = traits.polling_interval if traits else None
+        self._polling_interval_scalar: int | None = (
+            raw_pi if isinstance(raw_pi, int) else None
+        )
         self._polling_interval: PollingIntervalsT | None = (
-            traits.polling_interval if traits else None
+            {Code._10E0: raw_pi} if isinstance(raw_pi, int) else raw_pi
         )
         self._is_battery: bool | None = traits.is_battery if traits else None
         self._heartbeat_timeout: td | None = (
@@ -445,7 +449,13 @@ class DeviceBase(Entity):
             self._make_fake()
 
         self._scheme = traits.scheme
-        self._polling_interval = traits.polling_interval
+        raw_pi = traits.polling_interval
+        self._polling_interval_scalar = (
+            raw_pi if isinstance(raw_pi, int) else None
+        )
+        self._polling_interval = (
+            {Code._10E0: raw_pi} if isinstance(raw_pi, int) else raw_pi
+        )
         self._heartbeat_timeout = (
             td(seconds=traits.heartbeat_timeout)
             if traits.heartbeat_timeout is not None
@@ -533,11 +543,16 @@ class DeviceBase(Entity):
                 f"Battery-powered device {self.id} polling interval cannot be set below 300s (got {interval}s)"
             )
 
+        self._polling_interval_scalar = interval
         if interval is None:
             self._polling_interval = None
         else:
-            eff_schedule = self.effective_polling_interval or {}
-            codes = list(eff_schedule.keys()) or [Code._10E0]
+            eff_schedule = self.effective_polling_interval
+            codes = (
+                list(eff_schedule.keys())
+                if isinstance(eff_schedule, dict) and eff_schedule
+                else [Code._10E0]
+            )
             self._polling_interval = {code: interval for code in codes}
 
         if getattr(self._gateway, "polling_manager", None):
@@ -563,6 +578,7 @@ class DeviceBase(Entity):
                 f"Battery-powered device {self.id} polling interval cannot be set below 300s (got {interval}s)"
             )
 
+        self._polling_interval_scalar = None
         if self._polling_interval is None:
             self._polling_interval = {}
 
