@@ -60,7 +60,19 @@ SCH_DEVICE_ID_UFC = vol.Match(DEVICE_ID_REGEX.UFC)
 _SCH_TRAITS_DOMAINS = ("heat", "hvac")
 _SCH_TRAITS_HVAC_SCHEMES = ("itho", "nuaire", "orcon", "vasco", "climarad")
 
-SCH_POLLING_INTERVAL = vol.Schema({str: vol.All(int, vol.Range(min=0))})
+
+def _reject_bool(val: int) -> int:
+    """Reject bool (a subclass of int) in integer validators."""
+    if isinstance(val, bool):
+        raise vol.Invalid("boolean is not a valid polling interval")
+    return val
+
+
+_SCH_POLLING_SECONDS = vol.All(int, _reject_bool, vol.Range(min=0))
+SCH_POLLING_INTERVAL = vol.Any(
+    _SCH_POLLING_SECONDS,
+    vol.Schema({str: _SCH_POLLING_SECONDS}),
+)
 
 
 def sch_global_traits_dict_factory(

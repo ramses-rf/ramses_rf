@@ -18,7 +18,7 @@ class DeviceTraits:
     alias: str | None = None
     faked: bool | None = None
     scheme: str | None = None
-    polling_interval: PollingIntervalsT | None = None
+    polling_interval: PollingIntervalsT | int | None = None
     heartbeat_timeout: int | None = None
     is_battery: bool | None = None
 
