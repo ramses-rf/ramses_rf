@@ -21,6 +21,17 @@ def build_get_opentherm_data(intent: Command) -> CommandDTO:
         raise ValueError("Missing 'msg_id' in intent data")
 
     msg_id_int = msg_id if isinstance(msg_id, int) else int(msg_id, 16)
+
+    # Data-ID 0 (Master/Slave Status) carries the master's CH/DHW enable
+    # flags in the request's high data byte. ramses cannot know the
+    # controller's real flags, so a zeroed request reads as "CH disabled,
+    # DHW disabled" and R8810 bridges stop the boiler (issue 1372).
+    if msg_id_int == 0:
+        raise ValueError(
+            "OpenTherm Data-ID 0 (Status) must not be requested: the "
+            "request's high data byte carries master CH/DHW enable "
+            "flags that cannot be supplied safely (issue 1372)"
+        )
     msg_type = 8 if parity(msg_id_int) else 0
     payload = OpenThermMsgPayload.create(
         opentherm_index=0,
