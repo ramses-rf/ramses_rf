@@ -641,6 +641,40 @@ def test_polling_manager_first_poll_early_for_otb_3220(
         assert task.next_due >= now
 
 
+def test_polling_manager_otb_never_polls_status_id(
+    mock_gateway: MagicMock,
+) -> None:
+    """OTB polling must never include OpenTherm Data-ID 0x00 (Status).
+
+    A 3220 READ-DATA request for ID 0 carries the master status flags
+    (CH enable, DHW enable) in its high data byte.  ramses cannot know
+    the controller's real flags, so the zeroed request reads as "CH
+    disabled, DHW disabled" — R8810 bridges relay it to the boiler and
+    stop the burner (ramses-rf/ramses_rf issue 1372).
+
+    Regression: no OTB 3220 task may carry the zeroed-status payload
+    ``0000000000``.
+    """
+    # ARRANGE
+    poller = PollingManager(mock_gateway, shadow_mode=True)
+    otb_dev = MockDevice(mock_gateway, "10:111111", slug="OTB")
+
+    # ACT
+    poller.update_device_tasks(otb_dev)
+
+    # ASSERT: no task encodes a Data-ID 0 status read (master flags 00)
+    otb_3220 = [
+        t
+        for t in poller.get_scheduled_cmds()
+        if t.code == Code._3220 and t.device_id == "10:111111"
+    ]
+    assert otb_3220, "expected OTB 3220 poll tasks"
+    assert all(t.payload != "0000000000" for t in otb_3220), (
+        "OTB poll includes OpenTherm Data-ID 0 — its request byte "
+        "carries master CH/DHW enable flags (issue 1372)"
+    )
+
+
 @pytest.mark.asyncio
 async def test_polling_manager_2e04_rq_uses_ff_payload(
     mock_gateway: MagicMock,
@@ -1032,7 +1066,6 @@ def test_encode_opentherm_payload_parity() -> None:
     )
     assert OPENTHERM_PARAMS_DATA_IDS == (0x38, 0x39)
     assert OPENTHERM_POLL_DATA_IDS == (
-        0x00,
         0x01,
         0x05,
         0x11,
@@ -1046,6 +1079,10 @@ def test_encode_opentherm_payload_parity() -> None:
         0x38,
         0x39,
     )
+    # 0x00 (Master/Slave Status) is excluded from polling: its request
+    # byte carries master CH/DHW enable flags that ramses cannot supply
+    # safely — polling it stops the boiler via R8810 bridges (issue 1372)
+    assert 0x00 not in OPENTHERM_POLL_DATA_IDS
     assert 0x0E not in OPENTHERM_POLL_DATA_IDS
     assert 0x11 in OPENTHERM_POLL_DATA_IDS
 
@@ -1068,7 +1105,9 @@ def test_polling_manager_otb_expands_3220_data_id_tasks(
     active_keys = poller.update_device_tasks(otb_dev)
 
     # Assert
-    # 2 device-level tasks (10E0, 3EF0) + 13 Data-ID 3220 tasks
+    # 2 device-level tasks (10E0, 3EF0) + 12 Data-ID 3220 tasks
+    # (Data-ID 00 is excluded: a status read carries master CH/DHW
+    # enable flags that ramses cannot supply safely — issue 1372)
     device_level = {k for k in active_keys if len(k) == 2}
     ot_level = {k for k in active_keys if len(k) == 3}
 
@@ -1076,9 +1115,8 @@ def test_polling_manager_otb_expands_3220_data_id_tasks(
     assert ("10:048122", Code._10E0) in device_level
     assert ("10:048122", Code._3EF0) in device_level
 
-    assert len(ot_level) == 13
+    assert len(ot_level) == 12
     expected_data_ids = (
-        "00",
         "01",
         "05",
         "11",
@@ -1094,11 +1132,9 @@ def test_polling_manager_otb_expands_3220_data_id_tasks(
     )
     for data_id_hex in expected_data_ids:
         assert ("10:048122", Code._3220, data_id_hex) in ot_level
+    assert ("10:048122", Code._3220, "00") not in ot_level
 
     # Verify task payloads match parity-encoded 5-byte strings
-    assert (
-        poller._tasks[("10:048122", Code._3220, "00")].payload == "0000000000"
-    )
     assert (
         poller._tasks[("10:048122", Code._3220, "19")].payload == "0080190000"
     )
@@ -1136,9 +1172,11 @@ async def test_polling_manager_otb_live_dispatch_transmits_data_id_payloads(
     processed_count = await poller.poll_due_commands()
 
     # Assert
-    # 2 device-level tasks + 13 Data-ID tasks = 15 total
-    assert processed_count == 15
-    assert mock_gateway._async_send_dto.call_count == 15
+    # 2 device-level tasks + 12 Data-ID tasks = 14 total
+    # (Data-ID 00 excluded — status reads carry master CH/DHW enable
+    # flags ramses cannot supply safely, issue 1372)
+    assert processed_count == 14
+    assert mock_gateway._async_send_dto.call_count == 14
 
     # Extract all 3220 commands sent
     sent_3220_payloads: set[str] = set()
@@ -1151,7 +1189,6 @@ async def test_polling_manager_otb_live_dispatch_transmits_data_id_payloads(
             sent_3220_payloads.add(dto.payload)
 
     expected_payloads = {
-        "0000000000",
         "0080010000",
         "0000050000",
         "0000110000",
