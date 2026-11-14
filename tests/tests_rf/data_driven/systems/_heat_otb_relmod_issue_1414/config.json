@@ -1,0 +1,20 @@
+{
+    "config": {
+        "enable_eavesdrop": false,
+        "enforce_known_list": true
+    },
+
+    "main_tcs": "01:185426",
+    "01:185426": {
+        "system": {
+            "appliance_control": "10:048456"
+        }
+    },
+
+    "known_list": {
+        "01:185426": {},
+        "10:048456": {},
+        "13:164839": {},
+        "18:136212": {}
+    }
+}
