@@ -480,6 +480,43 @@ def _is_foreign_zone_sync(
     )
 
 
+def _non_multiroom_sensor_write(zone: Entity | FaultLog, src_id: str) -> bool:
+    """Return True when a bound sensor writes to a locally-sensed zone.
+
+    A zone whose controller marks ``multiroom_mode`` disabled takes its
+    temperature from local actuators, echoed in the controller's 30C9
+    zone syncs.  A bound thermostat's own 30C9 broadcast is a
+    device-local reading — accepting it makes the zone temperature
+    oscillate between the sensor and controller values
+    (ramses-rf/ramses_cc#1413).  The zone's own controller and its
+    actuators (a TRV may itself be the designated sensor) are never
+    blocked by this check.
+
+    :param zone: The zone target of the temperature update.
+    :param src_id: The source device id of the inbound message.
+    :return: True when ``src_id`` is the zone's dedicated sensor and the
+        zone is not multiroom.
+    """
+    zone_state = getattr(zone, "zone_state", None)
+    if (
+        zone_state is None
+        or getattr(zone_state, "multiroom_mode", None) is not False
+    ):
+        return False
+    if src_id == getattr(getattr(zone, "ctl", None), "id", None):
+        return False
+    if src_id in {
+        getattr(a, "id", None) for a in getattr(zone, "actuators", [])
+    }:
+        return False
+    sensor = getattr(zone, "sensor", None)
+    declared = getattr(zone, "_declared_sensor_id", None)
+    return src_id in (
+        getattr(sensor, "id", None),
+        str(declared) if declared is not None else None,
+    )
+
+
 def _ctl_is_zone_sensor(ctl: Entity | FaultLog, p_idx: object) -> bool:
     """Return True if ``ctl`` is the sensor of the zone named by ``p_idx``.
 
@@ -880,13 +917,20 @@ def _update_temperature_state(
         # zone syncs likewise carry child state: only the sync of the zone
         # it senses is its own ambient (ramses-rf/ramses_rf#1315).
         slug = getattr(target, "_SLUG", "")
+        # A bound thermostat's broadcast is not the zone temperature when
+        # the controller marks the zone locally-sensed (multiroom off) —
+        # only controller syncs carry it then (ramses-rf/ramses_cc#1413).
         if (
-            slug in ("TRV", "THM", DevType.CTL, DevType.UFC)
-            and src_id != target_id
-        ) or (
-            slug in (DevType.CTL, DevType.UFC)
-            and p.get(SZ_ZONE_INDEX) is not None
-            and not _ctl_is_zone_sensor(target, p[SZ_ZONE_INDEX])
+            (
+                slug in ("TRV", "THM", DevType.CTL, DevType.UFC)
+                and src_id != target_id
+            )
+            or (
+                slug in (DevType.CTL, DevType.UFC)
+                and p.get(SZ_ZONE_INDEX) is not None
+                and not _ctl_is_zone_sensor(target, p[SZ_ZONE_INDEX])
+            )
+            or _non_multiroom_sensor_write(target, src_id)
         ):
             pass
         else:

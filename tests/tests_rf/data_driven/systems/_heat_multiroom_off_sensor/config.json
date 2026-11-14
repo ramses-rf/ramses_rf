@@ -1,0 +1,19 @@
+{
+    "main_tcs": "01:154305",
+    "01:154305": {
+        "system": {},
+        "orphans": [],
+        "stored_hotwater": {},
+        "underfloor_heating": {},
+        "zones": {
+            "02": {
+                "class": "radiator_valve",
+                "sensor": "22:033088",
+                "actuators": [
+                    "04:197871",
+                    "04:237125"
+                ]
+            }
+        }
+    }
+}
