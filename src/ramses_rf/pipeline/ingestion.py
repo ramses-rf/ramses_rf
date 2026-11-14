@@ -17,7 +17,6 @@ from ramses_rf import quirks
 from ramses_rf.address import HGI_DEV_ADDR, NON_DEV_ADDR, Address
 from ramses_rf.commands.core import Command as Intent_
 from ramses_rf.const import (
-    F9,
     FA,
     FC,
     SZ_ACTIVE,
@@ -491,7 +490,7 @@ class StateProjector:
                                 err,
                             )
 
-            # Route domain-id opcodes (0008/0009/3150) to the DhwZone (F9/FA)
+            # Route domain-id opcodes (0008/0009/3150) to the DhwZone (FA)
             # or TCS (FC).  The ingestion path above only routes to src_dev
             # and dst_dev, but the DhwZone/TCS are virtual twins that are
             # neither src nor dst.  Without this, demand_state on the DhwZone
@@ -516,9 +515,11 @@ class StateProjector:
                             tcs.id,
                             err,
                         )
+                # Only FA is the DHW valve: F9 is the heating valve
+                # and must not overwrite the DhwZone's relay_demand
+                # (ramses-rf issue 1370).
                 elif (
-                    domain_val in (FA, F9)
-                    and getattr(tcs, "dhw", None) is not None
+                    domain_val == FA and getattr(tcs, "dhw", None) is not None
                 ):
                     try:
                         self._update_demand_state(tcs.dhw, payload, msg)
