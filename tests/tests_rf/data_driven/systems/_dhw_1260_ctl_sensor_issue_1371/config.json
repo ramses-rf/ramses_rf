@@ -1,0 +1,30 @@
+{
+    "config": {
+        "enable_eavesdrop": false,
+        "enforce_known_list": true
+    },
+
+    "main_tcs": "01:123456",
+    "01:123456": {
+        "system": {},
+        "stored_hotwater": {
+            "sensor": "07:123456",
+            "hotwater_valve": "13:215029"
+        },
+        "zones": {
+            "03": {
+                "class": "radiator_valve",
+                "sensor": "01:123456",
+                "actuators": ["04:000001"]
+            }
+        }
+    },
+
+    "known_list": {
+        "01:123456": {},
+        "07:123456": {},
+        "13:215029": {},
+        "04:000001": {},
+        "18:123456": {}
+    }
+}
