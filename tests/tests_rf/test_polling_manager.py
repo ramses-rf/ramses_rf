@@ -1387,3 +1387,52 @@ async def test_polling_manager_no_retry_when_never_heard(
     assert task.next_due == task.last_polled + td(
         seconds=INTERVAL_FAN_KEEP_ALIVE
     )
+
+
+@pytest.mark.asyncio
+async def test_polling_manager_fan_keepalive_sleep_uses_retry_interval(
+    mock_gateway: MagicMock,
+) -> None:
+    """After dispatching a keep-alive poll, the poll loop sleeps for retry_interval.
+
+    Regression test for ramses-rf/ramses_rf issue 1374: when a poll is
+    dispatched in poll_due_commands(), task.next_due is set to
+    now + INTERVAL_FAN_KEEP_ALIVE (600 s).  Without bounding the sleep
+    by retry_interval (120 s), _calculate_next_sleep_interval() sleeps
+    for DEFAULT_POLL_CYCLE_SECS (300 s), by which time the 10-min + 5-min
+    silence already reaches HEARTBEAT_TIMEOUT_FAN (15 min) and no retry
+    is ever sent.
+    """
+    poller = PollingManager(mock_gateway, shadow_mode=False)
+    fan_dev = MockDevice(mock_gateway, "32:333333", slug="FAN")
+    fan_dev._last_msg_dtm = dt.now(UTC) - td(minutes=10)
+    mock_gateway.device_registry.devices = [fan_dev]
+    mock_gateway.device_registry.device_by_id = {fan_dev.id: fan_dev}
+
+    poller.update_device_tasks(fan_dev)
+    task = poller._tasks[("32:333333", Code._10E0)]
+    task.next_due = dt.now(UTC) - td(seconds=1)
+    # Defer 10D0 so only 10E0 is due
+    poller._tasks[("32:333333", Code._10D0)].next_due = dt.now(UTC) + td(
+        hours=12
+    )
+
+    # Dispatch initial poll at t=0
+    processed = await poller.poll_due_commands()
+    assert processed == 1
+
+    # Sleep interval must wake at retry_interval (~120 s), not 300 s
+    sleep_secs = poller._calculate_next_sleep_interval()
+    assert sleep_secs <= INTERVAL_FAN_KEEP_ALIVE_RETRY
+    assert sleep_secs > INTERVAL_FAN_KEEP_ALIVE_RETRY - 5
+
+    # Simulate 120 s passing without an answer: waking at retry_interval
+    # pulls next_due forward and dispatches the retry in the same cycle
+    # without counting a missed poll.
+    assert task.last_polled is not None
+    task.last_polled = dt.now(UTC) - td(seconds=INTERVAL_FAN_KEEP_ALIVE_RETRY)
+    task.next_due = task.last_polled + td(seconds=INTERVAL_FAN_KEEP_ALIVE)
+
+    processed_retry = await poller.poll_due_commands()
+    assert processed_retry == 1
+    assert fan_dev.consecutive_missed_polls == 0
