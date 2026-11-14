@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from ramses_rf.config import GatewayConfig, strip_and_map_traits
-from ramses_rf.const import FF, Code, DevType, Verb
+from ramses_rf.const import FC, FF, Code, DevType, Verb
 from ramses_rf.devices.dev_base import BatteryState, DeviceBase
 from ramses_rf.exceptions import RamsesException
 from ramses_rf.gateway import Gateway
@@ -729,6 +729,46 @@ async def test_polling_manager_0004_zone_uses_payload_in_cmd(
                 f"Expected 0004 payload '0500' for zone 05, got '{dto.payload}'"
             )
             break
+
+
+def test_polling_manager_ctl_1100_uses_fc_payload(
+    mock_gateway: MagicMock,
+) -> None:
+    """The CTL's 1100 (TPI params) poll must use domain payload FC.
+
+    1100 is domain-indexed: an evohome controller answers only an RQ
+    carrying its domain index FC and silently ignores the generic "00"
+    fallback — build_get_tpi_params already uses FC for non-BDR
+    targets, as does the packet parser's ``^FC`` expectation
+    (ramses-rf/ramses_rf issue 1373).  BDR targets keep "00".
+    """
+    # ARRANGE
+    poller = PollingManager(mock_gateway, shadow_mode=True)
+    ctl_dev = MockDevice(mock_gateway, "01:111111", slug="CTL")
+    bdr_dev = MockDevice(mock_gateway, "13:222222", slug="BDR")
+
+    # ACT
+    poller.update_device_tasks(ctl_dev)
+    poller.update_device_tasks(bdr_dev)
+
+    # ASSERT: CTL 1100 task carries FC, BDR 1100 task would carry "00"
+    ctl_1100 = [
+        t
+        for t in poller.get_scheduled_cmds()
+        if t.code == Code._1100 and t.device_id == "01:111111"
+    ]
+    assert len(ctl_1100) == 1
+    assert ctl_1100[0].payload == FC, (
+        f"Expected 1100 payload 'FC' for CTL, got {ctl_1100[0].payload!r}"
+    )
+
+    bdr_1100 = [
+        t
+        for t in poller.get_scheduled_cmds()
+        if t.code == Code._1100 and t.device_id == "13:222222"
+    ]
+    for task in bdr_1100:
+        assert task.payload in (None, "00")
 
 
 def test_polling_manager_30C9_skips_zones_with_sensor(
