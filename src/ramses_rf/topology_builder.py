@@ -471,6 +471,30 @@ async def update_topology_schema_state(
         case _:
             pass
 
+    # The controller's own zone-indexed payloads (2309, 30C9, 000A, 2349,
+    # etc.) are authoritative evidence that a zone exists: instantiate it
+    # so schema-less discovery works on systems with no binding traffic
+    # (e.g. UFH-only, ramses-rf/ramses_rf issue 1384).  Only the TCS's
+    # own controller may create zones this way — a child device must not
+    # spawn zones by addressing the controller — and only indices below
+    # max_zones are zones: domain ids (F9/FA/FC) and UFH circuit ids
+    # (E1-E8) are rejected by the range check.
+    if (
+        tcs is not None
+        and getattr(msg.src, "id", None) == tcs.ctl.id
+        and (zone_index := (p.get(SZ_ZONE_INDEX) or p.get("zone_index")))
+        is not None
+    ):
+        try:
+            zone_index_int = int(str(zone_index), 16)
+        except ValueError:
+            zone_index_int = -1
+        if 0 <= zone_index_int < getattr(tcs, "_max_zones", 0):
+            with contextlib.suppress(
+                exc.DeviceNotFoundError, exc.SchemaInconsistentError
+            ):
+                tcs.get_htg_zone(f"{zone_index_int:02X}")
+
     if getattr(gateway.config, "enable_eavesdrop", False):
         engine = getattr(gateway, "_eavesdrop_engine", None)
         if engine is None:
