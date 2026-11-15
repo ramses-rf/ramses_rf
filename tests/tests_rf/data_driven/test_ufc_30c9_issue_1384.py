@@ -18,7 +18,7 @@ See: https://github.com/ramses-rf/ramses_rf/issues/1384
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -39,8 +39,8 @@ async def gwy() -> Gateway:
 
 async def test_ufc_30c9_broadcasts_are_accepted(gwy: Gateway) -> None:
     """Both UFCs expose their per-circuit temperature arrays."""
-    ufc_017 = gwy.device_registry.device_by_id["02:088017"]
-    ufc_037 = gwy.device_registry.device_by_id["02:088037"]
+    ufc_017 = gwy.device_registry.get_device("02:088017")
+    ufc_037 = gwy.device_registry.get_device("02:088037")
 
     temps_017 = await ufc_017.entity_state.get_value(Code._30C9)
     temps_037 = await ufc_037.entity_state.get_value(Code._30C9)
@@ -54,9 +54,14 @@ async def test_ufc_30c9_broadcasts_are_accepted(gwy: Gateway) -> None:
 
 async def test_ufc_3150_demand_broadcasts_still_land(gwy: Gateway) -> None:
     """The already-accepted 3150 per-circuit demand array is unchanged."""
-    ufc_017 = gwy.device_registry.device_by_id["02:088017"]
+    ufc_017 = gwy.device_registry.get_device("02:088017")
 
-    demands = await ufc_017.entity_state.get_value(Code._3150)
+    # The 3150 overload declares an aggregate heat-demand float, but a UFC
+    # stores the per-circuit array (E1-E4 demand entries).
+    demands = cast(
+        "list[dict[str, Any]]",
+        await ufc_017.entity_state.get_value(Code._3150),
+    )
 
     assert demands is not None and len(demands) == 4
     assert demands[0]["heat_demand"] == pytest.approx(0.03)
