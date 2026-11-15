@@ -278,6 +278,40 @@ async def test_is_hgi80_async_file_check() -> None:
         mock_exists.assert_called_once_with(test_port)
 
 
+@pytest.mark.parametrize(
+    "test_port",
+    [
+        "/dev/serial/by-id/usb-Indalo_Tech_ramses_esp_TEST",
+        "/dev/serial/by-id/usb-Espressif_ESP32-S3_TEST",
+    ],
+)
+async def test_is_hgi80_ramses_esp_by_id(test_port: str) -> None:
+    """ramses_esp (ESP32 native USB) is recognised as evofw3-compatible by-id."""
+    with patch("ramses_tx.discovery.os.path.exists", return_value=True):
+        assert await is_hgi80(SerPortNameT(test_port)) is False
+
+
+async def test_is_hgi80_ramses_esp_vid() -> None:
+    """An Espressif VID (0x303A, e.g. ramses_esp on ESP32-S3) is not an HGI80.
+
+    Without this, is_hgi80 warns 'the gateway type is not determinable'
+    for every ramses_esp attached via native USB (ramses_rf#1384).
+    """
+    port = Mock()
+    port.device = "/dev/ttyACM0"
+    port.vid = 0x303A
+    port.product = "USB Serial"
+
+    with (
+        patch("ramses_tx.discovery.os.path.exists", return_value=True),
+        patch(
+            "ramses_tx.discovery.serialx.async_list_serial_ports",
+            return_value=[port],
+        ),
+    ):
+        assert await is_hgi80(SerPortNameT("/dev/ttyACM0")) is False
+
+
 # --- Event-loop-closed guards (issue 802) ---
 
 

@@ -65,7 +65,10 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
     if "by-id" in serial_port:
         if "TUSB3410" in serial_port:
             return True
-        if any(x in serial_port for x in ("evofw3", "FT232R", "NANO")):
+        if any(
+            x in serial_port
+            for x in ("evofw3", "FT232R", "NANO", "ramses_esp", "ESP32")
+        ):
             return False
 
     try:
@@ -81,7 +84,7 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
         pass
     elif vid == 0x10AC:  # Honeywell
         return True
-    elif vid in (0x0403, 0x1B4F):  # FTDI, SparkFun
+    elif vid in (0x0403, 0x1B4F, 0x303A):  # FTDI, SparkFun, Espressif
         return False
 
     product = {x.device: x.product for x in komports}.get(serial_port)
@@ -90,7 +93,10 @@ async def is_hgi80(serial_port: SerPortNameT) -> bool | None:
         pass
     elif "TUSB3410" in product:
         return True
-    elif any(x in product for x in ("evofw3", "FT232R", "NANO")):
+    elif any(
+        x in product
+        for x in ("evofw3", "FT232R", "NANO", "ramses_esp", "ESP32")
+    ):
         return False
 
     _LOGGER.warning(
