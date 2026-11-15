@@ -497,6 +497,7 @@ _DEV_KLASSES_HEAT: dict[str, dict[Code, dict[Verb, PayloadT | set[str]]]] = {
         Code._22D0: {I_: {}, RP: {}},
         Code._22F1: {I_: {}},  # Added for snapshot parity
         Code._2309: {RP: {}},
+        Code._30C9: {I_: {}},  # HCC100: per-circuit temps (idx E1-E8)
         Code._3110: {I_: {}},  # Spider Autotemp
         Code._3120: {I_: {}},  # Added for snapshot parity
         Code._3150: {I_: {}},
