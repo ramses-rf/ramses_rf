@@ -612,6 +612,26 @@ class PollingManager:
         self._poller_task = None
         _LOGGER.info("PollingManager stopped.")
 
+    def _effective_next_due(self, task: PollingTask) -> dt:
+        """Return earliest wake time for a task, including retry cadence."""
+        if (
+            self.shadow_mode
+            or task.retry_interval is None
+            or task.last_polled is None
+        ):
+            return task.next_due
+        dev = self._gateway.device_registry.device_by_id.get(task.device_id)
+        last_seen = getattr(dev, "_last_msg_dtm", None)
+        if (
+            isinstance(last_seen, dt)
+            and _ensure_aware(last_seen) <= _ensure_aware(task.last_polled)
+            and getattr(dev, "is_available", False)
+        ):
+            retry_due = task.last_polled + td(seconds=task.retry_interval)
+            if retry_due < task.next_due:
+                return retry_due
+        return task.next_due
+
     def _calculate_next_sleep_interval(self) -> float:
         """Calculate dynamic sleep delay in seconds based on next due task.
 
@@ -622,7 +642,9 @@ class PollingManager:
             return self._cycle_interval
 
         now = dt.now(UTC)
-        next_due = min(task.next_due for task in self._tasks.values())
+        next_due = min(
+            self._effective_next_due(task) for task in self._tasks.values()
+        )
         delay = (next_due - now).total_seconds()
         return max(1.0, min(delay, self._cycle_interval))
 
@@ -682,7 +704,7 @@ class PollingManager:
                 )
                 last_seen = getattr(dev, "_last_msg_dtm", None)
                 if not isinstance(last_seen, dt) or (
-                    last_seen <= task.last_polled
+                    _ensure_aware(last_seen) <= _ensure_aware(task.last_polled)
                 ):
                     task.failures += 1
                     if dev is not None and hasattr(dev, "_missed_polls"):
@@ -713,7 +735,7 @@ class PollingManager:
                 last_seen = getattr(dev, "_last_msg_dtm", None)
                 if not isinstance(last_seen, dt):
                     continue  # never heard — keep the regular cadence
-                if last_seen > task.last_polled:
+                if _ensure_aware(last_seen) > _ensure_aware(task.last_polled):
                     # answered since the last poll: restore the regular
                     # cadence if a retry had pulled next_due forward
                     due = task.last_polled + td(seconds=task.interval)
