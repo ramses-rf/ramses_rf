@@ -284,12 +284,15 @@ class BindTopologyHandler(TopologyHandler):
                     # Bridging quirk: DeviceRegistry expects domain index under child_id
                     event_meta["child_id"] = str(zone_index)
                     for child_id in devices:
-                        if (
-                            child_id.startswith(f"{DevType.CTL}:")
-                            or child_id.startswith(f"{DevType.UFC}:")
-                            or child_id.startswith(f"{DevType.HGI}:")
-                            or child_id.startswith("63:")
-                        ):
+                        # Controller-class devices can never be zone
+                        # children: a UFC binds its circuits to UFH zones
+                        # via CREATE_CIRCUIT events, and an HGI/pseudo-dev
+                        # has no zone role — binding them as e.g. the zone
+                        # sensor breaks PARENT_RULES and spams LINK
+                        # EXCEPTIONs (ramses-rf/ramses_rf issue 1384).  A
+                        # CTL child (01:) is allowed through: a controller
+                        # can legitimately be a zone's sensor.
+                        if child_id[:2] in ("02", "18", "63"):
                             continue
                         self._emit(
                             TopologyChangedEvent(
