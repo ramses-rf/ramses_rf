@@ -3679,8 +3679,20 @@ class ActuatorStatePayload(PayloadBase):
         :returns: Decoded actuator state dictionary.
         :rtype: PayloadT
         """
+        # OTBs (10:) carry RelModLevel in 1% steps (0x00-0x64), not the
+        # 0-200 demand scale used by BDRs (13:) — the raw decode is
+        # raw/200 (ramses-rf/ramses_cc issue 1414).
+        is_otb = getattr(getattr(msg, "src", None), "type", None) in (
+            "10",
+            DevType.OTB,
+        )
+
         result: PayloadT = {
-            SZ_MODULATION_LEVEL: self.modulation_level,
+            SZ_MODULATION_LEVEL: (
+                min(1.0, self.modulation_level * 2)
+                if is_otb
+                else self.modulation_level
+            ),
         }
         if self.flags_3 is not None:
             f3 = self.flags_3
@@ -3697,7 +3709,11 @@ class ActuatorStatePayload(PayloadBase):
         if self.ch_setpoint is not None:
             result[SZ_CH_SETPOINT] = self.ch_setpoint
         if self.max_rel_modulation is not None:
-            result[SZ_MAX_REL_MODULATION] = self.max_rel_modulation
+            result[SZ_MAX_REL_MODULATION] = (
+                min(1.0, self.max_rel_modulation * 2)
+                if is_otb
+                else self.max_rel_modulation
+            )
 
         if (
             self.unknown_4 is not None
@@ -3760,12 +3776,20 @@ class ActuatorCyclePayload(PayloadBase):
 
     def to_dict(self, msg: Message | None = None) -> PayloadT:
         """Convert actuator cycle payload to pre-0.60 dictionary layout."""
+        # OTBs (10:) carry RelModLevel in 1% steps (0x00-0x64), not the
+        # 0-200 demand scale used by BDRs (13:) — see 3EF0 & issue 1414.
+        mod_level = getattr(self, SZ_MODULATION_LEVEL, None)
+        if mod_level is not None and (
+            getattr(getattr(msg, "src", None), "type", None)
+            in ("10", DevType.OTB)
+        ):
+            mod_level = min(1.0, mod_level * 2)
         return {
             SZ_CYCLE_COUNTDOWN: getattr(self, "cycle_countdown_sec", None),
             SZ_ACTUATOR_COUNTDOWN: getattr(
                 self, "actuator_countdown_sec", None
             ),
-            SZ_MODULATION_LEVEL: getattr(self, SZ_MODULATION_LEVEL, None),
+            SZ_MODULATION_LEVEL: mod_level,
         }
 
     @classmethod

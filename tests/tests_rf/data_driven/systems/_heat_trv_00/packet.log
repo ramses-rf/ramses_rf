@@ -370,7 +370,7 @@
 2022-03-13T15:29:14.372936 ...  I --- 04:098455 --:------ 04:098455 30C9 003 0008AB  # {'temperature': 22.19}
 2022-03-13T15:29:17.157907 ... RP --- 13:109598 18:199952 --:------ 0008 002 0000  # {'relay_demand': 0.0}
 2022-03-13T15:29:17.200763 ... RP --- 13:109598 18:199952 --:------ 3EF1 007 000111011100FF  # {'modulation_level': 0.0, 'actuator_countdown': 273, 'cycle_countdown': 273, '_unknown_0': 'FF'}
-2022-03-13T15:29:19.741306 ...  I --- 10:047707 --:------ 10:047707 3EF0 009 003C100A00FF035A00  # {'modulation_level': 0.6, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 90, 'max_rel_modulation': 0.0}
+2022-03-13T15:29:19.741306 ...  I --- 10:047707 --:------ 10:047707 3EF0 009 003C100A00FF035A00  # {'modulation_level': 1.0, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 90, 'max_rel_modulation': 0.0}
 2022-03-13T15:29:20.777597 ... RP --- 13:109598 18:199952 --:------ 0008 002 0000  # {'relay_demand': 0.0}
 2022-03-13T15:29:20.821436 ... RP --- 13:109598 18:199952 --:------ 3EF1 007 00010D010D00FF  # {'modulation_level': 0.0, 'actuator_countdown': 269, 'cycle_countdown': 269, '_unknown_0': 'FF'}
 2022-03-13T15:29:22.374114 ...  I --- 04:057586 --:------ 01:078710 2309 003 01079E  # {'zone_index': '01', 'setpoint': 19.5}
@@ -401,7 +401,7 @@
 
 
 2022-03-13T15:29:56.538139 ... RQ --- 01:078710 10:047707 --:------ 3EF0 001 00  # {}
-2022-03-13T15:29:56.550359 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033100  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 49, 'max_rel_modulation': 0.0}
+2022-03-13T15:29:56.550359 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033100  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 49, 'max_rel_modulation': 0.0}
 2022-03-13T15:30:00.873526 ...  I --- 04:098449 --:------ 01:078710 2309 003 0B07D0  # {'zone_index': '0B', 'setpoint': 20.0}
 2022-03-13T15:30:01.871537 ...  I --- 04:133277 --:------ 04:133277 30C9 003 0007D5  # {'temperature': 20.05}
 2022-03-13T15:30:02.872446 ...  I --- 04:061760 --:------ 01:078710 2309 003 060640  # {'zone_index': '06', 'setpoint': 16.0}
@@ -440,7 +440,7 @@
 2022-03-13T15:30:49.371012 ...  I --- 04:061760 --:------ 01:078710 3150 002 0600  # {'zone_index': '06', 'heat_demand': 0.0}
 2022-03-13T15:30:55.874239 ...  I --- 04:057586 --:------ 01:078710 3150 002 0122  # {'zone_index': '01', 'heat_demand': 0.17}
 2022-03-13T15:30:56.647629 ... RQ --- 01:078710 10:047707 --:------ 3EF0 001 00  # {}
-2022-03-13T15:30:56.679031 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033300  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 51, 'max_rel_modulation': 0.0}
+2022-03-13T15:30:56.679031 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033300  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 51, 'max_rel_modulation': 0.0}
 2022-03-13T15:30:57.371292 ...  I --- 04:098455 --:------ 01:078710 3150 002 0B42  # {'zone_index': '0B', 'heat_demand': 0.33}
 2022-03-13T15:30:57.870313 ...  I --- 22:060293 --:------ 22:060293 0008 002 000A  # {'relay_demand': 0.05}
 2022-03-13T15:31:01.373978 ...  I --- 04:098474 --:------ 01:078710 3150 002 0A40  # {'zone_index': '0A', 'heat_demand': 0.32}
@@ -451,12 +451,12 @@
 2022-03-13T15:31:08.870172 ...  I --- 04:098464 --:------ 01:078710 2309 003 080802  # {'zone_index': '08', 'setpoint': 20.5}
 2022-03-13T15:31:12.873548 ...  I --- 04:057587 --:------ 01:078710 3150 002 0546  # {'zone_index': '05', 'heat_demand': 0.35}
 2022-03-13T15:31:13.813467 ... RP --- 10:047707 18:199952 --:------ 2401 004 00000B14  # {'payload': '00000B14', '_value_2': 11, '_flags_2': [0, 0, 0, 0, 1, 0, 1, 1], '_percent_3': 0.1}
-2022-03-13T15:31:13.913286 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
-2022-03-13T15:31:14.112792 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:13.913286 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:14.112792 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
 2022-03-13T15:31:14.305186 ... RP --- 10:047707 18:199952 --:------ 3220 005 00C0000300  # {'msg_id': 0, 'msg_type': 'Read-Ack', 'msg_name': None, 'value': [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'description': 'Status'}
 2022-03-13T15:31:14.507207 ... RP --- 10:047707 18:199952 --:------ 3220 005 0070730000  # {'msg_id': 115, 'msg_type': 'Unknown-DataId', 'msg_name': 'OEMDiagnosticCode', 'description': 'OEM diagnostic code'}
 2022-03-13T15:31:14.703181 ... RP --- 10:047707 18:199952 --:------ 22D9 003 001450  # {'setpoint': 52.0}
-2022-03-13T15:31:14.908931 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:14.908931 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
 2022-03-13T15:31:15.103097 ... RP --- 10:047707 18:199952 --:------ 1300 003 0009F6  # {'pressure': None}
 2022-03-13T15:31:15.318186 ... RP --- 10:047707 18:199952 --:------ 12F0 003 007FFF  # {'dhw_flow_rate': None}
 2022-03-13T15:31:15.515835 ... RP --- 10:047707 18:199952 --:------ 3200 003 00125C  # {'temperature': 47.0}
@@ -467,13 +467,13 @@
 2022-03-13T15:31:16.318605 ... RP --- 10:047707 18:199952 --:------ 2401 004 00000B14  # {'payload': '00000B14', '_value_2': 11, '_flags_2': [0, 0, 0, 0, 1, 0, 1, 1], '_percent_3': 0.1}
 2022-03-13T15:31:16.375783 ...  I --- 04:061402 --:------ 01:078710 1060 003 04FF01  # {'zone_index': '04', 'battery_low': False, 'battery_level': None}
 2022-03-13T15:31:16.387955 ...  I --- 04:061402 --:------ 04:061402 1060 003 00FF01  # {'battery_low': False, 'battery_level': None}
-2022-03-13T15:31:16.518774 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:16.518774 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
 2022-03-13T15:31:16.729614 ... RP --- 10:047707 18:199952 --:------ 3220 005 00C0000300  # {'msg_id': 0, 'msg_type': 'Read-Ack', 'msg_name': None, 'value': [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'description': 'Status'}
 2022-03-13T15:31:16.917363 ... RP --- 10:047707 18:199952 --:------ 3220 005 00C0000300  # {'msg_id': 0, 'msg_type': 'Read-Ack', 'msg_name': None, 'value': [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 'description': 'Status'}
 2022-03-13T15:31:17.124691 ... RP --- 10:047707 18:199952 --:------ 3220 005 00B0730000  # {'msg_id': 115, 'msg_type': '-reserved-', 'msg_name': 'OEMDiagnosticCode', 'description': 'OEM diagnostic code'}
 2022-03-13T15:31:17.324545 ... RP --- 10:047707 18:199952 --:------ 3220 005 00B0730000  # {'msg_id': 115, 'msg_type': '-reserved-', 'msg_name': 'OEMDiagnosticCode', 'description': 'OEM diagnostic code'}
 2022-03-13T15:31:17.515197 ... RP --- 10:047707 18:199952 --:------ 22D9 003 001450  # {'setpoint': 52.0}
-2022-03-13T15:31:17.725267 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:17.725267 ... RP --- 10:047707 18:199952 --:------ 3EF0 009 0011100A00FF033400  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 52, 'max_rel_modulation': 0.0}
 2022-03-13T15:31:17.871321 ...  I --- 04:098474 --:------ 01:078710 2309 003 0A0802  # {'zone_index': '0A', 'setpoint': 20.5}
 2022-03-13T15:31:17.920364 ... RP --- 10:047707 18:199952 --:------ 3200 003 00125C  # {'temperature': 47.0}
 2022-03-13T15:31:18.115393 ... RP --- 10:047707 18:199952 --:------ 1290 003 00F830  # {'temperature': -20.0}
@@ -507,7 +507,7 @@
 
 
 2022-03-13T15:31:57.031010 ... RQ --- 01:078710 10:047707 --:------ 3EF0 001 00  # {}
-2022-03-13T15:31:57.036086 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033600  # {'modulation_level': 0.17, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 54, 'max_rel_modulation': 0.0}
+2022-03-13T15:31:57.036086 ... RP --- 10:047707 01:078710 --:------ 3EF0 009 0011100A00FF033600  # {'modulation_level': 0.34, '_flags_2': '10', '_flags_3': [0, 0, 0, 0, 1, 0, 1, 0], 'ch_active': True, 'dhw_active': False, 'flame_active': True, '_unknown_4': '00', '_unknown_5': 'FF', '_flags_6': [0, 0, 0, 0, 0, 0, 1, 1], 'ch_enabled': True, 'ch_setpoint': 54, 'max_rel_modulation': 0.0}
 2022-03-13T15:32:02.377352 ...  I --- 04:098455 --:------ 04:098455 30C9 003 0008A4  # {'temperature': 22.12}
 2022-03-13T15:32:02.849595 ... RP --- 10:047707 18:199952 --:------ 10E0 038 000001C8810B0700FEFFFFFFFFFF140807E35238383230000000000000000000000000000000  # {'date_2': '0000-00-00', 'date_1': '2019-08-20', 'manufacturer_sub_id': 'C8', 'product_id': '81', 'oem_code': '00', 'description': 'R8820'}
 2022-03-13T15:32:02.947488 ... RP --- 10:047707 18:199952 --:------ 10E0 038 000001C8810B0700FEFFFFFFFFFF140807E35238383230000000000000000000000000000000  # {'date_2': '0000-00-00', 'date_1': '2019-08-20', 'manufacturer_sub_id': 'C8', 'product_id': '81', 'oem_code': '00', 'description': 'R8820'}
