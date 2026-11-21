@@ -293,15 +293,23 @@ class PollingManager:
         schedule: dict[str, int | None] = dict(fallback_schedule)
 
         # Override with explicit SSOT schema traits if provided
-        if device.polling_interval is not None:
+        scalar_override = getattr(device, "_polling_interval_scalar", None)
+        if isinstance(scalar_override, int):
+            schedule = {code: scalar_override for code in fallback_schedule}
+            user_intervals: PollingIntervalsT = {
+                str(code): scalar_override for code in fallback_schedule
+            }
+        elif device.polling_interval is not None:
             schedule.update(device.polling_interval)
+            user_intervals = device.polling_interval
+        else:
+            user_intervals = {}
 
         # FAN keep-alive role swap (issue 1288): until the device confirms
         # 10D0 support, the universally-answered 10E0 provides liveness at
         # keep-alive rate and 10D0 only re-probes daily.  Once supported,
         # 10D0 replies carry liveness *and* filter data, so 10E0 drops back
         # to a daily refresh.  Explicit per-device overrides win either way.
-        user_intervals = device.polling_interval or {}
         if slug == DevType.FAN and getattr(device, "supports_10d0", False):
             if Code._10E0 not in user_intervals:
                 schedule[Code._10E0] = INTERVAL_DAILY

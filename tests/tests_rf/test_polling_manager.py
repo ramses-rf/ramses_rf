@@ -1007,12 +1007,48 @@ def test_sch_polling_interval_validates_dict() -> None:
     assert validated == {Code._10E0: 3600, Code._1F41: 1800}
 
 
+def test_sch_polling_interval_validates_scalar_int() -> None:
+    """SCH_POLLING_INTERVAL validates scalar non-negative int (issue 1375)."""
+    from ramses_rf.config import SCH_POLLING_INTERVAL
+
+    assert SCH_POLLING_INTERVAL(0) == 0
+    assert SCH_POLLING_INTERVAL(600) == 600
+
+
 def test_sch_polling_interval_rejects_negative() -> None:
-    """SCH_POLLING_INTERVAL rejects negative intervals."""
+    """SCH_POLLING_INTERVAL rejects negative intervals and booleans."""
     from ramses_rf.config import SCH_POLLING_INTERVAL
 
     with pytest.raises(Exception):  # noqa: B017
         SCH_POLLING_INTERVAL({Code._10E0: -1})
+    with pytest.raises(Exception):  # noqa: B017
+        SCH_POLLING_INTERVAL(-1)
+    with pytest.raises(Exception):  # noqa: B017
+        SCH_POLLING_INTERVAL(False)
+
+
+def test_resolve_schedule_scalar_polling_interval(
+    mock_gateway: MagicMock,
+) -> None:
+    """Scalar polling_interval trait sets or disables all default codes."""
+    fan_disabled = MockDevice(
+        mock_gateway,
+        "32:231719",
+        slug="FAN",
+        traits=DeviceTraits(polling_interval=0),
+    )
+    assert PollingManager.resolve_schedule_for_device(fan_disabled) == {}
+
+    fan_override = MockDevice(
+        mock_gateway,
+        "32:231719",
+        slug="FAN",
+        traits=DeviceTraits(polling_interval=1800),
+    )
+    assert PollingManager.resolve_schedule_for_device(fan_override) == {
+        Code._10E0: 1800,
+        Code._10D0: 1800,
+    }
 
 
 def test_encode_opentherm_payload_parity() -> None:
