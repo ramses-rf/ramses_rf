@@ -6,7 +6,7 @@
 # used for generating docs
 # (Note: sphinx <10 for furo 2025.12.19 and sphinx_design 0.7.0)
     furo==2025.12.19
-    markdown-it-py==4.2.0
+    markdown-it-py==4.3.0
     myst-parser==5.1.0
     Sphinx==9.2.0
     sphinxcontrib-mermaid==2.1.1
