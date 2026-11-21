@@ -1,0 +1,23 @@
+{
+    "config": {
+        "enable_eavesdrop": false,
+        "enforce_known_list": true
+    },
+    "main_tcs": "01:050858",
+    "01:050858": {
+        "system": {
+            "appliance_control": null
+        },
+        "stored_hotwater": {
+            "hotwater_valve": "13:215029",
+            "heating_valve": "13:246213"
+        },
+        "zones": {}
+    },
+    "known_list": {
+        "01:050858": {},
+        "13:215029": {},
+        "13:246213": {},
+        "18:001234": {}
+    }
+}

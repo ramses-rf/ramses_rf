@@ -353,10 +353,9 @@ def _resolve_logical_targets(
     if domain_index and tcs:
         if domain_index == "FC" and tcs not in targets:
             targets.append(tcs)
-        elif (
-            domain_index in ("FA", "F9")
-            and getattr(tcs, "dhw", None) is not None
-        ):
+        # Only FA is the DHW valve: F9 is the heating valve and must
+        # not overwrite the DhwZone's relay_demand (ramses-rf issue 1370).
+        elif domain_index == "FA" and getattr(tcs, "dhw", None) is not None:
             if tcs.dhw not in targets:
                 targets.append(tcs.dhw)
 

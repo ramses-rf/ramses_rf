@@ -75,32 +75,42 @@ async def test_dhw_zone_setpoint_and_mode_hydrated() -> None:
 
 @pytest.mark.asyncio
 async def test_dhw_zone_relay_demand_and_failsafe_hydrated() -> None:
-    """The DhwZone.relay_demand (0008 F9) and relay_failsafe (0009 F9) must
-    be hydrated via domain_id routing.
+    """The DhwZone.relay_demand (0008 FA) and relay_failsafe (0009 FA)
+    are hydrated via domain_id routing; F9 (heating valve) is not DHW.
 
     Pre-existing CQRS cutover bugs fixed alongside issue 843:
     - dispatcher mapped relay_demand → heat_demand (wrong field)
     - parser_0009 key ``failsafe_enabled`` didn't match ``relay_failsafe``
     - ingestion path had no domain_id routing for F9/FA → DhwZone
+
+    This capture binds 13:109598 to domain FA as the hotwater_valve
+    (000C zone_type 0E); the 0008 F914 element is the *heating* valve's
+    demand and must not reach the DhwZone (ramses-rf issue 1370).
     """
     gwy = await load_test_gwy(TRV_DIR)
     try:
         tcs = gwy.tcs
         assert tcs is not None and tcs.dhw is not None
 
-        # 0008 F914 from the Controller: relay_demand=0.1 for DHW domain
+        # 0008 FA00 from the Controller: DHW valve relay_demand=0.0.
+        # The 0008 F914 element (heating valve, 0.1) must not overwrite
+        # it — the F9 domain is not the DHW valve (issue 1370).
         relay_demand = await tcs.dhw.relay_demand()
-        assert relay_demand == 0.1, (
-            f"DHW relay_demand not hydrated: {relay_demand!r}"
+        assert relay_demand == 0.0, (
+            f"DHW relay_demand expected FA value 0.0: {relay_demand!r}"
         )
 
-        # 0009 array with F9 domain: failsafe_enabled=False
+        # The 0009 array in this capture carries only FC/F9 elements —
+        # no FA failsafe was broadcast, so nothing is hydrated.  The F9
+        # element still lands in the TCS's per-domain dict.
         relay_failsafe = await tcs.dhw.relay_failsafe()
-        assert relay_failsafe is not None, (
-            f"DHW relay_failsafe not hydrated: {relay_failsafe!r}"
+        assert relay_failsafe is None, (
+            f"DHW relay_failsafe expected None (no FA element): "
+            f"{relay_failsafe!r}"
         )
-        assert not relay_failsafe, (
-            f"DHW relay_failsafe expected False: {relay_failsafe!r}"
+        failsafes = tcs.relay_failsafes
+        assert failsafes is not None and "F9" in failsafes, (
+            f"TCS relay_failsafes lost the F9 domain: {failsafes!r}"
         )
 
         # heat_demand falls back to the hotwater_valve BDR's relay_demand
