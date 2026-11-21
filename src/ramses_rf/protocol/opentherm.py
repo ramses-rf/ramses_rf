@@ -212,12 +212,21 @@ OPENTHERM_PARAMS_DATA_IDS: Final[tuple[int, ...]] = (
 Includes DHW Setpoint (0x38) and Max CH Setpoint (0x39).
 """
 
-OPENTHERM_POLL_DATA_IDS: Final[tuple[int, ...]] = (
-    OPENTHERM_STATUS_DATA_IDS + OPENTHERM_PARAMS_DATA_IDS
+OPENTHERM_POLL_DATA_IDS: Final[tuple[int, ...]] = tuple(
+    data_id
+    for data_id in OPENTHERM_STATUS_DATA_IDS + OPENTHERM_PARAMS_DATA_IDS
+    if data_id != int(OtDataId.STATUS)
 )
 """Combined tuple of all periodic OpenTherm Data-IDs polled for bridge devices.
 
-Excludes Maximum Relative Modulation Level (0x0E), which is write-only.
+Excludes Maximum Relative Modulation Level (0x0E), which is write-only,
+and Master/Slave Status (0x00): a READ-DATA request for ID 0 carries the
+master status flags in its high data byte, and ramses cannot know the
+controller's real flags — sending zeros reads as "CH disabled, DHW
+disabled", which R8810 bridges relay to the boiler and stop the burner
+(ramses-rf/ramses_rf issue 1372). Status/flame state is already
+available via 3EF0.
+
 Active modulation demand (0x11) is also authoritatively broadcast by
 controllers via 3EF0/3EF1; it is polled here as well for systems without
 such broadcasts — direct probes against R8810A bridges returned clean

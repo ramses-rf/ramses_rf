@@ -218,6 +218,34 @@ def test_build_get_opentherm_data(snapshot: Any) -> None:
     assert str(Packet._from_cmd(dto)._frame) == snapshot
 
 
+def test_build_get_opentherm_data_refuses_status_id() -> None:
+    """Data-ID 0 (Status) requests must be refused.
+
+    The request's high data byte carries the master's CH/DHW enable
+    flags, which ramses cannot supply safely — a zeroed request tells
+    the boiler "CH disabled, DHW disabled" via R8810 bridges
+    (ramses-rf/ramses_rf issue 1372).
+    """
+    for msg_id in (0, 0x00, "00", "0"):
+        intent = Intent(
+            src=Address("18:000730"),
+            dst=Address("10:111111"),
+            action=Action.GET_OPENTHERM_DATA,
+            data={"msg_id": msg_id},
+        )
+        with pytest.raises(ValueError, match="Data-ID 0"):
+            build_dto(intent)
+
+    # other Data-IDs still build normally
+    intent = Intent(
+        src=Address("18:000730"),
+        dst=Address("10:111111"),
+        action=Action.GET_OPENTHERM_DATA,
+        data={"msg_id": 0x19},
+    )
+    assert build_dto(intent).code == Code._3220
+
+
 def test_set_fan_mode_orcon_2byte_default() -> None:
     """Default scheme (orcon) produces a 3-byte payload with mode_max=07."""
     expected_payload = "000107"
