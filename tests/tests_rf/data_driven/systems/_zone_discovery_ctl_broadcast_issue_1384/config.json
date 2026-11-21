@@ -1,0 +1,30 @@
+{
+    "_notes": {
+        "A": "ramses-rf/ramses_rf issue 1384: Evo Color + 2x HCC100 UFC, no zones in schema",
+        "B": "the controller broadcasts 2309/30C9/000A arrays for zones 00-05",
+        "C": "zones must be created from those broadcasts without manual schema edits"
+    },
+
+    "config": {
+        "enable_eavesdrop": false,
+        "enforce_known_list": false,
+        "use_aliases": false
+    },
+
+    "main_tcs": "01:071057",
+    "01:071057": {
+        "system": {"appliance_control": "13:106732"},
+        "stored_hotwater": {"hotwater_valve": "13:172828"},
+        "underfloor_heating": {
+            "02:088017": {},
+            "02:088037": {}
+        }
+    },
+
+    "known_list": {
+        "13:106732": {"class": "BDR"},
+        "13:122134": {"class": "BDR"},
+        "13:172828": {"class": "BDR"},
+        "18:195444": {"class": "HGI"}
+    }
+}

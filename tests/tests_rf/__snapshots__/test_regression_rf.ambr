@@ -6623,6 +6623,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:026398': dict({
@@ -6649,6 +6656,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '08': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:037519': dict({
@@ -6662,6 +6676,27 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:040078': dict({
@@ -6675,6 +6710,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:050858': dict({
@@ -6697,6 +6746,55 @@
             'class': None,
             'sensor': None,
           }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '05': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '07': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:051477': dict({
@@ -6710,6 +6808,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:054173': dict({
@@ -6723,6 +6828,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:059885': dict({
@@ -6764,6 +6876,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:063844': dict({
@@ -6777,6 +6896,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:069616': dict({
@@ -6870,6 +7003,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:073322': dict({
@@ -6883,6 +7023,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '0B': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:073765': dict({
@@ -6896,6 +7050,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:073976': dict({
@@ -7084,6 +7245,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:078710': dict({
@@ -7197,6 +7365,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:085545': dict({
@@ -7223,6 +7405,55 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '05': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:087939': dict({
@@ -7332,6 +7563,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:096339': dict({
@@ -7345,6 +7583,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:102458': dict({
@@ -7358,6 +7610,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:111111': dict({
@@ -7371,6 +7630,69 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '05': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '07': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '08': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:123456': dict({
@@ -7467,6 +7789,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:133689': dict({
@@ -7480,6 +7809,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:138490': dict({
@@ -7493,6 +7829,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:139901': dict({
@@ -7506,6 +7849,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:140959': dict({
@@ -7519,6 +7869,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '08': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:145038': dict({
@@ -7613,6 +7977,13 @@
             'class': 'radiator_valve',
             'sensor': '22:140285',
           }),
+          '0B': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:155341': dict({
@@ -7626,6 +7997,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:158182': dict({
@@ -7639,6 +8017,90 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '05': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '07': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '08': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '09': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '0A': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '0B': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:164379': dict({
@@ -7652,6 +8114,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:169176': dict({
@@ -7665,6 +8134,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:182472': dict({
@@ -7678,6 +8154,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:185426': dict({
@@ -7691,6 +8174,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:187666': dict({
@@ -7704,6 +8194,20 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '07': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:191718': dict({
@@ -7737,6 +8241,13 @@
           }),
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:195932': dict({
@@ -7887,6 +8398,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:198098': dict({
@@ -7913,6 +8431,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:205114': dict({
@@ -7926,6 +8451,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:205453': dict({
@@ -7939,6 +8471,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:210309': dict({
@@ -7985,6 +8524,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:225826': dict({
@@ -7998,6 +8544,13 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
         }),
       }),
       '01:239474': dict({
@@ -8011,11 +8564,32 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
           '06': dict({
             '_name': None,
             'actuators': list([
               '04:105113',
               '04:105249',
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '07': dict({
+            '_name': None,
+            'actuators': list([
             ]),
             'class': None,
             'sensor': None,
@@ -8033,6 +8607,55 @@
         'underfloor_heating': dict({
         }),
         'zones': dict({
+          '00': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '01': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '02': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '03': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '04': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '05': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
+          '06': dict({
+            '_name': None,
+            'actuators': list([
+            ]),
+            'class': None,
+            'sensor': None,
+          }),
           '07': dict({
             '_name': None,
             'actuators': list([
@@ -8165,6 +8788,13 @@
           'name': 'Office',
           'sensor': '22:140285',
           'type': 'RadZone',
+        }),
+        '0B': dict({
+          'actuators': list([
+          ]),
+          'name': None,
+          'sensor': None,
+          'type': 'Zone',
         }),
       }),
     }),
