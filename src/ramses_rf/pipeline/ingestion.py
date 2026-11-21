@@ -192,6 +192,7 @@ from ramses_rf.state_projector import (
     _ctl_is_zone_sensor,
     _get_dhw_zone_from_msg,
     _is_foreign_zone_sync,
+    _non_multiroom_sensor_write,
     _route_2411_to_fan,
 )
 from ramses_rf.typing import PayloadT
@@ -1196,19 +1197,29 @@ class StateProjector:
                 src_id = msg.src.id
 
                 slug = getattr(target, "_SLUG", "")
+                # A bound thermostat's broadcast is not the zone
+                # temperature when the controller marks the zone
+                # locally-sensed (multiroom off) — only controller
+                # syncs carry it then (ramses-rf/ramses_cc#1413).
                 if (
-                    slug
-                    in (
-                        DevType.TRV,
-                        DevType.THM,
-                        DevType.CTL,
-                        DevType.UFC,
+                    (
+                        slug
+                        in (
+                            DevType.TRV,
+                            DevType.THM,
+                            DevType.CTL,
+                            DevType.UFC,
+                        )
+                        and src_id != target_id
                     )
-                    and src_id != target_id
-                ) or (
-                    slug in (DevType.CTL, DevType.UFC)
-                    and payload.get(SZ_ZONE_INDEX) is not None
-                    and not _ctl_is_zone_sensor(target, payload[SZ_ZONE_INDEX])
+                    or (
+                        slug in (DevType.CTL, DevType.UFC)
+                        and payload.get(SZ_ZONE_INDEX) is not None
+                        and not _ctl_is_zone_sensor(
+                            target, payload[SZ_ZONE_INDEX]
+                        )
+                    )
+                    or _non_multiroom_sensor_write(target, src_id)
                 ):
                     pass
                 else:
